@@ -324,6 +324,12 @@ const applicationFormSchema = z.object({
   portConstructionConcessionAreaM2: optionalNumberField,
   portConstructionDuration: z.string().optional(),
 
+  // Gas Extraction details
+  gazExtractionPurpose: z.string().optional(),
+  gazExtractionDescription: z.string().optional(),
+  gazExtractionConcessionAreaM2: optionalNumberField,
+  gazExtractionWaterAmountM3PerDay: optionalNumberField,
+
   // Irrigation specific fields
   irrigationCropType: z.string().optional(),
   irrigationGrowingSeasonFrom: z.string().optional(),
@@ -421,6 +427,7 @@ const applicationFormSchema = z.object({
   gazExtractionGeneralRequirements: z.any().optional(),
   gazExtractionEIA: z.any().optional(),
   gazExtractionFeasibilityStudy: z.any().optional(),
+  gazExtractionRMBLicense: z.any().optional(),
 
   // Livestock
   livestockGeneralRequirements: z.any().optional(),
@@ -523,7 +530,7 @@ const applicationFormSchema = z.object({
     return;
   }
 
-  const pureConcessionActs = ["fish_farming_lakes", "recreation_activities", "port_construction"];
+  const pureConcessionActs = ["fish_farming_lakes", "recreation_activities", "port_construction", "gaz_extraction"];
   const isPureConcessionAct = selectedActivities.some((a) => pureConcessionActs.includes(a));
   const effectiveCategory = isPureConcessionAct ? "concession" : (data.waterUseCategory ?? "abstraction");
 
@@ -693,6 +700,41 @@ const applicationFormSchema = z.object({
         code: z.ZodIssueCode.custom,
         path: ["portConstructionDuration"],
         message: "Expected period of time required for construction is required."
+      });
+    }
+  }
+
+  const hasGazExtractionActivity = selectedActivities.includes("gaz_extraction");
+  if (hasGazExtractionActivity) {
+    if (!String(data.gazExtractionPurpose ?? "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["gazExtractionPurpose"],
+        message: "Purpose of extraction is required."
+      });
+    }
+
+    if (!String(data.gazExtractionDescription ?? "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["gazExtractionDescription"],
+        message: "Brief description of the project is required."
+      });
+    }
+
+    if (!isValidNumber(data.gazExtractionConcessionAreaM2) || data.gazExtractionConcessionAreaM2 <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["gazExtractionConcessionAreaM2"],
+        message: "Concession area (m²) must be a number greater than 0 for gas extraction."
+      });
+    }
+
+    if (!isValidNumber(data.gazExtractionWaterAmountM3PerDay) || data.gazExtractionWaterAmountM3PerDay < 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["gazExtractionWaterAmountM3PerDay"],
+        message: "Amount of water required (m³/day) must be a number (0 or more)."
       });
     }
   }
@@ -884,6 +926,11 @@ function computeModificationChanges(
     'portConstructionDescription',
     'portConstructionConcessionAreaM2',
     'portConstructionDuration',
+    // Gas extraction
+    'gazExtractionPurpose',
+    'gazExtractionDescription',
+    'gazExtractionConcessionAreaM2',
+    'gazExtractionWaterAmountM3PerDay',
   ];
   
   for (const field of fieldsToCompare) {
@@ -1039,6 +1086,10 @@ const FIELD_LABELS: Record<string, string> = {
   portConstructionDescription: 'Brief description of the project',
   portConstructionConcessionAreaM2: 'Concession area (m²)',
   portConstructionDuration: 'Expected period of time required for construction',
+  gazExtractionPurpose: 'Purpose of extraction',
+  gazExtractionDescription: 'Brief description of the project',
+  gazExtractionConcessionAreaM2: 'Concession area (m²)',
+  gazExtractionWaterAmountM3PerDay: 'Amount of water required, if any (m³/day)',
 };
 
 // Industry sub-field base labels (row index is dynamic)
@@ -1445,6 +1496,7 @@ export function ApplicationForm({
     gazExtractionGeneralRequirements: useRef<HTMLInputElement>(null),
     gazExtractionEIA: useRef<HTMLInputElement>(null),
     gazExtractionFeasibilityStudy: useRef<HTMLInputElement>(null),
+    gazExtractionRMBLicense: useRef<HTMLInputElement>(null),
     // Livestock documents
     livestockGeneralRequirements: useRef<HTMLInputElement>(null),
     livestockFeasibilityStudy: useRef<HTMLInputElement>(null),
@@ -1544,6 +1596,10 @@ export function ApplicationForm({
       portConstructionDescription: "",
       portConstructionConcessionAreaM2: undefined,
       portConstructionDuration: "",
+      gazExtractionPurpose: "",
+      gazExtractionDescription: "",
+      gazExtractionConcessionAreaM2: undefined,
+      gazExtractionWaterAmountM3PerDay: undefined,
       irrigationCropType: "",
       irrigationGrowingSeasonFrom: "",
       irrigationGrowingSeasonTo: "",
@@ -1788,7 +1844,7 @@ export function ApplicationForm({
   // Derived: effective water use category.
   // Fish farming in lakes & recreational activities → always concession.
   // All other activities → user-selectable, defaulting to abstraction.
-  const pureConcessionActivities = ["fish_farming_lakes", "recreation_activities", "port_construction"];
+  const pureConcessionActivities = ["fish_farming_lakes", "recreation_activities", "port_construction", "gaz_extraction"];
   const isPureConcession = watchedIntendedActivities?.some((a: string) => pureConcessionActivities.includes(a)) ?? false;
   const effectiveWaterUseCategory: "abstraction" | "concession" = isPureConcession
     ? "concession"
@@ -1796,6 +1852,7 @@ export function ApplicationForm({
 
   const isDistrictWaterSupply = watchedIntendedActivities?.includes("district_water_supply") ?? false;
   const isPortConstruction = watchedIntendedActivities?.includes("port_construction") ?? false;
+  const isGazExtraction = watchedIntendedActivities?.includes("gaz_extraction") ?? false;
 
   // Groundwater eligibility helpers (consumed by later tasks).
   const primarySelectedActivity = watchedIntendedActivities?.[0];
@@ -1826,12 +1883,12 @@ export function ApplicationForm({
     }
   }, [isGroundwater]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Port construction is always lake-based: lock waterSourceType to lake.
+  // Port construction and gas extraction are always lake-based: lock waterSourceType to lake.
   useEffect(() => {
-    if (!readOnly && isPortConstruction && form.getValues("waterSourceType") !== "lake") {
+    if (!readOnly && (isPortConstruction || isGazExtraction) && form.getValues("waterSourceType") !== "lake") {
       form.setValue("waterSourceType", "lake", { shouldDirty: false });
     }
-  }, [isPortConstruction]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPortConstruction, isGazExtraction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Seed 5 empty network rows when District Water Supply is selected and the table is empty.
   // Keyed on the selected activity (not the bulk profile flag) so any user gets the rows.
@@ -2009,7 +2066,7 @@ export function ApplicationForm({
 
     const intended = form.getValues('intendedActivities') || [];
     const selectedActivity = intended[0];
-    const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities', 'port_construction'];
+    const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities', 'port_construction', 'gaz_extraction'];
     const isPureConcessionAct = intended.some((a: string) => pureConcessionActs.includes(a));
     const savedCategory = form.getValues('waterUseCategory');
     const effectiveCat = isPureConcessionAct ? 'concession' : (savedCategory ?? 'abstraction');
@@ -2017,6 +2074,7 @@ export function ApplicationForm({
     const requiresAbstractionDetails = effectiveCat === 'abstraction' && selectedActivity !== 'district_water_supply';
     const requiresRecreationDetails = intended.includes('recreation_activities');
     const requiresPortConstructionDetails = intended.includes('port_construction');
+    const requiresGazExtractionDetails = intended.includes('gaz_extraction');
 
     const hasText = (value: unknown) => String(value ?? '').trim() !== '';
     const isPositiveNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0;
@@ -2225,6 +2283,44 @@ export function ApplicationForm({
 
       if (!portConstructionPurpose || !portConstructionDescription || !validPortArea || !portConstructionDuration) {
         setValidationError("Please fill in all Port Construction Details before proceeding.");
+        return false;
+      }
+    }
+
+    if (requiresGazExtractionDetails) {
+      const gazExtractionPurpose = String(form.getValues('gazExtractionPurpose') ?? '').trim();
+      const gazExtractionDescription = String(form.getValues('gazExtractionDescription') ?? '').trim();
+      const gazExtractionConcessionAreaM2 = form.getValues('gazExtractionConcessionAreaM2');
+      const gazExtractionWaterAmountM3PerDay = form.getValues('gazExtractionWaterAmountM3PerDay');
+      const validGazArea = typeof gazExtractionConcessionAreaM2 === 'number' && Number.isFinite(gazExtractionConcessionAreaM2) && gazExtractionConcessionAreaM2 > 0;
+      const validGazWaterAmount = typeof gazExtractionWaterAmountM3PerDay === 'number' && Number.isFinite(gazExtractionWaterAmountM3PerDay) && gazExtractionWaterAmountM3PerDay >= 0;
+
+      if (!gazExtractionPurpose) {
+        form.setError('gazExtractionPurpose', { type: 'manual', message: 'Purpose of extraction is required.' });
+      } else {
+        form.clearErrors('gazExtractionPurpose');
+      }
+
+      if (!gazExtractionDescription) {
+        form.setError('gazExtractionDescription', { type: 'manual', message: 'Brief description of the project is required.' });
+      } else {
+        form.clearErrors('gazExtractionDescription');
+      }
+
+      if (!validGazArea) {
+        form.setError('gazExtractionConcessionAreaM2', { type: 'manual', message: 'Concession area (m²) must be a number greater than 0.' });
+      } else {
+        form.clearErrors('gazExtractionConcessionAreaM2');
+      }
+
+      if (!validGazWaterAmount) {
+        form.setError('gazExtractionWaterAmountM3PerDay', { type: 'manual', message: 'Amount of water required (m³/day) must be a number (enter 0 if none).' });
+      } else {
+        form.clearErrors('gazExtractionWaterAmountM3PerDay');
+      }
+
+      if (!gazExtractionPurpose || !gazExtractionDescription || !validGazArea || !validGazWaterAmount) {
+        setValidationError("Please fill in all Gas Extraction Details before proceeding.");
         return false;
       }
     }
@@ -2554,6 +2650,10 @@ export function ApplicationForm({
         const portConstructionDescription = String(form.watch('portConstructionDescription') || form.getValues('portConstructionDescription') || '').trim();
         const portConstructionConcessionAreaM2 = form.watch('portConstructionConcessionAreaM2') ?? form.getValues('portConstructionConcessionAreaM2');
         const portConstructionDuration = String(form.watch('portConstructionDuration') || form.getValues('portConstructionDuration') || '').trim();
+        const gazExtractionPurpose = String(form.watch('gazExtractionPurpose') || form.getValues('gazExtractionPurpose') || '').trim();
+        const gazExtractionDescription = String(form.watch('gazExtractionDescription') || form.getValues('gazExtractionDescription') || '').trim();
+        const gazExtractionConcessionAreaM2 = form.watch('gazExtractionConcessionAreaM2') ?? form.getValues('gazExtractionConcessionAreaM2');
+        const gazExtractionWaterAmountM3PerDay = form.watch('gazExtractionWaterAmountM3PerDay') ?? form.getValues('gazExtractionWaterAmountM3PerDay');
         const hasRequiredDocs = checkRequiredDocuments();
         
         // Must have at least one activity selected
@@ -2668,7 +2768,7 @@ export function ApplicationForm({
           return !hasRequiredDocs;
         }
 
-        const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities', 'port_construction'];
+        const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities', 'port_construction', 'gaz_extraction'];
         const isPureConcessionAct = intendedActivities.some((a: string) => pureConcessionActs.includes(a));
         const savedCat = form.getValues('waterUseCategory');
         const effectiveCat = isPureConcessionAct ? 'concession' : (savedCat ?? 'abstraction');
@@ -2703,7 +2803,18 @@ export function ApplicationForm({
               typeof portConstructionConcessionAreaM2 === 'number' &&
               Number.isFinite(portConstructionConcessionAreaM2) &&
               portConstructionConcessionAreaM2 > 0);
-          return !hasRequiredDocs || !hasValidPolygons || !hasRecreationDetails || !hasPortConstructionDetails;
+          const hasGazExtractionActivity = intendedActivities.includes('gaz_extraction');
+          const hasGazExtractionDetails =
+            !hasGazExtractionActivity ||
+            (gazExtractionPurpose !== '' &&
+              gazExtractionDescription !== '' &&
+              typeof gazExtractionConcessionAreaM2 === 'number' &&
+              Number.isFinite(gazExtractionConcessionAreaM2) &&
+              gazExtractionConcessionAreaM2 > 0 &&
+              typeof gazExtractionWaterAmountM3PerDay === 'number' &&
+              Number.isFinite(gazExtractionWaterAmountM3PerDay) &&
+              gazExtractionWaterAmountM3PerDay >= 0);
+          return !hasRequiredDocs || !hasValidPolygons || !hasRecreationDetails || !hasPortConstructionDetails || !hasGazExtractionDetails;
         }
         
         // For abstraction activities, water abstraction details and LAT/LONG are required
@@ -4257,7 +4368,7 @@ export function ApplicationForm({
                             <SelectContent>
                               {isGroundwater ? (
                                 <SelectItem value="borehole">{tx("Borehole")}</SelectItem>
-                              ) : isPortConstruction ? (
+                              ) : (isPortConstruction || isGazExtraction) ? (
                                 <SelectItem value="lake">{tx("Lake")}</SelectItem>
                               ) : (
                                 <>
@@ -4301,7 +4412,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          {isPortConstruction ? tx("11. Name of the lake *") : isGroundwater ? tx("11. Name of the borehole *") : tx("11. Name of the source of water *")}
+                          {(isPortConstruction || isGazExtraction) ? tx("11. Name of the lake *") : isGroundwater ? tx("11. Name of the borehole *") : tx("11. Name of the source of water *")}
                         </FormLabel>
                         <FormControl>
                           <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter name of water source" }, "nameSourceWater")} />
@@ -4640,7 +4751,7 @@ export function ApplicationForm({
                               { value: "electricity_generation", label: tx("Electricity generation (Hydropower)") },
                               { value: "fish_farming_lakes", label: tx("Fish farming in lakes") },
                               { value: "fish_farming_ponds", label: tx("Fish farming in ponds") },
-                              { value: "gaz_extraction", label: tx("Gaz extraction") },
+                              { value: "gaz_extraction", label: tx("Gas Extraction") },
                               { value: "industry", label: tx("Industry") },
                               { value: "irrigation", label: tx("Irrigation") },
                               { value: "livestock", label: tx("Livestock") },
@@ -6545,12 +6656,125 @@ export function ApplicationForm({
                         </div>
                       )}
 
-                      {/* Gaz extraction Details */}
+                      {/* Gas Extraction Details */}
                       {watchedIntendedActivities?.includes("gaz_extraction") && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
                           <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
-                            Gaz Extraction Details
+                            8. Gas Extraction Details
                           </h4>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 mb-6">
+                              <tbody>
+                                <tr>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Purpose of extraction <span className="text-red-500">*</span></td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                    <FormField
+                                      control={form.control}
+                                      name="gazExtractionPurpose"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <BaseInput
+                                            {...field}
+                                            value={field.value ?? ""}
+                                            onChange={(e) => field.onChange(e.target.value)}
+                                            placeholder="Purpose of extraction"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            required
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the project <span className="text-red-500">*</span></td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                    <FormField
+                                      control={form.control}
+                                      name="gazExtractionDescription"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <BaseTextarea
+                                            {...field}
+                                            value={field.value ?? ""}
+                                            onChange={(e) => field.onChange(e.target.value)}
+                                            placeholder="Describe the gas extraction project..."
+                                            className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            required
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Concession area (m²) <span className="text-red-500">*</span></td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                    <FormField
+                                      control={form.control}
+                                      name="gazExtractionConcessionAreaM2"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <BaseInput
+                                            {...field}
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              if (readOnly) return;
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? undefined : Number(v));
+                                            }}
+                                            placeholder="Enter concession area in m²"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            required
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Amount of water required, if any (m³/day) <span className="text-red-500">*</span></td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                    <FormField
+                                      control={form.control}
+                                      name="gazExtractionWaterAmountM3PerDay"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <BaseInput
+                                            {...field}
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              if (readOnly) return;
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? undefined : Number(v));
+                                            }}
+                                            placeholder="Enter 0 if no water abstraction is required"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            required
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
 
                           {renderRequiredAttachmentsForActivity("gaz_extraction")}
 
