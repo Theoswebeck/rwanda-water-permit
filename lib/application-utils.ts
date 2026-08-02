@@ -116,7 +116,7 @@ export function formatApplicationTypeForDB(activity: string): Application['appli
     'recreation': 'commercial',
     'recreation_activities': 'commercial',
     'livestock': 'agricultural',
-    'gaz_extraction': 'industrial',
+    'gaz_extraction': 'commercial',
     'other': 'domestic',
   };
   return typeMap[activity] || 'domestic';
@@ -240,6 +240,9 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     const portConstructionM2 = parsePositiveNumber(formData.portConstructionConcessionAreaM2);
     if (portConstructionM2) return Number((portConstructionM2 / 10000).toFixed(4));
 
+    const gazExtractionM2 = parsePositiveNumber(formData.gazExtractionConcessionAreaM2);
+    if (gazExtractionM2) return Number((gazExtractionM2 / 10000).toFixed(4));
+
     const explicit = parsePositiveNumber(formData.concessionArea);
     if (explicit) {
       const unit = String(formData.concessionAreaUnit || '').toLowerCase();
@@ -298,7 +301,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     'recreation': 'commercial', // legacy
     'recreation_activities': 'commercial',
     'livestock': 'agricultural',
-    'gaz_extraction': 'industrial',
+    'gaz_extraction': 'commercial',
     'other': 'domestic'
   };
 
@@ -559,6 +562,12 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       portConstructionDescription: formData.portConstructionDescription,
       portConstructionConcessionAreaM2: formData.portConstructionConcessionAreaM2,
       portConstructionDuration: formData.portConstructionDuration,
+
+      // Gas extraction fields
+      gazExtractionPurpose: formData.gazExtractionPurpose,
+      gazExtractionDescription: formData.gazExtractionDescription,
+      gazExtractionConcessionAreaM2: formData.gazExtractionConcessionAreaM2,
+      gazExtractionWaterAmountM3PerDay: formData.gazExtractionWaterAmountM3PerDay,
 
       // Irrigation structured fields
       irrigationCropType: formData.irrigationCropType,

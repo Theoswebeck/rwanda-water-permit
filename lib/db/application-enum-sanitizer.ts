@@ -100,7 +100,7 @@ function mapApplicationType(value: unknown): string {
     recreation: 'commercial',
     recreation_activities: 'commercial',
     livestock: 'agricultural',
-    gaz_extraction: 'industrial',
+    gaz_extraction: 'commercial',
   }
   const normalized = aliases[key] || key
   return APPLICATION_TYPE.has(normalized) ? normalized : 'domestic'
