@@ -347,6 +347,7 @@ function getActivityLabelKinyarwanda(activity: string): string {
     mining: "ubucukuzi bw'amabuye y'agaciro",
     recreation_activities: "imyidagaduro",
     port_construction: "byo kubaka icyambu",
+    gaz_extraction: "byo gucukura gaze",
     water_supply: "gutanga amazi",
     municipal_supply: "gutanga amazi",
     other: "ibindi",
