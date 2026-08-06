@@ -12,6 +12,9 @@
     "start": "next start",
     "lint": "next lint",
     "test:account-types": "node --test scripts/test-account-types.mjs",
+    "test:activity-classification": "node --test scripts/test-activity-classification.mjs",
+    "test:catchment-resolution": "node --test scripts/test-catchment-resolution.mjs",
+    "build:catchment-lookup": "node scripts/build-catchment-lookup.mjs",
     "audit:inspections-schema": "node scripts/audit-inspections-schema.mjs"
   },
   "dependencies": {

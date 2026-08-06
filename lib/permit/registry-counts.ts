@@ -1,4 +1,8 @@
 import { query } from "@/lib/db/postgres";
+import {
+  activityCodeSqlExpression,
+  activityLabelSqlExpression,
+} from "@/lib/permit/activity-classification";
 
 export type RegistrySchema = {
   hasRegistry: boolean;
@@ -25,7 +29,19 @@ export type RegistryListFilters = {
   regime?: string;
   status?: string;
   waterSource?: string;
+  /**
+   * Coarse "use category" bucket used by the management dashboard's filters.
+   * See ACTIVITY_CATEGORIES below.
+   */
   authorizedActivity?: string;
+  /**
+   * Canonical activity code from `lib/permit/activity-classification`, used by
+   * the Permit Registry's Activity dropdown. Kept separate from
+   * `authorizedActivity` because the two vocabularies differ: the registry
+   * needs the full activity taxonomy (Coffee Washing, Navigation, Gas
+   * Extraction, …), the management dashboard only needs use categories.
+   */
+  activityCode?: string;
 };
 
 export type RegistryWhere = { sql: string; values: unknown[] };
@@ -123,6 +139,15 @@ function buildCategoryCaseExpr(columnExpr: string, categories: CategoryRule[]): 
 
 const WATER_SOURCE_CATEGORY_SQL = buildCategoryCaseExpr("pr.water_source", WATER_SOURCE_CATEGORIES);
 const ACTIVITY_CATEGORY_SQL = buildCategoryCaseExpr("pr.authorized_activity", ACTIVITY_CATEGORIES);
+
+/**
+ * Canonical activity code for a registry row — the same classification the
+ * Permit Registry table and the public Water Use Dashboard display.
+ */
+export const REGISTRY_ACTIVITY_CODE_SQL = activityCodeSqlExpression("pr.authorized_activity");
+
+/** Display label for a registry row's activity — the value staff sort on. */
+export const REGISTRY_ACTIVITY_LABEL_SQL = activityLabelSqlExpression("pr.authorized_activity");
 
 export async function detectRegistrySchema(): Promise<RegistrySchema> {
   const [tablesRes, extRes] = await Promise.all([
@@ -245,6 +270,13 @@ export function buildRegistryWhere(
 
   if (filters.authorizedActivity && filters.authorizedActivity !== "all") {
     where.push(`${ACTIVITY_CATEGORY_SQL} = lower(${p(filters.authorizedActivity)})`);
+  }
+
+  // Registry Activity filter. Uses the canonical classifier so the dropdown
+  // matches every spelling of an activity in the registry, across all pages —
+  // not just the rows currently rendered.
+  if (filters.activityCode && filters.activityCode !== "all") {
+    where.push(`${REGISTRY_ACTIVITY_CODE_SQL} = ${p(filters.activityCode)}`);
   }
 
   return {

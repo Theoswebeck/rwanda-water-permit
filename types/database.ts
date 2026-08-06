@@ -469,6 +469,8 @@ export interface PermitRegistryEntry {
   volume_or_area: string | null
   method_of_water_taking: string | null
   authorized_activity: string | null
+  /** Canonical activity code derived from `authorized_activity` (server-computed). */
+  activity_code?: string | null
   location: string | null
   latitude: number | null
   longitude: number | null

@@ -1,0 +1,1790 @@
+{
+  "districts": {
+    "nyarugenge": {
+      "code": "NNYL",
+      "share": 0.7903
+    },
+    "gasabo": {
+      "code": "NNYL",
+      "share": 0.7092
+    },
+    "kicukiro": {
+      "code": "NAKU",
+      "share": 0.8771
+    },
+    "nyanza": {
+      "code": "NAKN",
+      "share": 0.5608
+    },
+    "gisagara": {
+      "code": "NAKN",
+      "share": 0.9992
+    },
+    "nyaruguru": {
+      "code": "NAKN",
+      "share": 0.8427
+    },
+    "huye": {
+      "code": "NNYU",
+      "share": 0.5056
+    },
+    "nyamagabe": {
+      "code": "NNYU",
+      "share": 0.9326
+    },
+    "ruhango": {
+      "code": "NNYU",
+      "share": 0.5049
+    },
+    "muhanga": {
+      "code": "NNYU",
+      "share": 0.4946
+    },
+    "kamonyi": {
+      "code": "NNYL",
+      "share": 0.7483
+    },
+    "karongi": {
+      "code": "CKIV",
+      "share": 0.5734
+    },
+    "rutsiro": {
+      "code": "CKIV",
+      "share": 0.9124
+    },
+    "rubavu": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyabihu": {
+      "code": "NMUK",
+      "share": 0.7541
+    },
+    "ngororero": {
+      "code": "NNYU",
+      "share": 0.8262
+    },
+    "rusizi": {
+      "code": "CRUS",
+      "share": 0.8137
+    },
+    "rulindo": {
+      "code": "NNYL",
+      "share": 0.9937
+    },
+    "gakenke": {
+      "code": "NNYL",
+      "share": 0.6693
+    },
+    "musanze": {
+      "code": "NMUK",
+      "share": 0.9949
+    },
+    "burera": {
+      "code": "NMUK",
+      "share": 0.8803
+    },
+    "gicumbi": {
+      "code": "NMUV",
+      "share": 0.5484
+    },
+    "rwamagana": {
+      "code": "NAKU",
+      "share": 0.7209
+    },
+    "nyagatare": {
+      "code": "NAKL",
+      "share": 0.5099
+    },
+    "gatsibo": {
+      "code": "NAKL",
+      "share": 0.7184
+    },
+    "kayonza": {
+      "code": "NAKL",
+      "share": 0.8397
+    },
+    "kirehe": {
+      "code": "NAKU",
+      "share": 0.56
+    },
+    "ngoma": {
+      "code": "NAKU",
+      "share": 0.9627
+    },
+    "bugesera": {
+      "code": "NAKN",
+      "share": 0.5128
+    },
+    "nyamasheke": {
+      "code": "CKIV",
+      "share": 0.9278
+    }
+  },
+  "sectors": {
+    "nyarugenge|gitega": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "nyarugenge|kanyinya": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "nyarugenge|kigali": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "nyarugenge|kimisagara": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "nyarugenge|mageregere": {
+      "code": "NAKU",
+      "share": 0.5083
+    },
+    "nyarugenge|muhima": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "nyarugenge|nyakabanda": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "nyarugenge|nyamirambo": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "nyarugenge|nyarugenge": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "nyarugenge|rwezamenyo": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gasabo|bumbogo": {
+      "code": "NNYL",
+      "share": 0.7064
+    },
+    "gasabo|gatsata": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gasabo|gikomero": {
+      "code": "NNYL",
+      "share": 0.9901
+    },
+    "gasabo|gisozi": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gasabo|jabana": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gasabo|jali": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gasabo|kacyiru": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gasabo|kimihurura": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gasabo|kimironko": {
+      "code": "NNYL",
+      "share": 0.6666
+    },
+    "gasabo|kinyinya": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gasabo|ndera": {
+      "code": "NAKU",
+      "share": 0.9921
+    },
+    "gasabo|nduba": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gasabo|remera": {
+      "code": "NNYL",
+      "share": 0.8283
+    },
+    "gasabo|rusororo": {
+      "code": "NAKU",
+      "share": 0.9893
+    },
+    "gasabo|rutunga": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "kicukiro|gahanga": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "kicukiro|gatenga": {
+      "code": "NNYL",
+      "share": 0.5023
+    },
+    "kicukiro|gikondo": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "kicukiro|kagarama": {
+      "code": "NAKU",
+      "share": 0.9273
+    },
+    "kicukiro|kanombe": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "kicukiro|kicukiro": {
+      "code": "NNYL",
+      "share": 0.9818
+    },
+    "kicukiro|kigarama": {
+      "code": "NNYL",
+      "share": 0.9879
+    },
+    "kicukiro|masaka": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "kicukiro|niboye": {
+      "code": "NAKU",
+      "share": 0.9914
+    },
+    "kicukiro|nyarugunga": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "nyanza|busasamana": {
+      "code": "NNYU",
+      "share": 0.789
+    },
+    "nyanza|busoro": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "nyanza|cyabakamyi": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyanza|kibilizi": {
+      "code": "NAKN",
+      "share": 0.9994
+    },
+    "nyanza|kigoma": {
+      "code": "NAKN",
+      "share": 0.9589
+    },
+    "nyanza|mukingo": {
+      "code": "NNYU",
+      "share": 0.9625
+    },
+    "nyanza|muyira": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "nyanza|ntyazo": {
+      "code": "NAKN",
+      "share": 0.9999
+    },
+    "nyanza|nyagisozi": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyanza|rwabicuma": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "gisagara|gikonko": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "gisagara|gishubi": {
+      "code": "NAKN",
+      "share": 0.999
+    },
+    "gisagara|kansi": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "gisagara|kibirizi": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "gisagara|kigembe": {
+      "code": "NAKN",
+      "share": 0.9993
+    },
+    "gisagara|mamba": {
+      "code": "NAKN",
+      "share": 0.9981
+    },
+    "gisagara|muganza": {
+      "code": "NAKN",
+      "share": 0.999
+    },
+    "gisagara|mugombwa": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "gisagara|mukindo": {
+      "code": "NAKN",
+      "share": 0.9971
+    },
+    "gisagara|musha": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "gisagara|ndora": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "gisagara|nyanza": {
+      "code": "NAKN",
+      "share": 0.9986
+    },
+    "gisagara|save": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "nyaruguru|busanze": {
+      "code": "NAKN",
+      "share": 0.9992
+    },
+    "nyaruguru|cyahinda": {
+      "code": "NAKN",
+      "share": 0.9994
+    },
+    "nyaruguru|kibeho": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "nyaruguru|kivu": {
+      "code": "NAKN",
+      "share": 0.9983
+    },
+    "nyaruguru|mata": {
+      "code": "NAKN",
+      "share": 0.997
+    },
+    "nyaruguru|muganza": {
+      "code": "NAKN",
+      "share": 0.9611
+    },
+    "nyaruguru|munini": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "nyaruguru|ngera": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "nyaruguru|ngoma": {
+      "code": "NAKN",
+      "share": 0.9991
+    },
+    "nyaruguru|nyabimata": {
+      "code": "CRUS",
+      "share": 0.6671
+    },
+    "nyaruguru|nyagisozi": {
+      "code": "NAKN",
+      "share": 0.999
+    },
+    "nyaruguru|ruheru": {
+      "code": "NAKN",
+      "share": 0.5359
+    },
+    "nyaruguru|ruramba": {
+      "code": "NAKN",
+      "share": 0.5783
+    },
+    "nyaruguru|rusenge": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "huye|gishamvu": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "huye|huye": {
+      "code": "NAKN",
+      "share": 0.9857
+    },
+    "huye|karama": {
+      "code": "NAKN",
+      "share": 0.9954
+    },
+    "huye|kigoma": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "huye|kinazi": {
+      "code": "NAKN",
+      "share": 0.6355
+    },
+    "huye|maraba": {
+      "code": "NNYU",
+      "share": 0.9888
+    },
+    "huye|mbazi": {
+      "code": "NNYU",
+      "share": 0.5063
+    },
+    "huye|mukura": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "huye|ngoma": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "huye|ruhashya": {
+      "code": "NNYU",
+      "share": 0.7258
+    },
+    "huye|rusatira": {
+      "code": "NAKN",
+      "share": 0.7247
+    },
+    "huye|rwaniro": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "huye|simbi": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "huye|tumba": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "nyamagabe|buruhukiro": {
+      "code": "NNYU",
+      "share": 0.9705
+    },
+    "nyamagabe|cyanika": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyamagabe|gasaka": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyamagabe|gatare": {
+      "code": "NNYU",
+      "share": 0.9926
+    },
+    "nyamagabe|kaduha": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyamagabe|kamegeri": {
+      "code": "NNYU",
+      "share": 0.9993
+    },
+    "nyamagabe|kibirizi": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyamagabe|kibumbwe": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyamagabe|kitabi": {
+      "code": "NAKN",
+      "share": 0.5202
+    },
+    "nyamagabe|mbazi": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyamagabe|mugano": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyamagabe|musange": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyamagabe|musebeya": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyamagabe|mushubi": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "nyamagabe|nkomane": {
+      "code": "NNYU",
+      "share": 0.7929
+    },
+    "nyamagabe|tare": {
+      "code": "NNYU",
+      "share": 0.9713
+    },
+    "nyamagabe|uwinkingi": {
+      "code": "NNYU",
+      "share": 0.9951
+    },
+    "ruhango|bweramana": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ruhango|byimana": {
+      "code": "NNYU",
+      "share": 0.6192
+    },
+    "ruhango|kabagali": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ruhango|kinazi": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "ruhango|kinihira": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ruhango|mbuye": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "ruhango|mwendo": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ruhango|ntongwe": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "ruhango|ruhango": {
+      "code": "NAKN",
+      "share": 0.5146
+    },
+    "muhanga|cyeza": {
+      "code": "NNYL",
+      "share": 0.9999
+    },
+    "muhanga|kabacuzi": {
+      "code": "NNYL",
+      "share": 0.9981
+    },
+    "muhanga|kibangu": {
+      "code": "NNYU",
+      "share": 0.9984
+    },
+    "muhanga|kiyumba": {
+      "code": "NNYL",
+      "share": 0.9961
+    },
+    "muhanga|muhanga": {
+      "code": "NNYU",
+      "share": 0.6219
+    },
+    "muhanga|mushishiro": {
+      "code": "NNYU",
+      "share": 0.9995
+    },
+    "muhanga|nyabinoni": {
+      "code": "NNYU",
+      "share": 0.7543
+    },
+    "muhanga|nyamabuye": {
+      "code": "NNYU",
+      "share": 0.7512
+    },
+    "muhanga|nyarusange": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "muhanga|rongi": {
+      "code": "NNYL",
+      "share": 0.881
+    },
+    "muhanga|rugendabari": {
+      "code": "NNYU",
+      "share": 0.9914
+    },
+    "muhanga|shyogwe": {
+      "code": "NAKN",
+      "share": 0.5168
+    },
+    "kamonyi|gacurabwenge": {
+      "code": "NNYL",
+      "share": 0.8792
+    },
+    "kamonyi|karama": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "kamonyi|kayenzi": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "kamonyi|kayumbu": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "kamonyi|mugina": {
+      "code": "NAKN",
+      "share": 0.8065
+    },
+    "kamonyi|musambira": {
+      "code": "NNYL",
+      "share": 0.7442
+    },
+    "kamonyi|ngamba": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "kamonyi|nyamiyaga": {
+      "code": "NAKN",
+      "share": 0.5404
+    },
+    "kamonyi|nyarubaka": {
+      "code": "NAKN",
+      "share": 0.6185
+    },
+    "kamonyi|rugarika": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "kamonyi|rukoma": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "kamonyi|runda": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "karongi|bwishyura": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "karongi|gashari": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "karongi|gishyita": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "karongi|gitesi": {
+      "code": "CKIV",
+      "share": 0.901
+    },
+    "karongi|mubuga": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "karongi|murambi": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "karongi|murundi": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "karongi|mutuntu": {
+      "code": "NNYU",
+      "share": 0.9999
+    },
+    "karongi|rubengera": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "karongi|rugabano": {
+      "code": "NNYU",
+      "share": 0.5113
+    },
+    "karongi|ruganda": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "karongi|rwankuba": {
+      "code": "CKIV",
+      "share": 0.5896
+    },
+    "karongi|twumba": {
+      "code": "NNYU",
+      "share": 0.5327
+    },
+    "rutsiro|boneza": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rutsiro|gihango": {
+      "code": "CKIV",
+      "share": 0.999
+    },
+    "rutsiro|kigeyo": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rutsiro|kivumu": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rutsiro|manihira": {
+      "code": "CKIV",
+      "share": 0.677
+    },
+    "rutsiro|mukura": {
+      "code": "CKIV",
+      "share": 0.5881
+    },
+    "rutsiro|murunda": {
+      "code": "CKIV",
+      "share": 0.9668
+    },
+    "rutsiro|musasa": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rutsiro|mushonyi": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rutsiro|mushubati": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rutsiro|nyabirasi": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rutsiro|ruhango": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rutsiro|rusebeya": {
+      "code": "NNYU",
+      "share": 0.8674
+    },
+    "rubavu|bugeshi": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rubavu|busasamana": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rubavu|cyanzarwe": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rubavu|gisenyi": {
+      "code": "CKIV",
+      "share": 0.9999
+    },
+    "rubavu|kanama": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rubavu|kanzenze": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rubavu|mudende": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rubavu|nyakiriba": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rubavu|nyamyumba": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rubavu|nyundo": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rubavu|rubavu": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rubavu|rugerero": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyabihu|bigogwe": {
+      "code": "CKIV",
+      "share": 0.9264
+    },
+    "nyabihu|jenda": {
+      "code": "NMUK",
+      "share": 0.662
+    },
+    "nyabihu|jomba": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "nyabihu|kabatwa": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyabihu|karago": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "nyabihu|kintobo": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "nyabihu|mukamira": {
+      "code": "NMUK",
+      "share": 0.9741
+    },
+    "nyabihu|muringa": {
+      "code": "NMUK",
+      "share": 0.8978
+    },
+    "nyabihu|rambura": {
+      "code": "NMUK",
+      "share": 0.8795
+    },
+    "nyabihu|rugera": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "nyabihu|rurembo": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "nyabihu|shyira": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "ngororero|bwira": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ngororero|gatumba": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ngororero|hindiro": {
+      "code": "NNYU",
+      "share": 0.8565
+    },
+    "ngororero|kabaya": {
+      "code": "NMUK",
+      "share": 0.5974
+    },
+    "ngororero|kageyo": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ngororero|kavumu": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ngororero|matyazo": {
+      "code": "NMUK",
+      "share": 0.6026
+    },
+    "ngororero|muhanda": {
+      "code": "NNYU",
+      "share": 0.4494
+    },
+    "ngororero|muhororo": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ngororero|ndaro": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ngororero|ngororero": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ngororero|nyange": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "ngororero|sovu": {
+      "code": "NNYU",
+      "share": 1
+    },
+    "rusizi|bugarama": {
+      "code": "CRUS",
+      "share": 0.9959
+    },
+    "rusizi|butare": {
+      "code": "CRUS",
+      "share": 0.9818
+    },
+    "rusizi|bweyeye": {
+      "code": "CRUS",
+      "share": 0.9975
+    },
+    "rusizi|gashonga": {
+      "code": "CRUS",
+      "share": 1
+    },
+    "rusizi|giheke": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rusizi|gihundwe": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rusizi|gikundamvura": {
+      "code": "CRUS",
+      "share": 0.9984
+    },
+    "rusizi|gitambi": {
+      "code": "CRUS",
+      "share": 1
+    },
+    "rusizi|kamembe": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rusizi|muganza": {
+      "code": "CRUS",
+      "share": 1
+    },
+    "rusizi|mururu": {
+      "code": "CKIV",
+      "share": 0.5842
+    },
+    "rusizi|nkanka": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rusizi|nkombo": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rusizi|nkungu": {
+      "code": "CRUS",
+      "share": 0.8768
+    },
+    "nyamasheke|nyakabuye": {
+      "code": "CRUS",
+      "share": 1
+    },
+    "rusizi|nyakarenzo": {
+      "code": "CRUS",
+      "share": 0.8325
+    },
+    "rusizi|nzahaha": {
+      "code": "CRUS",
+      "share": 0.9999
+    },
+    "rusizi|rwimbogo": {
+      "code": "CRUS",
+      "share": 1
+    },
+    "nyamasheke|bushekeri": {
+      "code": "CKIV",
+      "share": 0.9715
+    },
+    "nyamasheke|bushenge": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyamasheke|cyato": {
+      "code": "CKIV",
+      "share": 0.9173
+    },
+    "nyamasheke|gihombo": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyamasheke|kagano": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyamasheke|kanjongo": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyamasheke|karambi": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyamasheke|karengera": {
+      "code": "CRUS",
+      "share": 0.9958
+    },
+    "nyamasheke|kirimbi": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyamasheke|macuba": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyamasheke|mahembe": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyamasheke|nyabitekeri": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "nyamasheke|rangiro": {
+      "code": "CKIV",
+      "share": 0.9644
+    },
+    "nyamasheke|ruharambuga": {
+      "code": "CKIV",
+      "share": 0.8474
+    },
+    "nyamasheke|shangi": {
+      "code": "CKIV",
+      "share": 1
+    },
+    "rulindo|base": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|burega": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|bushoki": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|buyoga": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|cyinzuzi": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|cyungo": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|kinihira": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|kisaro": {
+      "code": "NNYL",
+      "share": 0.9065
+    },
+    "rulindo|masoro": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|mbogo": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|murambi": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|ngoma": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|ntarabana": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|rukozo": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|rusiga": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|shyrongi": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "rulindo|tumba": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gakenke|busengo": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "gakenke|coko": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gakenke|cyabingo": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "gakenke|gakenke": {
+      "code": "NNYL",
+      "share": 0.9921
+    },
+    "gakenke|gashenyi": {
+      "code": "NNYL",
+      "share": 0.9364
+    },
+    "gakenke|janja": {
+      "code": "NMUK",
+      "share": 0.9597
+    },
+    "gakenke|kamubuga": {
+      "code": "NMUK",
+      "share": 0.9883
+    },
+    "gakenke|karambo": {
+      "code": "NNYL",
+      "share": 0.9987
+    },
+    "gakenke|kivuruga": {
+      "code": "NMUK",
+      "share": 0.9956
+    },
+    "gakenke|mataba": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gakenke|minazi": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gakenke|mugunga": {
+      "code": "NMUK",
+      "share": 0.9025
+    },
+    "gakenke|muhondo": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gakenke|muyongwe": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gakenke|muzo": {
+      "code": "NNYL",
+      "share": 0.6682
+    },
+    "gakenke|nemba": {
+      "code": "NNYL",
+      "share": 0.9744
+    },
+    "gakenke|ruli": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gakenke|rusasa": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "gakenke|rushashi": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "musanze|busogo": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|cyuve": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|gacaca": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|gashaki": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|gataraga": {
+      "code": "NMUK",
+      "share": 0.9475
+    },
+    "musanze|kimonyi": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|kinigi": {
+      "code": "NMUK",
+      "share": 0.9998
+    },
+    "musanze|muhoza": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|muko": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|musanze": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|nkotsi": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|nyange": {
+      "code": "NMUK",
+      "share": 0.9998
+    },
+    "musanze|remera": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|rwaza": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "musanze|shingiro": {
+      "code": "NMUK",
+      "share": 0.9981
+    },
+    "burera|bungwe": {
+      "code": "NMUV",
+      "share": 0.4896
+    },
+    "burera|butaro": {
+      "code": "NMUK",
+      "share": 0.8794
+    },
+    "burera|cyanika": {
+      "code": "NMUK",
+      "share": 0.9999
+    },
+    "burera|cyeru": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "burera|gahunga": {
+      "code": "NMUK",
+      "share": 0.9997
+    },
+    "burera|gatebe": {
+      "code": "NMUK",
+      "share": 0.7909
+    },
+    "burera|gitovu": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "burera|kagogo": {
+      "code": "NMUK",
+      "share": 0.9998
+    },
+    "burera|kinoni": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "burera|kinyababa": {
+      "code": "NMUK",
+      "share": 0.9998
+    },
+    "burera|kivuye": {
+      "code": "NMUK",
+      "share": 0.5984
+    },
+    "burera|nemba": {
+      "code": "NMUK",
+      "share": 0.5629
+    },
+    "burera|rugarama": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "burera|rugengabari": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "burera|ruhunde": {
+      "code": "NMUK",
+      "share": 0.887
+    },
+    "burera|rusarabuye": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "burera|rwerere": {
+      "code": "NMUK",
+      "share": 1
+    },
+    "gicumbi|bukure": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gicumbi|bwisige": {
+      "code": "NMUV",
+      "share": 1
+    },
+    "gicumbi|byumba": {
+      "code": "NMUV",
+      "share": 0.7876
+    },
+    "gicumbi|cyumba": {
+      "code": "NMUV",
+      "share": 0.9995
+    },
+    "gicumbi|giti": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gicumbi|kageyo": {
+      "code": "NNYL",
+      "share": 0.8631
+    },
+    "gicumbi|kaniga": {
+      "code": "NMUV",
+      "share": 0.9998
+    },
+    "gicumbi|manyagiro": {
+      "code": "NMUV",
+      "share": 0.965
+    },
+    "gicumbi|miyove": {
+      "code": "NNYL",
+      "share": 0.6977
+    },
+    "gicumbi|mukarange": {
+      "code": "NMUV",
+      "share": 1
+    },
+    "gicumbi|muko": {
+      "code": "NNYL",
+      "share": 0.8834
+    },
+    "gicumbi|mutete": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gicumbi|nyamiyaga": {
+      "code": "NNYL",
+      "share": 0.8222
+    },
+    "gicumbi|nyankenke": {
+      "code": "NMUV",
+      "share": 0.7995
+    },
+    "gicumbi|rubaya": {
+      "code": "NMUV",
+      "share": 0.9999
+    },
+    "gicumbi|rukomo": {
+      "code": "NMUV",
+      "share": 0.8937
+    },
+    "gicumbi|rushaki": {
+      "code": "NMUV",
+      "share": 1
+    },
+    "gicumbi|rutare": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gicumbi|ruvune": {
+      "code": "NMUV",
+      "share": 0.9162
+    },
+    "gicumbi|rwamiko": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gicumbi|shangasha": {
+      "code": "NMUV",
+      "share": 1
+    },
+    "rwamagana|fumbwe": {
+      "code": "NNYL",
+      "share": 0.643
+    },
+    "rwamagana|gahengeri": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "rwamagana|gishali": {
+      "code": "NNYL",
+      "share": 0.9893
+    },
+    "rwamagana|karenge": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "rwamagana|kigabiro": {
+      "code": "NAKU",
+      "share": 0.9252
+    },
+    "rwamagana|muhazi": {
+      "code": "NNYL",
+      "share": 0.7317
+    },
+    "rwamagana|munyaga": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "rwamagana|munyiginya": {
+      "code": "NNYL",
+      "share": 0.9996
+    },
+    "rwamagana|musha": {
+      "code": "NNYL",
+      "share": 0.8515
+    },
+    "rwamagana|muyumbu": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "rwamagana|mwulire": {
+      "code": "NAKU",
+      "share": 0.9642
+    },
+    "rwamagana|nyakaliro": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "rwamagana|nzige": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "rwamagana|rubona": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "nyagatare|gatunda": {
+      "code": "NMUV",
+      "share": 1
+    },
+    "nyagatare|karama": {
+      "code": "NMUV",
+      "share": 0.9999
+    },
+    "nyagatare|karangazi": {
+      "code": "NAKL",
+      "share": 0.9932
+    },
+    "nyagatare|katabagemu": {
+      "code": "NAKL",
+      "share": 0.6613
+    },
+    "nyagatare|kiyombe": {
+      "code": "NMUV",
+      "share": 0.9999
+    },
+    "nyagatare|matimba": {
+      "code": "NAKL",
+      "share": 0.6105
+    },
+    "nyagatare|mimuri": {
+      "code": "NMUV",
+      "share": 1
+    },
+    "nyagatare|mukama": {
+      "code": "NMUV",
+      "share": 1
+    },
+    "nyagatare|musheri": {
+      "code": "NMUV",
+      "share": 0.9988
+    },
+    "nyagatare|nyagatare": {
+      "code": "NMUV",
+      "share": 0.7471
+    },
+    "nyagatare|rukomo": {
+      "code": "NMUV",
+      "share": 1
+    },
+    "nyagatare|rwempasha": {
+      "code": "NMUV",
+      "share": 0.9987
+    },
+    "nyagatare|rwimiyaga": {
+      "code": "NAKL",
+      "share": 0.8951
+    },
+    "nyagatare|tabagwe": {
+      "code": "NMUV",
+      "share": 0.9997
+    },
+    "gatsibo|gasange": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gatsibo|gatsibo": {
+      "code": "NAKL",
+      "share": 0.5301
+    },
+    "gatsibo|gitoki": {
+      "code": "NAKL",
+      "share": 1
+    },
+    "gatsibo|kabarore": {
+      "code": "NAKL",
+      "share": 1
+    },
+    "gatsibo|kageyo": {
+      "code": "NAKL",
+      "share": 0.4543
+    },
+    "gatsibo|kiramuruzi": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gatsibo|kiziguro": {
+      "code": "NNYL",
+      "share": 0.5246
+    },
+    "gatsibo|muhura": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gatsibo|murambi": {
+      "code": "NNYL",
+      "share": 1
+    },
+    "gatsibo|ngarama": {
+      "code": "NMUV",
+      "share": 0.5347
+    },
+    "gatsibo|nyagihanga": {
+      "code": "NMUV",
+      "share": 0.9976
+    },
+    "gatsibo|remera": {
+      "code": "NNYL",
+      "share": 0.6155
+    },
+    "gatsibo|rugarama": {
+      "code": "NAKL",
+      "share": 0.9323
+    },
+    "gatsibo|rwimbogo": {
+      "code": "NAKL",
+      "share": 1
+    },
+    "kayonza|gahini": {
+      "code": "NAKL",
+      "share": 0.8511
+    },
+    "kayonza|kabare": {
+      "code": "NAKL",
+      "share": 0.8855
+    },
+    "kayonza|kabarondo": {
+      "code": "NAKU",
+      "share": 0.7495
+    },
+    "kayonza|mukarange": {
+      "code": "NNYL",
+      "share": 0.7216
+    },
+    "kayonza|murama": {
+      "code": "NAKL",
+      "share": 0.9915
+    },
+    "kayonza|murundi": {
+      "code": "NAKL",
+      "share": 1
+    },
+    "kayonza|mwiri": {
+      "code": "NAKL",
+      "share": 0.9568
+    },
+    "kayonza|ndego": {
+      "code": "NAKL",
+      "share": 1
+    },
+    "kayonza|nyamirama": {
+      "code": "NNYL",
+      "share": 0.467
+    },
+    "kayonza|rukara": {
+      "code": "NNYL",
+      "share": 0.8587
+    },
+    "kayonza|ruramira": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "kayonza|rwinkwavu": {
+      "code": "NAKL",
+      "share": 1
+    },
+    "kirehe|gahara": {
+      "code": "NAKU",
+      "share": 0.9996
+    },
+    "kirehe|gatore": {
+      "code": "NAKU",
+      "share": 0.9996
+    },
+    "kirehe|kigarama": {
+      "code": "NAKU",
+      "share": 0.9969
+    },
+    "kirehe|kigina": {
+      "code": "NAKU",
+      "share": 0.8805
+    },
+    "kirehe|kirehe": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "kirehe|mahama": {
+      "code": "NAKL",
+      "share": 0.9991
+    },
+    "kirehe|mpanga": {
+      "code": "NAKL",
+      "share": 0.9534
+    },
+    "kirehe|musaza": {
+      "code": "NAKU",
+      "share": 0.9996
+    },
+    "kirehe|mushikiri": {
+      "code": "NAKU",
+      "share": 0.9848
+    },
+    "kirehe|nasho": {
+      "code": "NAKL",
+      "share": 0.9014
+    },
+    "kirehe|nyamugari": {
+      "code": "NAKL",
+      "share": 0.9832
+    },
+    "kirehe|nyarubuye": {
+      "code": "NAKU",
+      "share": 0.744
+    },
+    "ngoma|gashanda": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "ngoma|jarama": {
+      "code": "NAKU",
+      "share": 0.9996
+    },
+    "ngoma|karembo": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "ngoma|kazo": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "ngoma|kibungo": {
+      "code": "NAKU",
+      "share": 0.5776
+    },
+    "ngoma|mugesera": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "ngoma|murama": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "ngoma|mutenderi": {
+      "code": "NAKU",
+      "share": 0.9996
+    },
+    "ngoma|remera": {
+      "code": "NAKU",
+      "share": 0.7234
+    },
+    "ngoma|rukira": {
+      "code": "NAKU",
+      "share": 0.9997
+    },
+    "ngoma|rukumberi": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "ngoma|rurenge": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "ngoma|sake": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "ngoma|zaza": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "bugesera|gashora": {
+      "code": "NAKU",
+      "share": 0.9972
+    },
+    "bugesera|juru": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "bugesera|kamabuye": {
+      "code": "NAKN",
+      "share": 0.9971
+    },
+    "bugesera|mareba": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "bugesera|mayange": {
+      "code": "NAKN",
+      "share": 0.723
+    },
+    "bugesera|musenyi": {
+      "code": "NAKN",
+      "share": 1
+    },
+    "bugesera|mwogo": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "bugesera|ngeruka": {
+      "code": "NAKN",
+      "share": 0.9993
+    },
+    "bugesera|ntarama": {
+      "code": "NAKU",
+      "share": 0.5713
+    },
+    "bugesera|nyamata": {
+      "code": "NAKU",
+      "share": 0.5941
+    },
+    "bugesera|nyarugenge": {
+      "code": "NAKN",
+      "share": 0.9984
+    },
+    "bugesera|rilima": {
+      "code": "NAKU",
+      "share": 1
+    },
+    "bugesera|ruhuha": {
+      "code": "NAKN",
+      "share": 0.9993
+    },
+    "bugesera|rweru": {
+      "code": "NAKU",
+      "share": 0.8454
+    },
+    "bugesera|shyara": {
+      "code": "NAKN",
+      "share": 1
+    }
+  }
+}

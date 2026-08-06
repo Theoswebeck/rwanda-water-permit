@@ -9,6 +9,8 @@ export const permitRegistryKeys = {
 export interface PermitRegistryQueryParams {
   q?: string;
   regime?: string;
+  /** Canonical activity code (see lib/permit/activity-classification). */
+  activity?: string;
   status?: string;
   sort_by?: string;
   sort_dir?: "asc" | "desc";
@@ -41,6 +43,7 @@ export function usePermitRegistryQuery(params: PermitRegistryQueryParams, enable
       searchParams.set("sort_dir", params.sort_dir ?? "asc");
       if (params.q && params.q.trim()) searchParams.set("q", params.q.trim());
       if (params.regime && params.regime !== "all") searchParams.set("regime", params.regime);
+      if (params.activity && params.activity !== "all") searchParams.set("activity", params.activity);
       if (params.status && params.status !== "all") searchParams.set("status", params.status);
 
       const res = await fetch(`/api/staff/permit-registry?${searchParams.toString()}`, {

@@ -57,6 +57,12 @@ import { useDeletePermitRegistry } from "@/hooks/useDeletePermitRegistry";
 import type { PermitRegistryEntry } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
+import {
+  ACTIVITY_NOT_SPECIFIED,
+  activityFilterOptions,
+  classifyActivity,
+  getActivityCategoryLabel,
+} from "@/lib/permit/activity-classification";
 import { cn } from "@/lib/utils";
 import { RowActions } from "@/components/permit-registry/row-actions";
 import { EditRegistryDrawer } from "@/components/permit-registry/edit-registry-drawer";
@@ -98,6 +104,7 @@ type SortField =
   | "serial_number"
   | "permit_holder"
   | "permit_number"
+  | "activity"
   | "status";
 type SortDir = "asc" | "desc";
 
@@ -131,7 +138,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const PAGE_SIZE = 50;
   const [activeRegistryTab, setActiveRegistryTab] = useState<"permits" | "map">("permits");
   const [searchTerm, setSearchTerm] = useState("");
-  const [regimeFilter, setRegimeFilter] = useState<string>("all");
+  const [activityFilter, setActivityFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("row_index");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -160,7 +167,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const offset = (currentPage - 1) * PAGE_SIZE;
   const { data, isLoading, error, refetch } = usePermitRegistryQuery({
     q: searchTerm,
-    regime: regimeFilter,
+    activity: activityFilter,
     status: statusFilter,
     sort_by: sortField,
     sort_dir: sortDir,
@@ -170,13 +177,9 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const entries = data?.items || [];
   const total = data?.total || 0;
 
-  const availableRegimes = useMemo(() => {
-    const regimes = new Set<string>(["Concession", "Authorization"]);
-    for (const entry of entries) {
-      if (entry.regime) regimes.add(entry.regime);
-    }
-    return Array.from(regimes).sort();
-  }, [entries]);
+  // The activity options are the fixed canonical taxonomy, not values scraped
+  // from the current page — the filter has to reach rows on every other page too.
+  const availableActivities = useMemo(() => activityFilterOptions(), []);
 
   const availableStatuses = useMemo(() => {
     const statuses = new Set<string>(["OPERATIONAL", "EXPIRED", "SUSPENDED", "REVOKED", "EXPIRING_SOON"]);
@@ -237,7 +240,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     setCurrentPage(1);
     setJumpPage("");
     setJumpError(false);
-  }, [searchTerm, regimeFilter, statusFilter, sortField, sortDir]);
+  }, [searchTerm, activityFilter, statusFilter, sortField, sortDir]);
 
   useEffect(() => {
     if (total > 0 && currentPage > totalPages) {
@@ -469,38 +472,37 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     );
   };
 
-  const getRegimeBadge = (regime: string | null | undefined) => {
-    if (!regime) return <span className="text-xs text-muted-foreground">--</span>;
-    if (regime.toLowerCase() === "concession") {
-      return (
-        <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-400 dark:border-violet-800 text-xs font-medium px-2 py-0.5 rounded-full">
-          Concession
-        </Badge>
-      );
+  /**
+   * Activity cell. Falls back to classifying the raw text client-side if the
+   * API response predates `activity_code` (e.g. a cached response), so the
+   * column never renders blank.
+   */
+  const getActivityBadge = (entry: PermitRegistryEntry) => {
+    const code = entry.activity_code || classifyActivity(entry.authorized_activity);
+    if (code === ACTIVITY_NOT_SPECIFIED) {
+      return <span className="text-xs text-muted-foreground">--</span>;
     }
-    if (regime.toLowerCase() === "authorization") {
-      return (
-        <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-400 dark:border-sky-800 text-xs font-medium px-2 py-0.5 rounded-full">
-          Authorization
-        </Badge>
-      );
-    }
+    const label = getActivityCategoryLabel(code);
     return (
-      <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 text-xs font-medium px-2 py-0.5 rounded-full">
-        {regime}
+      <Badge
+        variant="outline"
+        title={entry.authorized_activity || label}
+        className="max-w-full overflow-hidden bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-400 dark:border-sky-800 text-xs font-medium px-2 py-0.5 rounded-full"
+      >
+        <span className="block min-w-0 max-w-full truncate">{label}</span>
       </Badge>
     );
   };
 
   const activeFilterCount = [
-    regimeFilter !== "all",
+    activityFilter !== "all",
     statusFilter !== "all",
     searchTerm.trim() !== "",
   ].filter(Boolean).length;
 
   const clearFilters = () => {
     setSearchTerm("");
-    setRegimeFilter("all");
+    setActivityFilter("all");
     setStatusFilter("all");
   };
 
@@ -612,14 +614,16 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Select value={regimeFilter} onValueChange={setRegimeFilter}>
-              <SelectTrigger className="w-[150px] border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg h-10">
-                <SelectValue placeholder="Regime" />
+            <Select value={activityFilter} onValueChange={setActivityFilter}>
+              <SelectTrigger className="w-[190px] border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg h-10">
+                <SelectValue placeholder="Activity" />
               </SelectTrigger>
               <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
-                <SelectItem value="all">All Regimes</SelectItem>
-                {availableRegimes.map((r) => (
-                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                <SelectItem value="all">All Activities</SelectItem>
+                {availableActivities.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -927,8 +931,14 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                         <SortIcon field="permit_number" />
                       </span>
                     </TableHead>
-                    <TableHead className="w-[120px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
-                      Regime
+                    <TableHead
+                      className="w-[170px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
+                      onClick={() => toggleSort("activity")}
+                    >
+                      <span className="flex items-center">
+                        Activity
+                        <SortIcon field="activity" />
+                      </span>
                     </TableHead>
                     <TableHead className="hidden 2xl:table-cell w-[150px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                       Water Source
@@ -993,7 +1003,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                             </code>
                           </TableCell>
                           <TableCell className="p-2 sm:p-3 whitespace-nowrap">
-                            {getRegimeBadge(entry.regime)}
+                            {getActivityBadge(entry)}
                           </TableCell>
                           <TableCell className="p-2 sm:p-3 hidden 2xl:table-cell">
                             <div className="flex items-center gap-1.5">
