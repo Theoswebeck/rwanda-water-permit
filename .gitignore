@@ -43,3 +43,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude/
+
+# User-uploaded documents.
+#
+# On the on-prem server public/uploads is a SYMLINK to
+# /var/data/waterpermit/uploads, deliberately outside this working tree:
+# on 2026-07-08 a git operation run against the production checkout wiped
+# public/uploads and destroyed 1,400 applicant documents permanently.
+# Keeping the store out of the tree — and this entry, so `git clean -fd`
+# cannot remove even the symlink — is what prevents a repeat.
+# Never commit uploads, and never run git workflows on the prod checkout.
+/public/uploads
