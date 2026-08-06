@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +11,17 @@ import {
   usePublicWaterUseDashboardQuery,
   type PublicDashboardBucket,
 } from "@/hooks/usePublicWaterUseDashboardQuery";
+import {
+  getPreferredLanguage,
+  subscribeToLanguageChanges,
+  type AppLanguage,
+} from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
+
+/** Translate a sentence that carries numbers, then substitute them back in. */
+function fillTemplate(template: string, values: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (match, key) => values[key] ?? match);
+}
 
 /**
  * Public Water Use Dashboard.
@@ -29,11 +40,13 @@ function StatTile({
   label,
   value,
   loading,
+  tx,
   tone = "muted",
 }: {
   label: string;
   value: number;
   loading: boolean;
+  tx: (value: string) => string;
   tone?: "muted" | "positive" | "warning" | "danger";
 }) {
   const toneClass =
@@ -48,7 +61,7 @@ function StatTile({
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+        <CardTitle className="text-sm font-medium text-muted-foreground">{tx(label)}</CardTitle>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -68,10 +81,16 @@ function RankedBars({
   rows,
   loading,
   emptyMessage,
+  tx,
 }: {
   rows: PublicDashboardBucket[];
   loading: boolean;
   emptyMessage: string;
+  /**
+   * District and catchment names are proper nouns and pass through unchanged;
+   * activity categories are in the dictionary and do get translated.
+   */
+  tx: (value: string) => string;
 }) {
   const maxCount = useMemo(
     () => rows.reduce((max, row) => Math.max(max, row.count), 0),
@@ -89,7 +108,7 @@ function RankedBars({
   }
 
   if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
+    return <p className="text-sm text-muted-foreground">{tx(emptyMessage)}</p>;
   }
 
   return (
@@ -99,7 +118,7 @@ function RankedBars({
           <div className="flex items-baseline justify-between gap-3">
             <span className="min-w-0 truncate text-sm font-medium text-slate-800 dark:text-slate-200">
               <span className="mr-2 text-xs tabular-nums text-muted-foreground">{index + 1}.</span>
-              {row.label}
+              {tx(row.label)}
             </span>
             <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
               <span className="font-semibold text-slate-900 dark:text-slate-100">
@@ -125,6 +144,15 @@ export default function WaterUseDashboardPage() {
   const { data, isLoading, error } = usePublicWaterUseDashboardQuery();
   const [tab, setTab] = useState("total");
 
+  // Language is read on the client only (localStorage), so the first render is
+  // English and re-renders when the header's EN/RW toggle fires its event.
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = useCallback((value: string) => translateText(value, language), [language]);
+
   const totals = data?.totals;
   const attribution = data?.catchmentAttribution;
 
@@ -142,9 +170,9 @@ export default function WaterUseDashboardPage() {
               <Waves className="h-7 w-7 text-primary" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Water Use Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{tx("Water Use Dashboard")}</h1>
           <p className="mx-auto max-w-2xl text-muted-foreground">
-            Water use permits issued across Rwanda, as recorded in the national Permit Registry.
+            {tx("Water use permits issued across Rwanda, as recorded in the national Permit Registry.")}
           </p>
         </header>
 
@@ -157,10 +185,10 @@ export default function WaterUseDashboardPage() {
 
         <Tabs value={tab} onValueChange={setTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
-            <TabsTrigger value="total">Total Permits</TabsTrigger>
-            <TabsTrigger value="district">Per District</TabsTrigger>
-            <TabsTrigger value="catchment">Per Catchment</TabsTrigger>
-            <TabsTrigger value="activity">Per Activity</TabsTrigger>
+            <TabsTrigger value="total">{tx("Total Permits")}</TabsTrigger>
+            <TabsTrigger value="district">{tx("Per District")}</TabsTrigger>
+            <TabsTrigger value="catchment">{tx("Per Catchment")}</TabsTrigger>
+            <TabsTrigger value="activity">{tx("Per Activity")}</TabsTrigger>
           </TabsList>
 
           {/* ---------------------------------------------------------- Total */}
@@ -168,10 +196,10 @@ export default function WaterUseDashboardPage() {
             <Card className="border-0 bg-gradient-to-br from-sky-700 to-sky-900 text-white shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-white/90">
-                  Total permits in the registry
+                  {tx("Total permits in the registry")}
                 </CardTitle>
                 <CardDescription className="text-white/70">
-                  All water use permits on record, including expired and cancelled ones
+                  {tx("All water use permits on record, including expired and cancelled ones")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -190,14 +218,27 @@ export default function WaterUseDashboardPage() {
                 label="Active"
                 value={totals?.operational ?? 0}
                 loading={isLoading}
+                tx={tx}
                 tone="positive"
               />
-              <StatTile label="Expired" value={totals?.expired ?? 0} loading={isLoading} tone="danger" />
-              <StatTile label="Cancelled" value={totals?.cancelled ?? 0} loading={isLoading} />
+              <StatTile
+                label="Expired"
+                value={totals?.expired ?? 0}
+                loading={isLoading}
+                tx={tx}
+                tone="danger"
+              />
+              <StatTile
+                label="Cancelled"
+                value={totals?.cancelled ?? 0}
+                loading={isLoading}
+                tx={tx}
+              />
               <StatTile
                 label="Expiring within 3 months"
                 value={totals?.expiringSoon ?? 0}
                 loading={isLoading}
+                tx={tx}
                 tone="warning"
               />
             </div>
@@ -209,11 +250,12 @@ export default function WaterUseDashboardPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-primary" />
-                  Permits per District
+                  {tx("Permits per District")}
                 </CardTitle>
                 <CardDescription>
-                  Districts ranked by number of permits, out of {formatNumber(totals?.total ?? 0)} in
-                  total.
+                  {fillTemplate(tx("Districts ranked by number of permits, out of {total} in total."), {
+                    total: formatNumber(totals?.total ?? 0),
+                  })}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -221,6 +263,7 @@ export default function WaterUseDashboardPage() {
                   rows={data?.byDistrict ?? []}
                   loading={isLoading}
                   emptyMessage="No permits recorded yet."
+                  tx={tx}
                 />
               </CardContent>
             </Card>
@@ -232,10 +275,10 @@ export default function WaterUseDashboardPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Droplets className="h-4 w-4 text-primary" />
-                  Permits per Catchment
+                  {tx("Permits per Catchment")}
                 </CardTitle>
                 <CardDescription>
-                  Rwanda&apos;s nine Level-I river catchments, ranked by number of permits.
+                  {tx("Rwanda's nine Level-I river catchments, ranked by number of permits.")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -243,16 +286,26 @@ export default function WaterUseDashboardPage() {
                   rows={data?.byCatchment ?? []}
                   loading={isLoading}
                   emptyMessage="No permits recorded yet."
+                  tx={tx}
                 />
                 {attribution && !isLoading ? (
                   <p className="border-t pt-3 text-xs text-muted-foreground">
-                    {formatNumber(attribution.fromCoordinates)} permits were placed in a catchment
-                    from their recorded coordinates, and{" "}
-                    {formatNumber(attribution.estimatedFromLocation)} from the district or sector
-                    named in the permit — an estimate, since a district can span more than one
-                    catchment.{" "}
+                    {fillTemplate(
+                      tx(
+                        "{coordinates} permits were placed in a catchment from their recorded coordinates, and {estimated} from the district or sector named in the permit — an estimate, since a district can span more than one catchment."
+                      ),
+                      {
+                        coordinates: formatNumber(attribution.fromCoordinates),
+                        estimated: formatNumber(attribution.estimatedFromLocation),
+                      }
+                    )}{" "}
                     {attribution.unattributed > 0
-                      ? `${formatNumber(attribution.unattributed)} permits do not record a location precise enough to attribute.`
+                      ? fillTemplate(
+                          tx(
+                            "{unattributed} permits do not record a location precise enough to attribute."
+                          ),
+                          { unattributed: formatNumber(attribution.unattributed) }
+                        )
                       : ""}
                   </p>
                 ) : null}
@@ -266,11 +319,10 @@ export default function WaterUseDashboardPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Activity className="h-4 w-4 text-primary" />
-                  Permits per Activity
+                  {tx("Permits per Activity")}
                 </CardTitle>
                 <CardDescription>
-                  The authorised water use recorded on each permit, grouped into activity
-                  categories.
+                  {tx("The authorised water use recorded on each permit, grouped into activity categories.")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -278,6 +330,7 @@ export default function WaterUseDashboardPage() {
                   rows={data?.byActivity ?? []}
                   loading={isLoading}
                   emptyMessage="No permits recorded yet."
+                  tx={tx}
                 />
               </CardContent>
             </Card>
@@ -286,8 +339,10 @@ export default function WaterUseDashboardPage() {
 
         {data?.generatedAt ? (
           <p className="text-center text-xs text-muted-foreground">
-            Source: Rwanda Water Resources Board Permit Registry. Updated{" "}
-            {new Date(data.generatedAt).toLocaleString()}.
+            {fillTemplate(
+              tx("Source: Rwanda Water Resources Board Permit Registry. Updated {date}."),
+              { date: new Date(data.generatedAt).toLocaleString() }
+            )}
           </p>
         ) : null}
       </motion.div>
