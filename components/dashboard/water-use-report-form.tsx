@@ -1021,7 +1021,7 @@ export function WaterUseReportForm({
 
                   {template === 'abstraction' && (
                     <div className="pt-4 border-t">
-                      <h4 className="font-medium mb-4">{tx("3.2 Water Use Data (if any)")}</h4>
+                      <h4 className="font-medium mb-4">{tx("3.2 Water Use Data (for non-operational) — if any")}</h4>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="nonOpVolume">{tx("Total Volume Used (m³)")}</Label>
@@ -1165,7 +1165,7 @@ export function WaterUseReportForm({
               {/* 3.3 Quarterly Water Use Data - Abstraction, operational only */}
               {template === 'abstraction' && !isNonOperational && (
                 <div className="pt-4 border-t">
-                  <h4 className="font-medium mb-4">{tx("3.2 Quarterly Water Use Data")}</h4>
+                  <h4 className="font-medium mb-4">{tx("3.3 Quarterly Water Use Data (for operational)")}</h4>
                   <Table>
                     <TableHeader>
                       <TableRow>
