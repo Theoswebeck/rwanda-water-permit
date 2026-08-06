@@ -66,6 +66,8 @@ import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { getApplicationWorkflowKind } from "@/lib/application-workflow";
 import { fetchAssessorOptions } from "@/lib/staff-assessors";
+import { ApprovedApplicationActions } from "@/components/shared/approved-application-actions";
+import { fetchLinkedPermitsForApprovedApps, type LinkedPermitLite } from "@/lib/linked-permits";
 
 interface ReviewApplication extends Application {
   applicant_name?: string;
@@ -78,12 +80,6 @@ interface ReviewApplication extends Application {
     email?: string | null;
   } | null;
 }
-
-type LinkedPermitLite = {
-  id: string;
-  permit_number: string;
-  permit_pdf_url: string | null;
-};
 
 interface StaffMember {
   id: string;
@@ -131,7 +127,6 @@ function ReviewerDashboardContent() {
   const [activeChipIds, setActiveChipIds] = useState<string[]>(["new_submissions", "pending_review"]);
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
   const [permitByApplicationId, setPermitByApplicationId] = useState<Record<string, LinkedPermitLite>>({});
-  const [busyAction, setBusyAction] = useState<{ appId: string; kind: "permit_pdf" | "terms_pdf" } | null>(null);
 
   // Assessor assignment state
   const [assessors, setAssessors] = useState<StaffMember[]>([]);
@@ -228,88 +223,7 @@ function ReviewerDashboardContent() {
 
         // Fetch linked permits for approved applications (for Actions: View Permit / View PDF)
         try {
-          const approvedApps = processedApplications.filter((a) => a.status === "approved");
-          if (approvedApps.length === 0) {
-            setPermitByApplicationId({});
-          } else {
-            const appIdSet = new Set<string>(approvedApps.map((a) => a.id));
-            const appToPermitId: Record<string, string> = {};
-            const permitIdsToFetch = new Set<string>();
-
-            for (const app of approvedApps) {
-              // Renewals: permit id is directly referenced
-              if ((app as any).is_renewal === true && (app as any).renewed_from_permit_id) {
-                const pid = String((app as any).renewed_from_permit_id);
-                appToPermitId[app.id] = pid;
-                permitIdsToFetch.add(pid);
-                continue;
-              }
-
-              // Modifications: permit id lives in internal_notes.originalPermitId
-              if ((app as any).is_modification === true && (app as any).internal_notes) {
-                try {
-                  const parsed = JSON.parse(String((app as any).internal_notes));
-                  const pid = parsed?.originalPermitId;
-                  if (typeof pid === "string" && pid.trim()) {
-                    appToPermitId[app.id] = pid;
-                    permitIdsToFetch.add(pid);
-                    continue;
-                  }
-                } catch {
-                  // ignore parse errors
-                }
-              }
-            }
-
-            // 1) Permits that are directly linked via `permits.application_id` (new permits + transfers)
-            const { data: permitsByApp, error: permitsByAppError } = await supabase
-              .from("permits")
-              .select("id, application_id, permit_number, permit_pdf_url")
-              .in("application_id", Array.from(appIdSet));
-            if (permitsByAppError) throw permitsByAppError;
-
-            // 2) Permits referenced via renewal/modification permit IDs
-            let permitsById: any[] = [];
-            if (permitIdsToFetch.size > 0) {
-              const { data: permits, error: permitsByIdError } = await supabase
-                .from("permits")
-                .select("id, application_id, permit_number, permit_pdf_url")
-                .in("id", Array.from(permitIdsToFetch));
-              if (permitsByIdError) throw permitsByIdError;
-              permitsById = permits || [];
-            }
-
-            const permitById = new Map<string, LinkedPermitLite>();
-            for (const p of permitsById as any[]) {
-              if (p?.id && p?.permit_number) {
-                permitById.set(String(p.id), {
-                  id: String(p.id),
-                  permit_number: String(p.permit_number),
-                  permit_pdf_url: (p as any).permit_pdf_url ?? null,
-                });
-              }
-            }
-
-            const linked: Record<string, LinkedPermitLite> = {};
-
-            for (const p of (permitsByApp || []) as any[]) {
-              const applicationId = String(p.application_id);
-              if (!appIdSet.has(applicationId)) continue;
-              if (!p?.id || !p?.permit_number) continue;
-              linked[applicationId] = {
-                id: String(p.id),
-                permit_number: String(p.permit_number),
-                permit_pdf_url: (p as any).permit_pdf_url ?? null,
-              };
-            }
-
-            for (const [appId, pid] of Object.entries(appToPermitId)) {
-              const permit = permitById.get(pid);
-              if (permit) linked[appId] = permit;
-            }
-
-            setPermitByApplicationId(linked);
-          }
+          setPermitByApplicationId(await fetchLinkedPermitsForApprovedApps(processedApplications as any));
         } catch (e) {
           console.warn("⚠️ Failed to load linked permits for approved apps:", e);
           setPermitByApplicationId({});
@@ -345,181 +259,6 @@ function ReviewerDashboardContent() {
 
     fetchReviewApplications();
   }, []);
-
-  const openPermitPdf = async (app: ReviewApplication) => {
-    const permit = permitByApplicationId[app.id];
-    if (!permit?.id || !permit?.permit_number) {
-      alert("No linked permit found for this approved application.");
-      return;
-    }
-    if (busyAction) return;
-    setBusyAction({ appId: app.id, kind: "permit_pdf" });
-    try {
-      const verificationUrl = `https://waterpermit.rwb.rw/permit/view/${encodeURIComponent(permit.permit_number)}`;
-      window.open(verificationUrl, "_blank", "noopener,noreferrer");
-    } catch (e) {
-      console.error("❌ Failed to open permit page:", e);
-      alert("Failed to open permit page. Please try again.");
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const openTermsPdf = async (app: ReviewApplication) => {
-    if (busyAction) return;
-    if (app.terms_status && app.terms_status !== "accepted") {
-      alert("Terms have not been accepted for this application yet.");
-      return;
-    }
-
-    const permit = permitByApplicationId[app.id];
-    if (!permit?.id || !permit?.permit_number) {
-      alert("No linked permit found for this approved application.");
-      return;
-    }
-
-    setBusyAction({ appId: app.id, kind: "terms_pdf" });
-
-    const parseNotes = (s: unknown): Record<string, any> => {
-      if (typeof s !== "string" || !s.trim()) return {};
-      try {
-        const v = JSON.parse(s);
-        if (v && typeof v === "object" && !Array.isArray(v)) return v;
-        return {};
-      } catch {
-        return {};
-      }
-    };
-
-    const notes = parseNotes(app.internal_notes);
-    const existingPath = typeof notes.accepted_terms_pdf_url === "string" ? notes.accepted_terms_pdf_url : null;
-    if (existingPath) {
-      const blob = await downloadFromDocumentsBucket(existingPath);
-      if (!blob) {
-        alert("Failed to open Terms PDF. Please try again.");
-        setBusyAction(null);
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      setBusyAction(null);
-      return;
-    }
-
-    try {
-      // Fetch enough application data to render the exact contract terms + placeholders.
-      const { data: applicationData, error: appErr } = await supabase
-        .from("applications")
-        .select(
-          `
-          id,
-          internal_notes,
-          water_source,
-          water_body_name,
-          max_daily_volume_m3,
-          max_yearly_volume_m3,
-          estimated_usage_volume,
-          usage_unit,
-          proposed_duration_years,
-          concession_area,
-          intended_activities,
-          province,
-          district,
-          sector,
-          cell,
-          village,
-          coordinates,
-          applicant:users!applicant_id(account_type, first_name, last_name, company_name, id_number)
-        `
-        )
-        .eq("id", app.id)
-        .single();
-
-      if (appErr || !applicationData) throw appErr ?? new Error("Application not found");
-
-      const variant = selectPermitVariant(applicationData as any);
-      // getResolvedContractTerms applies any assessor text overrides on top
-      // of the variant template + placeholder substitution; returns null
-      // when the variant has no template.
-      const resolvedTerms = getResolvedContractTerms({
-        application: applicationData as any,
-        applicationNumber: app.application_number || "",
-        variantOverride: variant,
-      });
-      if (!resolvedTerms) throw new Error("No contract terms configured for this application type.");
-
-      // placeholderCtx is no longer needed for filling text (resolver did it)
-      // but a couple of downstream callers still want it for derived labels.
-      const placeholderCtx = buildContractPlaceholderContext(
-        applicationData as any,
-        app.application_number || "",
-      );
-      void placeholderCtx;
-      const filledSections = resolvedTerms.sections.map((section) => ({
-        title: section.title,
-        paragraphs: section.paragraphs,
-      }));
-
-      const applicantName = (() => {
-        const applicant = (applicationData as any).applicant;
-        if (!applicant) return "N/A";
-        if (applicant.account_type === "individual") {
-          return `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || "N/A";
-        }
-        return applicant.company_name || "N/A";
-      })();
-
-      const contractNumber = String(permit.permit_number).replace(/^WP-/, "");
-      const postAcceptanceNoticeBody =
-        "You have already acknowledged that these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.";
-
-      const termsBlob = await generateTermsConditionsPdfBlob({
-        applicationNumber: app.application_number || "N/A",
-        projectTitle: app.project_title || "N/A",
-        applicantName,
-        contractNumber,
-        termsHeading: resolvedTerms.heading,
-        termsSections: filledSections,
-        importantNotice: resolvedTerms.importantNotice
-          ? { ...resolvedTerms.importantNotice, body: postAcceptanceNoticeBody }
-          : null,
-      });
-
-      // Upload + persist path in internal_notes (best-effort).
-      const upload = await uploadTermsPdf({
-        permitId: permit.id,
-        contractNumber,
-        pdfBlob: termsBlob,
-      });
-
-      if (upload?.path) {
-        const mergedPatch = {
-          accepted_terms_pdf_url: upload.path,
-          accepted_terms_pdf_updated_at: new Date().toISOString(),
-        };
-
-        // Persist via staff API (service role) to avoid RLS issues.
-        await fetch(`/api/staff/applications/${encodeURIComponent(app.id)}/internal-notes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patch: mergedPatch }),
-        }).catch(() => null);
-
-        const merged = { ...notes, ...mergedPatch };
-        setReviewApplications((prev) => prev.map((a) => (a.id === app.id ? ({ ...a, internal_notes: JSON.stringify(merged) } as any) : a)));
-      }
-
-      const url = URL.createObjectURL(termsBlob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (e) {
-      console.error("❌ Failed to generate/open terms PDF:", e);
-      alert("Failed to generate Terms PDF. Please try again.");
-    } finally {
-      setBusyAction(null);
-    }
-  };
 
   // Fetch assessors for assignment dropdown
   useEffect(() => {
@@ -828,59 +567,16 @@ function ReviewerDashboardContent() {
                       <TableCell className="p-2 sm:p-3 text-right">
                         <div className="flex items-center justify-end">
                         {app.status === "approved" ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="outline" size="sm" className="h-8 min-w-[72px] justify-center px-2">
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem asChild>
-                                <Link
-                                  href={`/review/application/${app.application_number}`}
-                                  className="flex items-center"
-                                >
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View Application
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={async () => {
-                                  await openPermitPdf(app);
-                                }}
-                                disabled={!!busyAction}
-                                className="flex items-center cursor-pointer"
-                              >
-                                {busyAction?.appId === app.id && busyAction.kind === "permit_pdf" ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                  <Eye className="h-4 w-4 mr-2" />
-                                )}
-                                {busyAction?.appId === app.id && busyAction.kind === "permit_pdf"
-                                  ? "Opening Permit Page…"
-                                  : "View Permit Page"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={async () => {
-                                  await openTermsPdf(app);
-                                }}
-                                disabled={!!busyAction}
-                                className="flex items-center cursor-pointer"
-                              >
-                                {busyAction?.appId === app.id && busyAction.kind === "terms_pdf" ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                  <Download className="h-4 w-4 mr-2" />
-                                )}
-                                {busyAction?.appId === app.id && busyAction.kind === "terms_pdf"
-                                  ? "Generating Terms PDF…"
-                                  : "View Terms PDF"}
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <ApprovedApplicationActions
+                            app={app}
+                            permit={permitByApplicationId[app.id]}
+                            viewApplicationHref={`/review/application/${app.application_number}`}
+                            onInternalNotesUpdated={(appId, internalNotes) =>
+                              setReviewApplications((prev) =>
+                                prev.map((a) => (a.id === appId ? ({ ...a, internal_notes: internalNotes } as any) : a))
+                              )
+                            }
+                          />
                         ) : canAssignOrReassignFromReviewDashboard(app.status) && !isFinalizedStatus(app.status) ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -970,25 +666,6 @@ function ReviewerDashboardContent() {
   return (
     <ProtectedRoute allowedRoles={['reviewer', 'admin']} requireProfile={true}>
       <DashboardLayout>
-        {busyAction ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-            <div className="w-[92vw] max-w-md rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-xl dark:border-slate-800 dark:bg-slate-950/90">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-slate-100 p-3 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                    {busyAction.kind === "permit_pdf" ? "Opening Permit Page" : "Preparing Terms PDF"}
-                  </div>
-                  <div className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                    This can take a few seconds. Please keep this tab open.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

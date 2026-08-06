@@ -35,6 +35,8 @@ import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
 import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { getApplicationWorkflowKind } from "@/lib/application-workflow";
+import { ApprovedApplicationActions } from "@/components/shared/approved-application-actions";
+import { fetchLinkedPermitsForApprovedApps, type LinkedPermitLite } from "@/lib/linked-permits";
 
 interface AssessmentApplication extends Application {
   applicant_name?: string;
@@ -71,6 +73,7 @@ function AssessmentDashboardContent() {
   const [activeChipId, setActiveChipId] = useState("pending_assessment");
   const [activeInnerTab, setActiveInnerTab] = useState<"all_applications" | "map">("all_applications");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
+  const [permitByApplicationId, setPermitByApplicationId] = useState<Record<string, LinkedPermitLite>>({});
 
   const processApplications = (data: any[] | null | undefined): AssessmentApplication[] => {
     return (data ?? [])
@@ -135,6 +138,16 @@ function AssessmentDashboardContent() {
 
         const processedAll = processApplications(allData);
         setAllApplications(processedAll);
+
+        // Fetch linked permits for approved applications (for Actions: View
+        // Permit Page / View Terms PDF). Best-effort: a failure here must not
+        // blank the whole assessment dashboard.
+        try {
+          setPermitByApplicationId(await fetchLinkedPermitsForApprovedApps(processedAll as any));
+        } catch (e) {
+          console.warn("⚠️ Failed to load linked permits for approved apps:", e);
+          setPermitByApplicationId({});
+        }
 
         // Batch-fetch workflow dates
         const submittedAtMap: Record<string, string | null> = {};
@@ -309,18 +322,31 @@ function AssessmentDashboardContent() {
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
                         <div className="flex justify-end">
-                          <Link href={`/assessment/application/${app.application_number}`}>
-                            <Button 
-                              size="sm" 
-                              className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
-                            >
-                              <Eye className="h-3 w-3" />
-                              <span className="hidden sm:inline">
-                                {!!user?.id && app.assigned_assessor_id === user.id && (app.status === "under_review" || app.status === "pending_assessment" || app.status === "returned_to_assessment") ? "Continue" : "View"}
-                              </span>
-                              <span className="sm:hidden">Go</span>
-                            </Button>
-                          </Link>
+                          {app.status === "approved" ? (
+                            <ApprovedApplicationActions
+                              app={app}
+                              permit={permitByApplicationId[app.id]}
+                              viewApplicationHref={`/assessment/application/${app.application_number}`}
+                              onInternalNotesUpdated={(appId, internalNotes) =>
+                                setAllApplications((prev) =>
+                                  prev.map((a) => (a.id === appId ? ({ ...a, internal_notes: internalNotes } as any) : a))
+                                )
+                              }
+                            />
+                          ) : (
+                            <Link href={`/assessment/application/${app.application_number}`}>
+                              <Button
+                                size="sm"
+                                className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
+                              >
+                                <Eye className="h-3 w-3" />
+                                <span className="hidden sm:inline">
+                                  {!!user?.id && app.assigned_assessor_id === user.id && (app.status === "under_review" || app.status === "pending_assessment" || app.status === "returned_to_assessment") ? "Continue" : "View"}
+                                </span>
+                                <span className="sm:hidden">Go</span>
+                              </Button>
+                            </Link>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
