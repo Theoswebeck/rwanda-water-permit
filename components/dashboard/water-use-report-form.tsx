@@ -1054,8 +1054,8 @@ export function WaterUseReportForm({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="day">m³/day</SelectItem>
-                                <SelectItem value="month">m³/month</SelectItem>
+                                <SelectItem value="day">{tx("m³/day")}</SelectItem>
+                                <SelectItem value="month">{tx("m³/month")}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -1208,8 +1208,8 @@ export function WaterUseReportForm({
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="day">m³/day</SelectItem>
-                                  <SelectItem value="month">m³/month</SelectItem>
+                                  <SelectItem value="day">{tx("m³/day")}</SelectItem>
+                                  <SelectItem value="month">{tx("m³/month")}</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
