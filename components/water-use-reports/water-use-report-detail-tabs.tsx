@@ -354,17 +354,42 @@ function ReportSections({
   section9: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   getApplicantName: (r: WaterUseReportWithRelations) => string;
 }) {
+  // A section is worth a tab if the current template still uses it, or if this
+  // report predates the 2026 template revision and carries data for it.
+  const hasValues = (obj: Record<string, unknown>) =>
+    Object.values(obj || {}).some(
+      (v) => v !== "" && v !== null && v !== undefined && v !== false &&
+        !(Array.isArray(v) && v.length === 0),
+    );
+
+  const isNonOperational = section3.operationalStatus === "non_operational";
+  const isConcession = report.template === "concession";
+
   const sectionTabs = [
     { id: "section1", label: "General Info", icon: User },
     { id: "section2", label: "Permitted Use", icon: Droplets },
     { id: "section3", label: "Actual Use", icon: BarChart3 },
-    { id: "section4", label: "Efficiency", icon: Leaf },
-    { id: "section5", label: "Environmental", icon: Leaf },
-    { id: "section6", label: "Social/Gender", icon: Users },
-    { id: "section7", label: "Compliance", icon: CheckSquare },
-    { id: "section8", label: "Future Plans", icon: Calendar },
+    ...(!isConcession && (!isNonOperational || hasValues(section4))
+      ? [{ id: "section4", label: "Efficiency", icon: Leaf }]
+      : []),
+    ...(!isNonOperational || hasValues(section5_monitoring) || hasValues(section5_incidents)
+      ? [{ id: "section5", label: "Environmental", icon: Leaf }]
+      : []),
+    ...(!isNonOperational || hasValues(section6_employment) || hasValues(section6_ohs)
+      ? [{ id: "section6", label: "Social/Gender", icon: Users }]
+      : []),
+    // Compliance Status was retired by the 2026 template — legacy reports only.
+    ...(hasValues(section7)
+      ? [{ id: "section7", label: "Compliance", icon: CheckSquare }]
+      : []),
+    ...(!isNonOperational || hasValues(section8)
+      ? [{ id: "section8", label: "Future Plans", icon: Calendar }]
+      : []),
     { id: "section9", label: "Declaration", icon: FileSignature },
   ];
+
+  const sectionNo: Record<string, number> = {};
+  sectionTabs.forEach((t, i) => { sectionNo[t.id] = i + 1; });
 
   const [sectionTab, setSectionTab] = useState("section1");
 
@@ -376,7 +401,7 @@ function ReportSections({
           onValueChange={setSectionTab}
           className="w-full"
         >
-          <TabsList className="grid grid-cols-9 w-full mb-6">
+          <TabsList className="grid w-full mb-6" style={{ gridTemplateColumns: `repeat(${sectionTabs.length}, minmax(0, 1fr))` }}>
             {sectionTabs.map((tab) => (
               <TabsTrigger
                 key={tab.id}
@@ -403,7 +428,7 @@ function ReportSections({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <User className="h-5 w-5" />
-                    Section 1: General Information
+                    {`Section ${sectionNo.section1}: General Information`}
                   </CardTitle>
                   <CardDescription>
                     Permit holder and project details
@@ -479,7 +504,7 @@ function ReportSections({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Droplets className="h-5 w-5" />
-                    Section 2: Permitted Water Use Summary
+                    {`Section ${sectionNo.section2}: Permitted Water Use Summary`}
                   </CardTitle>
                   <CardDescription>
                     Authorized values from the permit
@@ -550,7 +575,7 @@ function ReportSections({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <BarChart3 className="h-5 w-5" />
-                    Section 3: Actual Water Use
+                    {`Section ${sectionNo.section3}: Actual Water Use`}
                   </CardTitle>
                   <CardDescription>
                     Reported water usage for the year
@@ -574,6 +599,24 @@ function ReportSections({
                     )}
                   </div>
 
+                  {isNonOperational && section3.nonOperationalReason && (
+                    <div>
+                      <Label className="text-muted-foreground text-sm">
+                        Reason for Non-Operational Status
+                      </Label>
+                      <div className="mt-1 p-3 bg-amber-50 rounded-md border border-amber-200 text-sm">
+                        {section3.nonOperationalReason}
+                      </div>
+                    </div>
+                  )}
+
+                  {isConcession && section3.changesduringYear && (
+                    <ReadOnlyField
+                      label="Changes During Reporting Year"
+                      value={section3.changesDescription || "Yes"}
+                    />
+                  )}
+
                   {section3.waterUseConflicts && (
                     <div>
                       <Label className="text-muted-foreground text-sm">
@@ -585,6 +628,32 @@ function ReportSections({
                     </div>
                   )}
 
+                  {/* Non-operational water use data (abstraction, "if any") */}
+                  {!isConcession && isNonOperational && (
+                    <div className="pt-4 border-t">
+                      <h4 className="font-semibold mb-4">Water Use Data (if any)</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <ReadOnlyField
+                          label="Total Volume Used (m³)"
+                          value={section3.nonOperationalVolume}
+                        />
+                        <ReadOnlyField
+                          label="Average Use"
+                          value={
+                            section3.nonOperationalAverageUse
+                              ? `${section3.nonOperationalAverageUse} m³/${section3.nonOperationalAverageUnit || "day"}`
+                              : undefined
+                          }
+                        />
+                        <ReadOnlyField
+                          label="Measurement Method"
+                          value={section3.nonOperationalMethod}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {!isConcession && !isNonOperational && (
                   <div className="pt-4 border-t">
                     <h4 className="font-semibold mb-4">
                       Quarterly Water Use Data
@@ -594,7 +663,7 @@ function ReportSections({
                         <TableRow>
                           <TableHead>Quarter</TableHead>
                           <TableHead>Volume (m³)</TableHead>
-                          <TableHead>Avg Daily (m³/day)</TableHead>
+                          <TableHead>Average Use</TableHead>
                           <TableHead>Measurement Method</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -607,7 +676,7 @@ function ReportSections({
                                 Q{idx + 1}
                               </TableCell>
                               <TableCell>{qData.volume || "-"}</TableCell>
-                              <TableCell>{qData.avgDaily || "-"}</TableCell>
+                              <TableCell>{qData.avgDaily ? `${qData.avgDaily} m³/${qData.avgUnit || "day"}` : "-"}</TableCell>
                               <TableCell className="capitalize">
                                 {qData.method?.replace(/_/g, " ") || "-"}
                               </TableCell>
@@ -635,6 +704,7 @@ function ReportSections({
                       </TableBody>
                     </Table>
                   </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
@@ -651,7 +721,7 @@ function ReportSections({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Leaf className="h-5 w-5" />
-                    Section 4: Water Use Efficiency
+                    {`Section ${sectionNo.section4}: Water Use Efficiency`}
                   </CardTitle>
                   <CardDescription>
                     Measures taken to improve water efficiency
@@ -659,11 +729,13 @@ function ReportSections({
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <ReadOnlyField
-                      label="Efficiency Measures Implemented"
-                      value={section4.efficiencyMeasures}
-                      className="md:col-span-2"
-                    />
+                    {section4.efficiencyMeasures && (
+                      <ReadOnlyField
+                        label="Efficiency Measures Implemented"
+                        value={section4.efficiencyMeasures}
+                        className="md:col-span-2"
+                      />
+                    )}
                     <ReadOnlyField
                       label="Water Recycling/Reuse Practices"
                       value={section4.recyclingPractices}
@@ -674,11 +746,11 @@ function ReportSections({
                       value={section4.estimatedWaterSaved}
                     />
                     <ReadOnlyField
-                      label="Reduction Percentage (%)"
+                      label="Water Reduction vs Previous Year (%)"
                       value={section4.reductionPercentage}
                     />
                     <ReadOnlyField
-                      label="Identified Water Losses"
+                      label="Identified Losses (Leakage, Source Seepage, Dry-out Evaporation, etc.)"
                       value={section4.identifiedLosses}
                       className="md:col-span-2"
                     />
@@ -699,13 +771,45 @@ function ReportSections({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Leaf className="h-5 w-5" />
-                    Section 5: Environmental Compliance
+                    {`Section ${sectionNo.section5}: Environmental Compliance`}
                   </CardTitle>
                   <CardDescription>
                     Water quality monitoring and environmental incidents
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {isConcession && (
+                    <div>
+                      <h4 className="font-semibold mb-4">Environmental Practices</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <ReadOnlyField
+                          label="Nature/Property of Offshore Infrastructure/Equipment"
+                          value={
+                            Array.isArray(section5_monitoring.infrastructureNature) &&
+                            section5_monitoring.infrastructureNature.length > 0
+                              ? section5_monitoring.infrastructureNature
+                                  .map((n: string) =>
+                                    n === "Any other" && section5_monitoring.infrastructureOther
+                                      ? `Other: ${section5_monitoring.infrastructureOther}`
+                                      : n,
+                                  )
+                                  .join(", ")
+                              : undefined
+                          }
+                        />
+                        <ReadOnlyField
+                          label="Pollution Prevention & Control Practices"
+                          value={section5_monitoring.pollutionPrevention}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Water quality monitoring was retired by the 2026 template —
+                      rendered only for reports that still carry the readings. */}
+                  {["waterTemperature", "dissolvedOxygen", "turbidity", "ph", "nutrients", "bod"].some(
+                    (k) => section5_monitoring[k]?.min || section5_monitoring[k]?.max,
+                  ) && (
                   <div>
                     <h4 className="font-semibold mb-4">
                       Water Quality Monitoring
@@ -753,6 +857,7 @@ function ReportSections({
                       </TableBody>
                     </Table>
                   </div>
+                  )}
 
                   <div className="pt-4 border-t">
                     <h4 className="font-semibold mb-4">
@@ -815,7 +920,7 @@ function ReportSections({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5" />
-                    Section 6: Social & Gender Impact
+                    {`Section ${sectionNo.section6}: Social & Gender Impact`}
                   </CardTitle>
                   <CardDescription>
                     Employment data and gender inclusivity measures
@@ -869,6 +974,33 @@ function ReportSections({
                     </Table>
                   </div>
 
+                  {(section6_employment.communityEngaged ||
+                    section6_employment.womenInConsultations ||
+                    section6_employment.communityBenefits ||
+                    section6_employment.genderSupportMeasures) && (
+                    <div className="pt-4 border-t">
+                      <h4 className="font-semibold mb-4">Community Engagement and Benefits</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <ReadOnlyField
+                          label="Local Community Members Engaged"
+                          value={section6_employment.communityEngaged}
+                        />
+                        <ReadOnlyField
+                          label="Women Participating in Consultations"
+                          value={section6_employment.womenInConsultations}
+                        />
+                        <ReadOnlyField
+                          label="Community Benefits Linked to Water Use"
+                          value={section6_employment.communityBenefits}
+                        />
+                        <ReadOnlyField
+                          label="Gender-Specific Support Measures"
+                          value={section6_employment.genderSupportMeasures}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="pt-4 border-t">
                     <h4 className="font-semibold mb-4">
                       Gender Inclusivity & OHS
@@ -907,7 +1039,7 @@ function ReportSections({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <CheckSquare className="h-5 w-5" />
-                    Section 7: Compliance Status
+                    {`Section ${sectionNo.section7}: Compliance Status`}
                   </CardTitle>
                   <CardDescription>
                     Self-reported compliance with permit conditions
@@ -957,7 +1089,7 @@ function ReportSections({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Calendar className="h-5 w-5" />
-                    Section 8: Future Plans
+                    {`Section ${sectionNo.section8}: Future Plans`}
                   </CardTitle>
                   <CardDescription>
                     Planned changes and improvements for the next year
@@ -965,11 +1097,13 @@ function ReportSections({
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <ReadOnlyField
-                      label="Planned Changes in Water Use"
-                      value={section8.plannedChanges}
-                      className="md:col-span-2"
-                    />
+                    {section8.plannedChanges && (
+                      <ReadOnlyField
+                        label="Planned Changes in Water Use"
+                        value={section8.plannedChanges}
+                        className="md:col-span-2"
+                      />
+                    )}
                     <ReadOnlyField
                       label="Expected Change (%)"
                       value={section8.expectedChangePercentage}
@@ -1005,7 +1139,7 @@ function ReportSections({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <FileSignature className="h-5 w-5" />
-                    Section 9: Declaration
+                    {`Section ${sectionNo.section9}: Declaration`}
                   </CardTitle>
                   <CardDescription>
                     Certification and submission details

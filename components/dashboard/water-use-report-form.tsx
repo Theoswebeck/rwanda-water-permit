@@ -42,7 +42,6 @@ import {
   BarChart3, 
   Leaf, 
   Users, 
-  CheckSquare, 
   Calendar,
   FileSignature,
   Loader2,
@@ -115,46 +114,37 @@ export function WaterUseReportForm({
     section3: existingReport?.section3 || {
       operationalStatus: '',
       waterUseConflicts: '',
-      paymentStatus: 'not_paid',
+      paymentStatus: template === 'abstraction' ? 'paid' : 'not_paid',
+      // Non-operational shortcut (both templates)
+      nonOperationalReason: '',
+      // Non-operational water use data (abstraction, section 3.2)
+      nonOperationalVolume: '',
+      nonOperationalAverageUse: '',
+      nonOperationalAverageUnit: 'day',
+      nonOperationalMethod: '',
       // Concession-specific
       totalSurfaceAreaOccupied: '',
       changesduringYear: false,
       changesDescription: '',
     },
     section3_quarterly: existingReport?.section3_quarterly || {
-      q1: { volume: '', avgDaily: '', method: '' },
-      q2: { volume: '', avgDaily: '', method: '' },
-      q3: { volume: '', avgDaily: '', method: '' },
-      q4: { volume: '', avgDaily: '', method: '' },
-      // Concession fish farming quarterly
-      q1_fish: { cages: '', capacity: '', surface: '' },
-      q2_fish: { cages: '', capacity: '', surface: '' },
-      q3_fish: { cages: '', capacity: '', surface: '' },
-      q4_fish: { cages: '', capacity: '', surface: '' },
+      q1: { volume: '', avgDaily: '', avgUnit: 'day', method: '' },
+      q2: { volume: '', avgDaily: '', avgUnit: 'day', method: '' },
+      q3: { volume: '', avgDaily: '', avgUnit: 'day', method: '' },
+      q4: { volume: '', avgDaily: '', avgUnit: 'day', method: '' },
     },
-    // Section 4 - Water Use Efficiency
+    // Section 4 - Water Use Efficiency (abstraction only)
     section4: existingReport?.section4 || {
-      efficiencyMeasures: '',
       recyclingPractices: '',
       estimatedWaterSaved: '',
       reductionPercentage: '',
       identifiedLosses: '',
-      // Concession-specific
-      productionOutputMeasures: '',
-      ecologicalImpactMeasures: '',
-      spatialOccupationMeasures: '',
     },
-    // Section 5 - Environmental Compliance
+    // Section 5 - Environmental Practices & Incidents
     section5_monitoring: existingReport?.section5_monitoring || {
-      waterTemperature: { min: '', max: '', avg: '' },
-      dissolvedOxygen: { min: '', max: '', avg: '' },
-      turbidity: { min: '', max: '', avg: '' },
-      ph: { min: '', max: '', avg: '' },
-      nutrients: { min: '', max: '', avg: '' },
-      bod: { min: '', max: '', avg: '' },
-      other: { parameter: '', min: '', max: '', avg: '' },
       // Concession-specific
       infrastructureNature: [],
+      infrastructureOther: '',
       pollutionPrevention: '',
     },
     section5_incidents: existingReport?.section5_incidents || {
@@ -174,11 +164,6 @@ export function WaterUseReportForm({
       technicalFemale: '',
       unskilledMale: '',
       unskilledFemale: '',
-      // Concession-specific
-      communityEngaged: '',
-      womenInConsultations: '',
-      communityBenefits: '',
-      genderSupportMeasures: '',
     },
     section6_ohs: existingReport?.section6_ohs || {
       genderInclusiveSafety: false,
@@ -188,22 +173,10 @@ export function WaterUseReportForm({
       genderGrievance: false,
       genderGrievanceRemarks: '',
     },
-    // Section 7 - Compliance Status
-    section7: existingReport?.section7 || {
-      permitLimitsCompliance: false,
-      permitLimitsRemarks: '',
-      zoningCompliance: false,
-      zoningRemarks: '',
-      environmentalApprovalCompliance: false,
-      environmentalApprovalRemarks: '',
-      monitoringReportsCompliance: false,
-      monitoringReportsRemarks: '',
-      waterFeesCompliance: false,
-      waterFeesRemarks: '',
-    },
-    // Section 8 - Future Plans
+    // Section 7 - retired by the 2026 template revision; kept for schema/read compatibility
+    section7: existingReport?.section7 || {},
+    // Future Plans (next reporting year) — all items optional ("if any")
     section8: existingReport?.section8 || {
-      plannedChanges: '',
       expectedChangePercentage: '',
       plannedInfrastructureUpgrades: '',
       environmentalImprovements: '',
@@ -215,40 +188,76 @@ export function WaterUseReportForm({
       declarationDate: new Date().toISOString().split('T')[0],
       agreed: false,
     },
-  }), [reportingYear, existingReport]);
+  }), [reportingYear, existingReport, template]);
 
   // Form state - organized by sections
   const [formData, setFormData] = useState(() => buildInitialFormData());
-  const tabOrder = useMemo(() => [
-    "section1",
-    "section2",
-    "section3",
-    "section4",
-    "section5",
-    "section6",
-    "section7",
-    "section8",
-    "section9",
-  ], []);
-  const sectionLabelById = useMemo(
-    () =>
-      ({
-        section1: "Section 1: General Info",
-        section2: "Section 2: Permitted Use",
-        section3: "Section 3: Actual Use",
-        section4: "Section 4: Efficiency",
-        section5: "Section 5: Environmental",
-        section6: "Section 6: Social/Gender",
-        section7: "Section 7: Compliance",
-        section8: "Section 8: Future Plans",
-        section9: "Section 9: Declaration",
-      }) as Record<string, string>,
-    [],
-  );
+
+  // Non-operational users answer only the profile questions, then go straight to
+  // the declaration — the template closes the reporting session at that point.
+  const isNonOperational = formData.section3.operationalStatus === 'non_operational';
+
+  // Tab set is template-driven: the 2026 template drops "Efficiency" for
+  // concession and "Compliance Status" for both templates.
+  const tabOrder = useMemo(() => {
+    if (isNonOperational) return ["section1", "section2", "section3", "section9"];
+    const order = ["section1", "section2", "section3"];
+    if (template === 'abstraction') order.push("section4");
+    order.push("section5", "section6", "section8", "section9");
+    return order;
+  }, [isNonOperational, template]);
+
+  const sectionTitleById = useMemo(() => {
+    const titles: Record<string, string> = {
+      section1: "General Information",
+      section2: "Permitted Water Use Summary",
+      section3: "Actual Water Use During Reporting Year",
+      section4: "Water Use Efficiency and Management",
+      section5: template === 'concession'
+        ? "Environmental Practices, Compliance, and Monitoring"
+        : "Environmental Compliance and Monitoring",
+      section6: "Social and Gender-Disaggregated Information",
+      section8: "Future Plans (Next Reporting Year)",
+      section9: "Declaration",
+    };
+    return titles;
+  }, [template]);
+
+  // Display number reflects position in the active tab set, not the legacy key.
+  const sectionNumberById = useMemo(() => {
+    const numbers: Record<string, number> = {};
+    tabOrder.forEach((id, index) => { numbers[id] = index + 1; });
+    return numbers;
+  }, [tabOrder]);
+
+  const sectionLabelById = useMemo(() => {
+    const shortLabels: Record<string, string> = {
+      section1: "General Info",
+      section2: "Permitted Use",
+      section3: "Actual Use",
+      section4: "Efficiency",
+      section5: "Environmental",
+      section6: "Social/Gender",
+      section8: "Future Plans",
+      section9: "Declaration",
+    };
+    return tabOrder.reduce<Record<string, string>>((acc, id, index) => {
+      acc[id] = `Section ${index + 1}: ${shortLabels[id]}`;
+      return acc;
+    }, {});
+  }, [tabOrder]);
 
   useEffect(() => {
     setFormData(buildInitialFormData());
   }, [buildInitialFormData]);
+
+  // Switching to non-operational shrinks the tab set; don't strand the user on a
+  // tab that no longer exists.
+  useEffect(() => {
+    if (!tabOrder.includes(activeTab)) {
+      setActiveTab(tabOrder[tabOrder.length - 1]);
+    }
+  }, [tabOrder, activeTab]);
 
   const isBlank = useCallback((value: unknown) => {
     if (value === null || value === undefined) return true;
@@ -368,6 +377,27 @@ export function WaterUseReportForm({
 
       if (sectionId === "section3") {
         addRequiredIssue(issues, sectionId, "Operational Status", formData.section3.operationalStatus);
+
+        // Non-operational: only the reason is mandatory; use data is "if any".
+        if (isNonOperational) {
+          addRequiredIssue(issues, sectionId, "Reason for Non-Operational Status", formData.section3.nonOperationalReason);
+          if (template === "abstraction") {
+            if (!isBlank(formData.section3.nonOperationalVolume)) {
+              addNumericIssue(issues, sectionId, "Total Volume Used (m³)", formData.section3.nonOperationalVolume, {
+                min: 0,
+                maxDecimals: 2,
+              });
+            }
+            if (!isBlank(formData.section3.nonOperationalAverageUse)) {
+              addNumericIssue(issues, sectionId, "Average Use", formData.section3.nonOperationalAverageUse, {
+                min: 0,
+                maxDecimals: 2,
+              });
+            }
+          }
+          return issues;
+        }
+
         addRequiredIssue(issues, sectionId, "Water Use-Related Conflicts/Challenges", formData.section3.waterUseConflicts);
         addRequiredIssue(issues, sectionId, "Payment of Water Fees", formData.section3.paymentStatus);
 
@@ -388,100 +418,51 @@ export function WaterUseReportForm({
           (["q1", "q2", "q3", "q4"] as const).forEach((quarter, index) => {
             const prefix = `Q${index + 1}`;
             const quarterlyData = (formData.section3_quarterly as any)[quarter] || {};
-            addNumericIssue(issues, sectionId, `${prefix} Volume Used (m³)`, quarterlyData.volume, {
+            addNumericIssue(issues, sectionId, `${prefix} Volume Used (m³/quarter)`, quarterlyData.volume, {
               min: 0,
               maxDecimals: 2,
             });
-            addNumericIssue(issues, sectionId, `${prefix} Avg Daily Use (m³/day)`, quarterlyData.avgDaily, {
+            addNumericIssue(issues, sectionId, `${prefix} Average Use`, quarterlyData.avgDaily, {
               min: 0,
               maxDecimals: 2,
             });
             addRequiredIssue(issues, sectionId, `${prefix} Measurement Method`, quarterlyData.method);
           });
         }
-
-        if (template === "concession" && permit.purpose?.includes("fish")) {
-          (["q1_fish", "q2_fish", "q3_fish", "q4_fish"] as const).forEach((quarter, index) => {
-            const prefix = `Q${index + 1} Fish`;
-            const fishData = (formData.section3_quarterly as any)[quarter] || {};
-            addNumericIssue(issues, sectionId, `${prefix} Number of Cages`, fishData.cages, {
-              min: 0,
-              integer: true,
-            });
-            addNumericIssue(issues, sectionId, `${prefix} Capacity`, fishData.capacity, {
-              min: 0,
-              integer: true,
-            });
-            addNumericIssue(issues, sectionId, `${prefix} Used Surface (Ha)`, fishData.surface, {
-              min: 0,
-              maxDecimals: 2,
-            });
-          });
-        }
       }
 
       if (sectionId === "section4") {
-        if (template === "abstraction") {
-          addRequiredIssue(issues, sectionId, "Water Efficiency Measures Implemented", formData.section4.efficiencyMeasures);
-          addRequiredIssue(issues, sectionId, "Recycling / Reuse Practices", formData.section4.recyclingPractices);
-          addNumericIssue(issues, sectionId, "Estimated Water Saved (m³/year)", formData.section4.estimatedWaterSaved, {
-            min: 0,
-            maxDecimals: 2,
-          });
-          addRequiredIssue(issues, sectionId, "Identified Losses", formData.section4.identifiedLosses);
-        } else {
-          addRequiredIssue(issues, sectionId, "Production Output Measures", formData.section4.productionOutputMeasures);
-          addRequiredIssue(issues, sectionId, "Ecological Impact Measures", formData.section4.ecologicalImpactMeasures);
-          addRequiredIssue(issues, sectionId, "Spatial Occupation Measures", formData.section4.spatialOccupationMeasures);
-        }
-
-        addNumericIssue(issues, sectionId, "Reduction Compared to Previous Year (%)", formData.section4.reductionPercentage, {
+        // Efficiency section only exists on the abstraction template.
+        addRequiredIssue(issues, sectionId, "Recycling / Reuse Practices", formData.section4.recyclingPractices);
+        addNumericIssue(issues, sectionId, "Estimated Water Saved (m³/year)", formData.section4.estimatedWaterSaved, {
+          min: 0,
+          maxDecimals: 2,
+        });
+        addNumericIssue(issues, sectionId, "Water Reduction Compared to the Previous Year (%)", formData.section4.reductionPercentage, {
           min: 0,
           max: 100,
           maxDecimals: 2,
         });
+        addRequiredIssue(issues, sectionId, "Identified Losses", formData.section4.identifiedLosses);
       }
 
       if (sectionId === "section5") {
         if (template === "concession") {
-          if (!Array.isArray(formData.section5_monitoring.infrastructureNature) || formData.section5_monitoring.infrastructureNature.length === 0) {
+          const natures: string[] = Array.isArray(formData.section5_monitoring.infrastructureNature)
+            ? formData.section5_monitoring.infrastructureNature
+            : [];
+          if (natures.length === 0) {
             issues.push({
               sectionId,
               label: "Infrastructure/Equipment Nature",
               message: "is required",
             });
           }
+          if (natures.includes("Any other")) {
+            addRequiredIssue(issues, sectionId, "Other Infrastructure/Equipment (specify)", formData.section5_monitoring.infrastructureOther);
+          }
           addRequiredIssue(issues, sectionId, "Pollution Prevention & Control Practices", formData.section5_monitoring.pollutionPrevention);
         }
-
-        const requiredMonitoringFields = [
-          { key: "waterTemperature", label: "Water Temperature" },
-          { key: "dissolvedOxygen", label: "Dissolved Oxygen" },
-          { key: "turbidity", label: "Turbidity" },
-        ];
-        if (template === "concession") {
-          requiredMonitoringFields.push(
-            { key: "ph", label: "pH" },
-            { key: "nutrients", label: "Nutrients (P & N)" },
-            { key: "bod", label: "BOD" },
-          );
-        }
-
-        requiredMonitoringFields.forEach(({ key, label }) => {
-          const param = (formData.section5_monitoring as any)[key] || {};
-          addNumericIssue(issues, sectionId, `${label} Min`, param.min, { maxDecimals: 2 });
-          addNumericIssue(issues, sectionId, `${label} Max`, param.max, { maxDecimals: 2 });
-
-          const minValue = parseNumeric(param.min);
-          const maxValue = parseNumeric(param.max);
-          if (minValue !== null && maxValue !== null && minValue > maxValue) {
-            issues.push({
-              sectionId,
-              label: `${label} Min/Max`,
-              message: "must have Min less than or equal to Max",
-            });
-          }
-        });
 
         if (formData.section5_incidents.hasIncidents) {
           addRequiredIssue(issues, sectionId, "Date of Incident", formData.section5_incidents.incidentDate);
@@ -525,16 +506,6 @@ export function WaterUseReportForm({
           integer: true,
         });
 
-        if (template === "concession") {
-          addNumericIssue(issues, sectionId, "Local Community Members Engaged", formData.section6_employment.communityEngaged, {
-            min: 0,
-            integer: true,
-          });
-          addRequiredIssue(issues, sectionId, "Women in Consultations", formData.section6_employment.womenInConsultations);
-          addRequiredIssue(issues, sectionId, "Community Benefits", formData.section6_employment.communityBenefits);
-          addRequiredIssue(issues, sectionId, "Gender-Specific Support Measures", formData.section6_employment.genderSupportMeasures);
-        }
-
         addRequiredIssue(
           issues,
           sectionId,
@@ -555,28 +526,18 @@ export function WaterUseReportForm({
         );
       }
 
-      if (sectionId === "section7") {
-        addRequiredIssue(issues, sectionId, "Permit limits remarks", formData.section7.permitLimitsRemarks);
-        if (template === "concession") {
-          addRequiredIssue(issues, sectionId, "Zoning compliance remarks", formData.section7.zoningRemarks);
-        }
-        addRequiredIssue(issues, sectionId, "Environmental approval remarks", formData.section7.environmentalApprovalRemarks);
-        addRequiredIssue(issues, sectionId, "Monitoring reports remarks", formData.section7.monitoringReportsRemarks);
-        addRequiredIssue(issues, sectionId, "Water fees remarks", formData.section7.waterFeesRemarks);
-      }
-
+      // Future Plans items are all "(if any)" in the 2026 template — validate
+      // format only, never presence.
       if (sectionId === "section8") {
-        addRequiredIssue(issues, sectionId, "Planned Changes in Water Use", formData.section8.plannedChanges);
-        addNumericIssue(
-          issues,
-          sectionId,
-          "Expected Increase/Decrease (%)",
-          formData.section8.expectedChangePercentage,
-          { min: 0, max: 100, maxDecimals: 2 },
-        );
-        addRequiredIssue(issues, sectionId, "Planned Infrastructure Upgrades", formData.section8.plannedInfrastructureUpgrades);
-        addRequiredIssue(issues, sectionId, "Environmental Improvement Measures", formData.section8.environmentalImprovements);
-        addRequiredIssue(issues, sectionId, "Gender Inclusion Actions", formData.section8.genderInclusionActions);
+        if (!isBlank(formData.section8.expectedChangePercentage)) {
+          addNumericIssue(
+            issues,
+            sectionId,
+            "Expected Increase/Decrease (%)",
+            formData.section8.expectedChangePercentage,
+            { min: 0, max: 100, maxDecimals: 2 },
+          );
+        }
       }
 
       if (sectionId === "section9") {
@@ -593,7 +554,7 @@ export function WaterUseReportForm({
 
       return issues;
     },
-    [addNumericIssue, addRequiredIssue, formData, parseNumeric, permit.purpose, template],
+    [addNumericIssue, addRequiredIssue, formData, isBlank, isNonOperational, template],
   );
 
   const validateAllSections = useCallback(() => {
@@ -685,27 +646,6 @@ export function WaterUseReportForm({
     }));
   }, []);
 
-  // Auto-calculate average when min or max changes for monitoring parameters
-  const updateMonitoringMinMax = useCallback((parent: string, field: 'min' | 'max', value: string) => {
-    setFormData(prev => {
-      const existing = (prev as any).section5_monitoring?.[parent] || {};
-      const normalizedValue = normalizeDecimalValue(value);
-      const updatedParam = { ...existing, [field]: normalizedValue };
-      const minVal = parseNumeric(field === 'min' ? normalizedValue : updatedParam.min);
-      const maxVal = parseNumeric(field === 'max' ? normalizedValue : updatedParam.max);
-      const avg = (minVal !== null && maxVal !== null)
-        ? String(Math.round(((minVal + maxVal) / 2) * 100) / 100)
-        : '';
-      return {
-        ...prev,
-        section5_monitoring: {
-          ...prev.section5_monitoring,
-          [parent]: { ...updatedParam, avg },
-        },
-      };
-    });
-  }, [normalizeDecimalValue, parseNumeric]);
-
   // Get water use type options based on template
   const waterUseOptions = useMemo(() => getWaterUseTypeOptions(template), [template]);
   const waterSourceOptions = useMemo(() => getWaterSourceTypeOptions(template), [template]);
@@ -796,18 +736,21 @@ export function WaterUseReportForm({
     }
   };
 
-  // Tab configuration based on template
-  const tabs = [
-    { id: 'section1', label: tx('General Info'), icon: User },
-    { id: 'section2', label: tx('Permitted Use'), icon: Droplets },
-    { id: 'section3', label: tx('Actual Use'), icon: BarChart3 },
-    { id: 'section4', label: tx('Efficiency'), icon: Leaf },
-    { id: 'section5', label: tx('Environmental'), icon: Leaf },
-    { id: 'section6', label: tx('Social/Gender'), icon: Users },
-    { id: 'section7', label: tx('Compliance'), icon: CheckSquare },
-    { id: 'section8', label: tx('Future Plans'), icon: Calendar },
-    { id: 'section9', label: tx('Declaration'), icon: FileSignature },
-  ];
+  // Tab configuration follows tabOrder, which is template- and status-driven.
+  const tabMeta: Record<string, { label: string; icon: typeof User }> = {
+    section1: { label: tx('General Info'), icon: User },
+    section2: { label: tx('Permitted Use'), icon: Droplets },
+    section3: { label: tx('Actual Use'), icon: BarChart3 },
+    section4: { label: tx('Efficiency'), icon: Leaf },
+    section5: { label: tx('Environmental'), icon: Leaf },
+    section6: { label: tx('Social/Gender'), icon: Users },
+    section8: { label: tx('Future Plans'), icon: Calendar },
+    section9: { label: tx('Declaration'), icon: FileSignature },
+  };
+  const tabs = tabOrder.map((id) => ({ id, ...tabMeta[id] }));
+
+  // Heading helper: "Section N: Title" using the live numbering.
+  const heading = (id: string) => `${tx("Section")} ${sectionNumberById[id]}: ${tx(sectionTitleById[id])}`;
 
   return (
     <Card className="border-2 border-blue-200">
@@ -817,7 +760,9 @@ export function WaterUseReportForm({
           {tx("Annual Water Use Report")} - {reportingYear}
         </CardTitle>
         <CardDescription className="text-blue-700">
-          {tx("Complete all 9 sections below. Click each tab to fill in the required information.")}
+          {isNonOperational
+            ? tx("Non-operational users complete only the sections below, then submit — the reporting session closes immediately.")
+            : `${tx("Complete all")} ${tabOrder.length} ${tx("sections below. Click each tab to fill in the required information.")}`}
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6">
@@ -846,7 +791,7 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
-                {tx("Section 1: General Information")}
+                {heading("section1")}
               </CardTitle>
               <CardDescription>
                 {tx("This information is automatically populated from your permit. It cannot be edited.")}
@@ -876,12 +821,6 @@ export function WaterUseReportForm({
                   <Label className="text-muted-foreground">{tx("Permit Expiry Date")}</Label>
                   <div className="p-3 bg-slate-50 rounded-md border">
                     {formatDate(permit.expiry_date)}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">{tx("Reporting Year")}</Label>
-                  <div className="p-3 bg-blue-50 rounded-md border border-blue-200 font-semibold text-blue-800">
-                    {reportingYear}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -940,6 +879,14 @@ export function WaterUseReportForm({
                   </div>
                 </div>
               </div>
+
+              {/* Reporting Year closes Section 1 per the 2026 template */}
+              <div className="pt-4 border-t space-y-2">
+                <Label className="text-muted-foreground">{tx("Reporting Year")}</Label>
+                <div className="p-3 bg-blue-50 rounded-md border border-blue-200 font-semibold text-blue-800 md:max-w-xs">
+                  {reportingYear}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -950,7 +897,7 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Droplets className="h-5 w-5" />
-                {tx("Section 2: Permitted Water Use Summary")}
+                {heading("section2")}
               </CardTitle>
               <CardDescription>
                 {tx("Authorized values from your permit. These are read-only.")}
@@ -1022,10 +969,13 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5" />
-                {tx("Section 3: Actual Water Use During Reporting Year")}
+                {heading("section3")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* 3.1 Water Use Profile */}
+              <h4 className="font-medium">{tx("3.1 Water Use Profile")}</h4>
+
               {/* Operational Status */}
               <div className="space-y-3">
                 <Label>{tx("Operational Status")} *</Label>
@@ -1035,41 +985,109 @@ export function WaterUseReportForm({
                   disabled={isReadOnly}
                   className="flex gap-6"
                 >
-                  {template === 'abstraction' ? (
-                    <>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="operational" id="operational" />
-                        <Label htmlFor="operational">{tx("Operational")}</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="non_operational" id="non_operational" />
-                        <Label htmlFor="non_operational">{tx("Non-operational")}</Label>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="fully" id="fully" />
-                        <Label htmlFor="fully">{tx("Fully Operational")}</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="partial" id="partial" />
-                        <Label htmlFor="partial">{tx("Partial")}</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="non_operational" id="non_operational" />
-                        <Label htmlFor="non_operational">{tx("Non-Operational")}</Label>
-                      </div>
-                    </>
-                  )}
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="operational" id="operational" />
+                    <Label htmlFor="operational">{tx("Operational")}</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="non_operational" id="non_operational" />
+                    <Label htmlFor="non_operational">{tx("Non-operational")}</Label>
+                  </div>
                 </RadioGroup>
+                {isNonOperational && (
+                  <Alert className="border-amber-200 bg-amber-50">
+                    <Info className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-800">
+                      {tx("As a non-operational user, state your reason below and the reporting session will be closed on submission.")}
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
 
-              {/* Concession-specific fields */}
-              {template === 'concession' && (
+              {/* Non-operational: reason + optional water use data (3.2) */}
+              {isNonOperational && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="totalSurface">{tx("Total Surface Area Occupied (Ha)")}</Label>
+                    <Label htmlFor="nonOpReason">{tx("Reason for Non-Operational Status")} *</Label>
+                    <Textarea
+                      id="nonOpReason"
+                      value={formData.section3.nonOperationalReason}
+                      onChange={(e) => updateFormData('section3', 'nonOperationalReason', e.target.value)}
+                      disabled={isReadOnly}
+                      placeholder={tx("Explain why the water use activity was not operational...")}
+                      rows={3}
+                    />
+                  </div>
+
+                  {template === 'abstraction' && (
+                    <div className="pt-4 border-t">
+                      <h4 className="font-medium mb-4">{tx("3.2 Water Use Data (if any)")}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="nonOpVolume">{tx("Total Volume Used (m³)")}</Label>
+                          <Input
+                            id="nonOpVolume"
+                            type="number"
+                            step="0.01"
+                            value={formData.section3.nonOperationalVolume}
+                            onChange={(e) => updateFormData('section3', 'nonOperationalVolume', e.target.value)}
+                            disabled={isReadOnly}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="nonOpAvg">{tx("Average Use")}</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="nonOpAvg"
+                              type="number"
+                              step="0.01"
+                              value={formData.section3.nonOperationalAverageUse}
+                              onChange={(e) => updateFormData('section3', 'nonOperationalAverageUse', e.target.value)}
+                              disabled={isReadOnly}
+                            />
+                            <Select
+                              value={formData.section3.nonOperationalAverageUnit || 'day'}
+                              onValueChange={(value) => updateFormData('section3', 'nonOperationalAverageUnit', value)}
+                              disabled={isReadOnly}
+                            >
+                              <SelectTrigger className="w-32">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="day">m³/day</SelectItem>
+                                <SelectItem value="month">m³/month</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="nonOpMethod">{tx("Measurement Method")}</Label>
+                          <Select
+                            value={formData.section3.nonOperationalMethod || ''}
+                            onValueChange={(value) => updateFormData('section3', 'nonOperationalMethod', value)}
+                            disabled={isReadOnly}
+                          >
+                            <SelectTrigger id="nonOpMethod">
+                              <SelectValue placeholder={tx("Select")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="meter">{tx("Meter Reading")}</SelectItem>
+                              <SelectItem value="calculation">{tx("Calculation")}</SelectItem>
+                              <SelectItem value="estimation">{tx("Estimation")}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Concession-specific fields */}
+              {template === 'concession' && !isNonOperational && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="totalSurface">{tx("Total Surface Area Occupied — current coverage (Ha)")}</Label>
                     <Input
                       id="totalSurface"
                       type="number"
@@ -1103,49 +1121,57 @@ export function WaterUseReportForm({
                 </>
               )}
 
-              {/* Water Use Conflicts */}
-              <div className="space-y-2">
-                <Label htmlFor="conflicts">{tx("Water Use-Related Conflict or Challenges in the Area")}</Label>
-                <Textarea
-                  id="conflicts"
-                  value={formData.section3.waterUseConflicts}
-                  onChange={(e) => updateFormData('section3', 'waterUseConflicts', e.target.value)}
-                  disabled={isReadOnly}
-                  placeholder={tx("Describe any conflicts or challenges...")}
-                  rows={3}
-                />
-              </div>
-
-              {/* Payment Status */}
-              <div className="space-y-3">
-                <Label>{tx("Payment of Water Fees")}</Label>
-                <RadioGroup
-                  value={formData.section3.paymentStatus}
-                  onValueChange={(value) => updateFormData('section3', 'paymentStatus', value)}
-                  disabled={isReadOnly}
-                  className="flex gap-6"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="paid" id="paid" />
-                    <Label htmlFor="paid">{tx("Paid")}</Label>
+              {/* Water Use Conflicts + Payment — operational users only */}
+              {!isNonOperational && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="conflicts">{tx("Water Use-Related Conflict or Challenges in the Area")}</Label>
+                    <Textarea
+                      id="conflicts"
+                      value={formData.section3.waterUseConflicts}
+                      onChange={(e) => updateFormData('section3', 'waterUseConflicts', e.target.value)}
+                      disabled={isReadOnly}
+                      placeholder={tx("Describe any conflicts or challenges...")}
+                      rows={3}
+                    />
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="not_paid" id="not_paid" />
-                    <Label htmlFor="not_paid">{tx("Not Paid")}</Label>
-                  </div>
-                </RadioGroup>
-              </div>
 
-              {/* Quarterly Data Table - Abstraction */}
-              {template === 'abstraction' && (
+                  {/* Payment Status */}
+                  <div className="space-y-3">
+                    <Label>{tx("Payment of Water Fees")}</Label>
+                    <RadioGroup
+                      value={formData.section3.paymentStatus}
+                      onValueChange={(value) => updateFormData('section3', 'paymentStatus', value)}
+                      disabled={isReadOnly}
+                      className="flex gap-6"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="paid" id="paid" />
+                        <Label htmlFor="paid">
+                          {template === 'abstraction'
+                            ? tx("Paid (approved by the system)")
+                            : tx("Paid (attach proof of payment)")}
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="not_paid" id="not_paid" />
+                        <Label htmlFor="not_paid">{tx("Not Paid")}</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                </>
+              )}
+
+              {/* 3.3 Quarterly Water Use Data - Abstraction, operational only */}
+              {template === 'abstraction' && !isNonOperational && (
                 <div className="pt-4 border-t">
-                  <h4 className="font-medium mb-4">{tx("Monthly/Quarterly Water Use Data")}</h4>
+                  <h4 className="font-medium mb-4">{tx("3.2 Quarterly Water Use Data")}</h4>
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>{tx("Quarter")}</TableHead>
-                        <TableHead>{tx("Volume Used (m³)")}</TableHead>
-                        <TableHead>{tx("Avg Daily Use (m³/day)")}</TableHead>
+                        <TableHead>{tx("Volume Used (m³/quarter)")}</TableHead>
+                        <TableHead>{tx("Average Use")}</TableHead>
                         <TableHead>{tx("Measurement Method")}</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1164,14 +1190,29 @@ export function WaterUseReportForm({
                             />
                           </TableCell>
                           <TableCell>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={(formData.section3_quarterly as any)[q]?.avgDaily || ''}
-                              onChange={(e) => updateNestedFormData('section3_quarterly', q, 'avgDaily', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-28"
-                            />
+                            <div className="flex gap-2">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={(formData.section3_quarterly as any)[q]?.avgDaily || ''}
+                                onChange={(e) => updateNestedFormData('section3_quarterly', q, 'avgDaily', e.target.value)}
+                                disabled={isReadOnly}
+                                className="w-24"
+                              />
+                              <Select
+                                value={(formData.section3_quarterly as any)[q]?.avgUnit || 'day'}
+                                onValueChange={(value) => updateNestedFormData('section3_quarterly', q, 'avgUnit', value)}
+                                disabled={isReadOnly}
+                              >
+                                <SelectTrigger className="w-32">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="day">m³/day</SelectItem>
+                                  <SelectItem value="month">m³/month</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Select
@@ -1201,58 +1242,6 @@ export function WaterUseReportForm({
                   </Table>
                 </div>
               )}
-
-              {/* Quarterly Data Table - Concession Fish Farming */}
-              {template === 'concession' && permit.purpose?.includes('fish') && (
-                <div className="pt-4 border-t">
-                  <h4 className="font-medium mb-4">{tx("Quarterly Fish Farming Data")}</h4>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{tx("Quarter")}</TableHead>
-                        <TableHead>{tx("Number of Cages")}</TableHead>
-                        <TableHead>{tx("Capacity (fish/cage)")}</TableHead>
-                        <TableHead>{tx("Used Surface (Ha)")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {['q1_fish', 'q2_fish', 'q3_fish', 'q4_fish'].map((q, idx) => (
-                        <TableRow key={q}>
-                          <TableCell className="font-medium">Q{idx + 1}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              value={(formData.section3_quarterly as any)[q]?.cages || ''}
-                              onChange={(e) => updateNestedFormData('section3_quarterly', q, 'cages', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-24"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              value={(formData.section3_quarterly as any)[q]?.capacity || ''}
-                              onChange={(e) => updateNestedFormData('section3_quarterly', q, 'capacity', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-24"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={(formData.section3_quarterly as any)[q]?.surface || ''}
-                              onChange={(e) => updateNestedFormData('section3_quarterly', q, 'surface', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-24"
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1263,122 +1252,60 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Leaf className="h-5 w-5" />
-                {tx("Section 4: Water Use Efficiency and Management")}
+                {heading("section4")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {template === 'abstraction' ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="efficiency">{tx("Water Efficiency Measures Implemented")}</Label>
-                    <Textarea
-                      id="efficiency"
-                      value={formData.section4.efficiencyMeasures}
-                      onChange={(e) => updateFormData('section4', 'efficiencyMeasures', e.target.value)}
-                      disabled={isReadOnly}
-                      placeholder={tx("Describe water efficiency measures...")}
-                      rows={3}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="recycling">{tx("Recycling / Reuse Practices")}</Label>
-                    <Textarea
-                      id="recycling"
-                      value={formData.section4.recyclingPractices}
-                      onChange={(e) => updateFormData('section4', 'recyclingPractices', e.target.value)}
-                      disabled={isReadOnly}
-                      placeholder={tx("Describe recycling practices...")}
-                      rows={3}
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="waterSaved">{tx("Estimated Water Saved (m³/year)")}</Label>
-                      <Input
-                        id="waterSaved"
-                        type="number"
-                        step="0.01"
-                        value={formData.section4.estimatedWaterSaved}
-                        onChange={(e) => updateFormData('section4', 'estimatedWaterSaved', e.target.value)}
-                        disabled={isReadOnly}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="reduction">{tx("Reduction Compared to Previous Year (%)")}</Label>
-                      <Input
-                        id="reduction"
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        value={formData.section4.reductionPercentage}
-                        onChange={(e) => updatePercentageField('section4', 'reductionPercentage', e.target.value)}
-                        disabled={isReadOnly}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="losses">{tx("Identified Losses (Leakage, Evaporation, etc.)")}</Label>
-                    <Textarea
-                      id="losses"
-                      value={formData.section4.identifiedLosses}
-                      onChange={(e) => updateFormData('section4', 'identifiedLosses', e.target.value)}
-                      disabled={isReadOnly}
-                      placeholder={tx("Describe identified water losses...")}
-                      rows={3}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="prodOutput">{tx("Water Efficiency Measures - Production (Outputs)")}</Label>
-                    <Textarea
-                      id="prodOutput"
-                      value={formData.section4.productionOutputMeasures}
-                      onChange={(e) => updateFormData('section4', 'productionOutputMeasures', e.target.value)}
-                      disabled={isReadOnly}
-                      placeholder={tx("Describe production efficiency measures...")}
-                      rows={3}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="ecological">{tx("Water Efficiency Measures - Ecological Impacts")}</Label>
-                    <Textarea
-                      id="ecological"
-                      value={formData.section4.ecologicalImpactMeasures}
-                      onChange={(e) => updateFormData('section4', 'ecologicalImpactMeasures', e.target.value)}
-                      disabled={isReadOnly}
-                      placeholder={tx("Describe ecological impact measures...")}
-                      rows={3}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="spatial">{tx("Water Efficiency Measures - Spatial Occupation")}</Label>
-                    <Textarea
-                      id="spatial"
-                      value={formData.section4.spatialOccupationMeasures}
-                      onChange={(e) => updateFormData('section4', 'spatialOccupationMeasures', e.target.value)}
-                      disabled={isReadOnly}
-                      placeholder={tx("Describe spatial occupation measures...")}
-                      rows={3}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="reductionConc">{tx("Reduction Compared to Previous Year (%)")}</Label>
-                    <Input
-                      id="reductionConc"
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={formData.section4.reductionPercentage}
-                      onChange={(e) => updatePercentageField('section4', 'reductionPercentage', e.target.value)}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-                </>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="recycling">{tx("Recycling / Reuse Practices")}</Label>
+                <Textarea
+                  id="recycling"
+                  value={formData.section4.recyclingPractices}
+                  onChange={(e) => updateFormData('section4', 'recyclingPractices', e.target.value)}
+                  disabled={isReadOnly}
+                  placeholder={tx("Describe recycling practices...")}
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="waterSaved">{tx("Estimated Water Saved (m³/year)")}</Label>
+                  <Input
+                    id="waterSaved"
+                    type="number"
+                    step="0.01"
+                    value={formData.section4.estimatedWaterSaved}
+                    onChange={(e) => updateFormData('section4', 'estimatedWaterSaved', e.target.value)}
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reduction">{tx("Water Reduction Compared to the Previous Year (%)")}</Label>
+                  <Input
+                    id="reduction"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={formData.section4.reductionPercentage}
+                    onChange={(e) => updatePercentageField('section4', 'reductionPercentage', e.target.value)}
+                    disabled={isReadOnly}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="losses">
+                  {tx("Identified Losses (Leakage, Source Seepage, Source Dry-out Evaporation, etc.)")}
+                </Label>
+                <Textarea
+                  id="losses"
+                  value={formData.section4.identifiedLosses}
+                  onChange={(e) => updateFormData('section4', 'identifiedLosses', e.target.value)}
+                  disabled={isReadOnly}
+                  placeholder={tx("Describe identified water losses...")}
+                  rows={3}
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1389,17 +1316,18 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Leaf className="h-5 w-5" />
-                {tx("Section 5: Environmental Compliance and Monitoring")}
+                {heading("section5")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Concession-specific: Infrastructure Nature & Pollution Prevention */}
+              {/* Concession-specific: 4.1 Environmental Practices */}
               {template === 'concession' && (
                 <>
+                  <h4 className="font-medium">{sectionNumberById.section5}.1 {tx("Environmental Practices")}</h4>
                   <div className="space-y-3">
                     <Label>{tx("Nature/Property of Used Infrastructure/Equipment Offshore")}</Label>
                     <div className="flex flex-wrap gap-4">
-                      {['Stainless steel', 'Wood', 'Galvanized', 'Plastic'].map((item) => (
+                      {['Stainless steel', 'Wood', 'Galvanized', 'Plastic', 'Any other'].map((item) => (
                         <div key={item} className="flex items-center space-x-2">
                           <Checkbox
                             id={`infra-${item}`}
@@ -1413,10 +1341,18 @@ export function WaterUseReportForm({
                             }}
                             disabled={isReadOnly}
                           />
-                          <Label htmlFor={`infra-${item}`}>{item}</Label>
+                          <Label htmlFor={`infra-${item}`}>{tx(item)}</Label>
                         </div>
                       ))}
                     </div>
+                    {formData.section5_monitoring.infrastructureNature?.includes('Any other') && (
+                      <Input
+                        value={formData.section5_monitoring.infrastructureOther || ''}
+                        onChange={(e) => updateFormData('section5_monitoring', 'infrastructureOther', e.target.value)}
+                        disabled={isReadOnly}
+                        placeholder={tx("Specify other infrastructure/equipment...")}
+                      />
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="pollution">{tx("Pollution Prevention & Control Practices")}</Label>
@@ -1432,241 +1368,9 @@ export function WaterUseReportForm({
                 </>
               )}
 
-              {/* Environmental Monitoring Results */}
-              <div className="pt-4 border-t">
-                <h4 className="font-medium mb-4">5.{template === 'concession' ? '2' : '1'} {tx("Environmental Monitoring Results")}</h4>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{tx("Parameter")}</TableHead>
-                      <TableHead>{tx("Unit")}</TableHead>
-                      <TableHead>{tx("Min")}</TableHead>
-                      <TableHead>{tx("Max")}</TableHead>
-                      <TableHead>{tx("Average")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell>{tx("Water Temperature")}</TableCell>
-                      <TableCell>°C</TableCell>
-                      <TableCell>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={formData.section5_monitoring.waterTemperature?.min || ''}
-                          onChange={(e) => updateMonitoringMinMax('waterTemperature', 'min', e.target.value)}
-                          disabled={isReadOnly}
-                          className="w-20"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={formData.section5_monitoring.waterTemperature?.max || ''}
-                          onChange={(e) => updateMonitoringMinMax('waterTemperature', 'max', e.target.value)}
-                          disabled={isReadOnly}
-                          className="w-20"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          value={formData.section5_monitoring.waterTemperature?.avg || ''}
-                          readOnly
-                          disabled={isReadOnly}
-                          className="w-20 bg-muted"
-                          tabIndex={-1}
-                        />
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>{tx("Dissolved Oxygen")}</TableCell>
-                      <TableCell>mg/L</TableCell>
-                      <TableCell>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={formData.section5_monitoring.dissolvedOxygen?.min || ''}
-                          onChange={(e) => updateMonitoringMinMax('dissolvedOxygen', 'min', e.target.value)}
-                          disabled={isReadOnly}
-                          className="w-20"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={formData.section5_monitoring.dissolvedOxygen?.max || ''}
-                          onChange={(e) => updateMonitoringMinMax('dissolvedOxygen', 'max', e.target.value)}
-                          disabled={isReadOnly}
-                          className="w-20"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={formData.section5_monitoring.dissolvedOxygen?.avg || ''}
-                          readOnly
-                          disabled={isReadOnly}
-                          className="w-20 bg-muted"
-                          tabIndex={-1}
-                        />
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>{tx("Turbidity")}</TableCell>
-                      <TableCell>NTU</TableCell>
-                      <TableCell>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={formData.section5_monitoring.turbidity?.min || ''}
-                          onChange={(e) => updateMonitoringMinMax('turbidity', 'min', e.target.value)}
-                          disabled={isReadOnly}
-                          className="w-20"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={formData.section5_monitoring.turbidity?.max || ''}
-                          onChange={(e) => updateMonitoringMinMax('turbidity', 'max', e.target.value)}
-                          disabled={isReadOnly}
-                          className="w-20"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          value={formData.section5_monitoring.turbidity?.avg || ''}
-                          readOnly
-                          disabled={isReadOnly}
-                          className="w-20 bg-muted"
-                          tabIndex={-1}
-                        />
-                      </TableCell>
-                    </TableRow>
-                    {template === 'concession' && (
-                      <>
-                        <TableRow>
-                          <TableCell>pH</TableCell>
-                          <TableCell>-</TableCell>
-                          <TableCell>
-                            <Input
-                              type="text"
-                              inputMode="decimal"
-                              value={formData.section5_monitoring.ph?.min || ''}
-                              onChange={(e) => updateMonitoringMinMax('ph', 'min', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-20"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="text"
-                              inputMode="decimal"
-                              value={formData.section5_monitoring.ph?.max || ''}
-                              onChange={(e) => updateMonitoringMinMax('ph', 'max', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-20"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              step="0.1"
-                              value={formData.section5_monitoring.ph?.avg || ''}
-                              readOnly
-                              disabled={isReadOnly}
-                              className="w-20 bg-muted"
-                              tabIndex={-1}
-                            />
-                          </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell>{tx("Nutrients (P & N)")}</TableCell>
-                          <TableCell>mg/L</TableCell>
-                          <TableCell>
-                            <Input
-                              type="text"
-                              inputMode="decimal"
-                              value={formData.section5_monitoring.nutrients?.min || ''}
-                              onChange={(e) => updateMonitoringMinMax('nutrients', 'min', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-20"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="text"
-                              inputMode="decimal"
-                              value={formData.section5_monitoring.nutrients?.max || ''}
-                              onChange={(e) => updateMonitoringMinMax('nutrients', 'max', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-20"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={formData.section5_monitoring.nutrients?.avg || ''}
-                              readOnly
-                              disabled={isReadOnly}
-                              className="w-20 bg-muted"
-                              tabIndex={-1}
-                            />
-                          </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell>BOD</TableCell>
-                          <TableCell>mg/L</TableCell>
-                          <TableCell>
-                            <Input
-                              type="text"
-                              inputMode="decimal"
-                              value={formData.section5_monitoring.bod?.min || ''}
-                              onChange={(e) => updateMonitoringMinMax('bod', 'min', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-20"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="text"
-                              inputMode="decimal"
-                              value={formData.section5_monitoring.bod?.max || ''}
-                              onChange={(e) => updateMonitoringMinMax('bod', 'max', e.target.value)}
-                              disabled={isReadOnly}
-                              className="w-20"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={formData.section5_monitoring.bod?.avg || ''}
-                              readOnly
-                              disabled={isReadOnly}
-                              className="w-20 bg-muted"
-                              tabIndex={-1}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      </>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-
               {/* Environmental Incidents */}
               <div className="pt-4 border-t">
-                <h4 className="font-medium mb-4">5.{template === 'concession' ? '3' : '2'} {tx("Environmental Incidents")}</h4>
+                <h4 className="font-medium mb-4">{sectionNumberById.section5}.{template === 'concession' ? '2' : '1'} {tx("Environmental Incidents")}</h4>
                 <div className="space-y-4">
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -1737,13 +1441,13 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                {tx("Section 6: Social and Gender-Disaggregated Information")}
+                {heading("section6")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Employment Table */}
               <div>
-                <h4 className="font-medium mb-4">{tx("6.1 Employment Related to Water Use Activity")}</h4>
+                <h4 className="font-medium mb-4">{sectionNumberById.section6}.1 {tx("Employment Related to Water Use Activity")}</h4>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1852,58 +1556,9 @@ export function WaterUseReportForm({
                 </Table>
               </div>
 
-              {/* Concession-specific: Community Engagement */}
-              {template === 'concession' && (
-                <div className="pt-4 border-t">
-                  <h4 className="font-medium mb-4">{tx("6.2 Community Engagement and Benefits")}</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="communityEngaged">{tx("Local Community Members Engaged")}</Label>
-                      <Input
-                        id="communityEngaged"
-                        value={formData.section6_employment.communityEngaged}
-                        onChange={(e) => updateFormData('section6_employment', 'communityEngaged', e.target.value)}
-                        disabled={isReadOnly}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="womenConsult">{tx("Women Participating in Consultations (Number / %)")}</Label>
-                      <Input
-                        id="womenConsult"
-                        value={formData.section6_employment.womenInConsultations}
-                        onChange={(e) => updateFormData('section6_employment', 'womenInConsultations', e.target.value)}
-                        disabled={isReadOnly}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="communityBenefits">{tx("Community Benefits Linked to Water Use")}</Label>
-                      <Textarea
-                        id="communityBenefits"
-                        value={formData.section6_employment.communityBenefits}
-                        onChange={(e) => updateFormData('section6_employment', 'communityBenefits', e.target.value)}
-                        disabled={isReadOnly}
-                        rows={2}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="genderSupport">{tx("Gender-Specific Support Measures")}</Label>
-                      <Textarea
-                        id="genderSupport"
-                        value={formData.section6_employment.genderSupportMeasures}
-                        onChange={(e) => updateFormData('section6_employment', 'genderSupportMeasures', e.target.value)}
-                        disabled={isReadOnly}
-                        rows={2}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* OHS */}
               <div className="pt-4 border-t">
-                <h4 className="font-medium mb-4">6.{template === 'concession' ? '3' : '2'} {tx("Occupational Health and Safety (Gender-Sensitive)")}</h4>
+                <h4 className="font-medium mb-4">{sectionNumberById.section6}.2 {tx("Occupational Health and Safety (Gender-Sensitive)")}</h4>
                 <div className="space-y-4">
                   <div className="flex items-start space-x-4">
                     <div className="flex items-center space-x-2 min-w-[250px]">
@@ -1965,141 +1620,18 @@ export function WaterUseReportForm({
           </Card>
         </TabsContent>
 
-        {/* SECTION 7: Compliance Status */}
-        <TabsContent value="section7">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckSquare className="h-5 w-5" />
-                {tx("Section 7: Compliance Status")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start space-x-4">
-                  <div className="flex items-center space-x-2 min-w-[250px]">
-                    <Checkbox
-                      id="permitLimits"
-                      checked={formData.section7.permitLimitsCompliance}
-                      onCheckedChange={(checked) => updateFormData('section7', 'permitLimitsCompliance', checked)}
-                      disabled={isReadOnly}
-                    />
-                    <Label htmlFor="permitLimits">{tx("Compliance with permit limits")}</Label>
-                  </div>
-                  <Input
-                    placeholder={tx("Remarks")}
-                    value={formData.section7.permitLimitsRemarks}
-                    onChange={(e) => updateFormData('section7', 'permitLimitsRemarks', e.target.value)}
-                    disabled={isReadOnly}
-                    className="flex-1"
-                  />
-                </div>
-
-                {template === 'concession' && (
-                  <div className="flex items-start space-x-4">
-                    <div className="flex items-center space-x-2 min-w-[250px]">
-                      <Checkbox
-                        id="zoning"
-                        checked={formData.section7.zoningCompliance}
-                        onCheckedChange={(checked) => updateFormData('section7', 'zoningCompliance', checked)}
-                        disabled={isReadOnly}
-                      />
-                      <Label htmlFor="zoning">{tx("Compliance with zoning restrictions")}</Label>
-                    </div>
-                    <Input
-                      placeholder={tx("Remarks")}
-                      value={formData.section7.zoningRemarks}
-                      onChange={(e) => updateFormData('section7', 'zoningRemarks', e.target.value)}
-                      disabled={isReadOnly}
-                      className="flex-1"
-                    />
-                  </div>
-                )}
-
-                <div className="flex items-start space-x-4">
-                  <div className="flex items-center space-x-2 min-w-[250px]">
-                    <Checkbox
-                      id="envApproval"
-                      checked={formData.section7.environmentalApprovalCompliance}
-                      onCheckedChange={(checked) => updateFormData('section7', 'environmentalApprovalCompliance', checked)}
-                      disabled={isReadOnly}
-                    />
-                    <Label htmlFor="envApproval">{tx("Environmental approval compliance")}</Label>
-                  </div>
-                  <Input
-                    placeholder={tx("Remarks")}
-                    value={formData.section7.environmentalApprovalRemarks}
-                    onChange={(e) => updateFormData('section7', 'environmentalApprovalRemarks', e.target.value)}
-                    disabled={isReadOnly}
-                    className="flex-1"
-                  />
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="flex items-center space-x-2 min-w-[250px]">
-                    <Checkbox
-                      id="monitoring"
-                      checked={formData.section7.monitoringReportsCompliance}
-                      onCheckedChange={(checked) => updateFormData('section7', 'monitoringReportsCompliance', checked)}
-                      disabled={isReadOnly}
-                    />
-                    <Label htmlFor="monitoring">{tx("Submission of monitoring reports")}</Label>
-                  </div>
-                  <Input
-                    placeholder={tx("Remarks")}
-                    value={formData.section7.monitoringReportsRemarks}
-                    onChange={(e) => updateFormData('section7', 'monitoringReportsRemarks', e.target.value)}
-                    disabled={isReadOnly}
-                    className="flex-1"
-                  />
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="flex items-center space-x-2 min-w-[250px]">
-                    <Checkbox
-                      id="fees"
-                      checked={formData.section7.waterFeesCompliance}
-                      onCheckedChange={(checked) => updateFormData('section7', 'waterFeesCompliance', checked)}
-                      disabled={isReadOnly}
-                    />
-                    <Label htmlFor="fees">{tx("Payment of water use fees")}</Label>
-                  </div>
-                  <Input
-                    placeholder={tx("Remarks")}
-                    value={formData.section7.waterFeesRemarks}
-                    onChange={(e) => updateFormData('section7', 'waterFeesRemarks', e.target.value)}
-                    disabled={isReadOnly}
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* SECTION 8: Future Plans */}
         <TabsContent value="section8">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
-                {tx("Section 8: Future Plans (Next Reporting Year)")}
+                {heading("section8")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="plannedChanges">{tx("Planned Changes in Water Use")}</Label>
-                <Textarea
-                  id="plannedChanges"
-                  value={formData.section8.plannedChanges}
-                  onChange={(e) => updateFormData('section8', 'plannedChanges', e.target.value)}
-                  disabled={isReadOnly}
-                  placeholder={tx("Describe any planned changes...")}
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="expectedChange">{tx("Expected Increase/Decrease (%)")}</Label>
+                <Label htmlFor="expectedChange">{tx("Expected Increase/Decrease (%) (if any)")}</Label>
                 <Input
                   id="expectedChange"
                   type="number"
@@ -2111,19 +1643,21 @@ export function WaterUseReportForm({
                   disabled={isReadOnly}
                 />
               </div>
+              {template === 'abstraction' && (
+                <div className="space-y-2">
+                  <Label htmlFor="infrastructure">{tx("Planned Infrastructure Upgrades (if any)")}</Label>
+                  <Textarea
+                    id="infrastructure"
+                    value={formData.section8.plannedInfrastructureUpgrades}
+                    onChange={(e) => updateFormData('section8', 'plannedInfrastructureUpgrades', e.target.value)}
+                    disabled={isReadOnly}
+                    placeholder={tx("Describe planned upgrades...")}
+                    rows={3}
+                  />
+                </div>
+              )}
               <div className="space-y-2">
-                <Label htmlFor="infrastructure">{tx("Planned Infrastructure Upgrades")}</Label>
-                <Textarea
-                  id="infrastructure"
-                  value={formData.section8.plannedInfrastructureUpgrades}
-                  onChange={(e) => updateFormData('section8', 'plannedInfrastructureUpgrades', e.target.value)}
-                  disabled={isReadOnly}
-                  placeholder={tx("Describe planned upgrades...")}
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="envImprove">{tx("Environmental Improvement Measures")}</Label>
+                <Label htmlFor="envImprove">{tx("Environmental Improvement Measures (if any)")}</Label>
                 <Textarea
                   id="envImprove"
                   value={formData.section8.environmentalImprovements}
@@ -2134,7 +1668,7 @@ export function WaterUseReportForm({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="genderActions">{tx("Planned Actions to Enhance Gender Inclusion")}</Label>
+                <Label htmlFor="genderActions">{tx("Planned Actions to Enhance Gender Inclusion (if any)")}</Label>
                 <Textarea
                   id="genderActions"
                   value={formData.section8.genderInclusionActions}
@@ -2154,7 +1688,7 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileSignature className="h-5 w-5" />
-                {tx("Section 9: Declaration")}
+                {heading("section9")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
