@@ -771,10 +771,12 @@ function ReportSections({
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Leaf className="h-5 w-5" />
-                    {`Section ${sectionNo.section5}: Environmental Compliance`}
+                    {`Section ${sectionNo.section5}: ${isConcession ? "Environmental Practices, Compliance, and Monitoring" : "Environmental Compliance and Monitoring"}`}
                   </CardTitle>
                   <CardDescription>
-                    Water quality monitoring and environmental incidents
+                    {isConcession
+                      ? "Environmental practices and incidents"
+                      : "Environmental incidents"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
