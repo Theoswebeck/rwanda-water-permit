@@ -27,6 +27,64 @@ const PROTECTED_ROUTES = [
 
 const AUTH_PAGES = ['/login', '/register']
 
+// ─────────────────────────────────────────────────────────────────────────────
+// API access control
+//
+// Every /api/* route requires a valid session UNLESS its prefix appears below.
+// The middleware previously did not match /api/* at all, which left routes such
+// as /api/staff/permit-registry (the whole permit registry, with holder names
+// and contacts) and /api/admin/users/delete answerable by anyone.
+//
+// The allowlist is deliberately short and prefix-based. Anything added here is
+// world-readable, so it needs a reason.
+// ─────────────────────────────────────────────────────────────────────────────
+const PUBLIC_API_PREFIXES = [
+  // Data behind the public Water Use Dashboard. Aggregate counts only.
+  '/api/public/water-use-dashboard',
+  // Public permit verification: the /permit/view/<number> page reached by
+  // scanning a permit's QR code lets anyone download that permit's PDF.
+  '/api/public/permits/pdf/',
+  // The sign-in surface itself — login, signup, logout, OTP codes, password
+  // reset, phone verification. These routes enforce their own rules; they
+  // cannot require a session because they are how a session is obtained.
+  '/api/auth/',
+  // Identity lookups used by the signup form before an account exists.
+  '/api/nida/',
+  '/api/rra/',
+  // Server-to-server callback from IremboPay; authenticated by the provider,
+  // not by a browser session.
+  '/api/payments/webhook',
+  // Infrastructure probes used by the deployment.
+  '/api/health',
+  '/api/warmup',
+]
+
+/** Routes only staff may call. Applicants get 403 even when signed in. */
+const STAFF_API_PREFIXES = ['/api/staff/', '/api/management/', '/api/approver/']
+const ADMIN_API_PREFIXES = ['/api/admin/']
+
+const STAFF_ROLES = new Set([
+  'admin',
+  'approver',
+  'reviewer',
+  'verifier',
+  'assessor',
+  'inspector',
+])
+
+function isPublicApiPath(pathname: string): boolean {
+  return PUBLIC_API_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix)
+  )
+}
+
+function jsonError(message: string, status: number) {
+  return new NextResponse(JSON.stringify({ error: message }), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
 const ROLE_ROUTES: Record<string, string[]> = {
   admin: PROTECTED_ROUTES,
   approver: ['/approver', '/dashboard/profile', '/dashboard/settings', '/management'],
@@ -68,8 +126,57 @@ function resolveEffectiveRolesFromClaims(
   return new Set([baseRole].filter(Boolean))
 }
 
+/**
+ * Gate for /api/* requests. Returns a response to short-circuit with, or null
+ * to let the request through.
+ */
+async function guardApiRequest(request: NextRequest, pathname: string) {
+  if (isPublicApiPath(pathname)) return null
+
+  const token = request.cookies.get(getAuthCookieName())?.value
+  if (!token) return jsonError('Authentication required', 401)
+
+  const claims = await verifySessionToken(token)
+  if (!claims) {
+    const res = jsonError('Authentication required', 401)
+    clearSessionCookie(res)
+    return res
+  }
+
+  const status = String(claims.status || '')
+  if (status === 'suspended' || status === 'inactive') {
+    return jsonError('Account is not active', 403)
+  }
+
+  const role = normalizeRole(claims.role)
+  const email = String(claims.email || '').trim().toLowerCase()
+  const isSuperuser = SUPERUSER_EMAILS.has(email)
+  const effectiveRoles = resolveEffectiveRolesFromClaims(claims, role)
+
+  if (ADMIN_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    if (!isSuperuser && role !== 'admin' && !effectiveRoles.has('admin')) {
+      return jsonError('Forbidden', 403)
+    }
+    return null
+  }
+
+  if (STAFF_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    const isStaff =
+      isSuperuser || Array.from(effectiveRoles).some((r) => STAFF_ROLES.has(r))
+    if (!isStaff) return jsonError('Forbidden', 403)
+  }
+
+  return null
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+
+  if (pathname.startsWith('/api/')) {
+    const blocked = await guardApiRequest(request, pathname)
+    return blocked ?? NextResponse.next()
+  }
+
   const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))
   const isAuthPage = AUTH_PAGES.includes(pathname)
 
@@ -149,6 +256,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Every API route passes through the allowlist gate above.
+    '/api/:path*',
     '/dashboard',
     '/dashboard/:path*',
     '/admin',
