@@ -15,7 +15,8 @@
     "test:activity-classification": "node --test scripts/test-activity-classification.mjs",
     "test:catchment-resolution": "node --test scripts/test-catchment-resolution.mjs",
     "build:catchment-lookup": "node scripts/build-catchment-lookup.mjs",
-    "audit:inspections-schema": "node scripts/audit-inspections-schema.mjs"
+    "audit:inspections-schema": "node scripts/audit-inspections-schema.mjs",
+    "test:water-use-report-template": "node --test scripts/test-water-use-report-template.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

@@ -24,6 +24,7 @@ import {
   type WaterUseReportWithRelations
 } from "@/hooks/useWaterUseReports";
 import type { PermitWithApplication } from "@/hooks/usePermitsQuery";
+import type { WaterUseReportTemplate } from "@/types/database";
 
 // Lazy load the form component
 const WaterUseReportForm = dynamic(
@@ -145,7 +146,11 @@ function WaterUseReportContent() {
 
     try {
       const { syncUrl = true, showDraftFeedback = true } = options;
-      const template = getReportTemplate(permit.application?.intended_activities);
+      // An existing report keeps the template it was created with; only a new
+      // report resolves one from the permit.
+      const template =
+        (existingReport?.template as WaterUseReportTemplate | undefined) ??
+        getReportTemplate(permit.application?.intended_activities, permit.purpose);
       
       const reportPayload = {
         permit_id: permit.id,
@@ -301,7 +306,9 @@ function WaterUseReportContent() {
     );
   }
 
-  const template = getReportTemplate(permit.application?.intended_activities);
+  const template =
+    (existingReport?.template as WaterUseReportTemplate | undefined) ??
+    getReportTemplate(permit.application?.intended_activities, permit.purpose);
 
   return (
     <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>

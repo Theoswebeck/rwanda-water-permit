@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { WaterUseReport, WaterUseReportTemplate, WaterUseReportStatus } from '@/types/database'
+import { selectWaterUseReportTemplate } from '@/lib/water-use-report-utils'
 
 // ⚡ PERFORMANCE: Query keys for cache management
 export const waterUseReportKeys = {
@@ -220,27 +221,20 @@ export function useSubmitWaterUseReportMutation() {
   })
 }
 
-// Helper function to determine report template based on intended activities
-export function getReportTemplate(intendedActivities: string[] | null | undefined): WaterUseReportTemplate {
-  const concessionActivities = [
-    'recreation',
-    'fish_farming_lakes',
-    'gas_extraction',
-    'gaz_extraction',
-    'port',
-    'port_construction',
-    'recreation_activities',
-  ]
-
-  if (!intendedActivities || intendedActivities.length === 0) {
-    return 'abstraction'
-  }
-
-  const hasConcession = intendedActivities.some(activity =>
-    concessionActivities.includes(activity.toLowerCase())
-  )
-
-  return hasConcession ? 'concession' : 'abstraction'
+/**
+ * Determine the report template from the permit purpose and/or the
+ * application's intended activities. Pass the purpose whenever it is
+ * available — activities alone miss permits whose activity list doesn't
+ * name the concession activity (see selectWaterUseReportTemplate).
+ */
+export function getReportTemplate(
+  intendedActivities: string[] | null | undefined,
+  permitPurpose?: string | null,
+): WaterUseReportTemplate {
+  return selectWaterUseReportTemplate({
+    permitPurpose: permitPurpose as never,
+    applicationIntendedActivities: intendedActivities as never,
+  })
 }
 
 // Helper to get water use type options based on template

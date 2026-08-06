@@ -1,16 +1,46 @@
 import type { Application, Permit, WaterUseReportTemplate, User } from '@/types/database'
 
+/**
+ * Activities that occupy a water body rather than abstract from it, and so
+ * report on the concession template. Spelling variants are all listed because
+ * `permit.purpose` and `application.intended_activities` are populated by
+ * different code paths and disagree on some of them.
+ *
+ * Single source of truth — `getReportTemplate()` in hooks/useWaterUseReports
+ * delegates here rather than keeping a second copy.
+ */
+export const CONCESSION_ACTIVITIES = new Set<string>([
+  'recreation',
+  'recreation_activities',
+  'fish_farming_lakes',
+  'gas_extraction',
+  'gaz_extraction',
+  'port',
+  'port_construction',
+])
+
+export function isConcessionActivity(value?: string | null): boolean {
+  if (!value) return false
+  return CONCESSION_ACTIVITIES.has(value.trim().toLowerCase())
+}
+
+/**
+ * Resolve the reporting template from BOTH the permit purpose and the
+ * application's intended activities — either one indicating a concession
+ * activity is enough.
+ *
+ * Checking only intended_activities used to mis-resolve real permits: e.g.
+ * 000018/RWB/2026 has purpose 'recreation' (concession) but its activities are
+ * ["navigation"], so it rendered the abstraction template.
+ */
 export function selectWaterUseReportTemplate(args: {
   permitPurpose?: Permit['purpose'] | null
   applicationIntendedActivities?: Application['intended_activities'] | null
 }): WaterUseReportTemplate {
-  const purpose = args.permitPurpose || undefined
+  if (isConcessionActivity(args.permitPurpose)) return 'concession'
 
-  // Concession template is used for lake concession-style permits.
-  // Current supported mapping (can be expanded later):
-  // - fish_farming_lakes (cages in lake)
-  // - recreation
-  if (purpose === 'fish_farming_lakes' || purpose === 'recreation') {
+  const activities = args.applicationIntendedActivities
+  if (Array.isArray(activities) && activities.some(isConcessionActivity)) {
     return 'concession'
   }
 
