@@ -844,21 +844,38 @@ export default function InspectorApplicationView() {
     try {
       setSubmitLoading(true);
       actionInFlightRef.current = true;
-      
-      // 1. Save assessment with revision status
-      await saveAssessment('returned_for_revision');
-      
-      // 2. Update application status
-      const { error: appError } = await supabase
+
+      // 1. Move the application to revision_required FIRST — this is the transition
+      // that unlocks the applicant's edit flow. If it fails, abort before touching
+      // the assessment so the two records can never disagree.
+      const { data: updatedApp, error: appError } = await supabase
         .from('applications')
-        .update({ 
+        .update({
           status: 'revision_required',
           revision_notes: revisionNotes,
           updated_at: new Date().toISOString()
         })
         .eq('id', application.id);
-        
+
       if (appError) throw appError;
+      if (!updatedApp || (Array.isArray(updatedApp) && updatedApp.length === 0)) {
+        throw new Error('Application status update did not apply. Please refresh and try again.');
+      }
+
+      // Fire-and-forget: email the applicant that revision is required
+      // (idempotent per revision cycle server-side).
+      try {
+        fetch('/api/notifications/send-revision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ applicationId: application.id }),
+        }).catch(() => null);
+      } catch {}
+
+      // 2. Save assessment with revision status. If this fails the applicant can
+      // already revise; re-running "Return for revision" will retry this save.
+      await saveAssessment('returned_for_revision');
       
       setShowRevisionDialog(false);
       setRevisionNotes("");

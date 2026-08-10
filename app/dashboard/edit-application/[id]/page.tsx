@@ -21,6 +21,7 @@ import type { Application, Document, User as UserType } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
 import { buildDocumentLookupPathPatterns, resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
+import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { mapFormDataToApplication as mapFormDataToApplicationShared } from "@/lib/application-utils";
 
 interface ApplicationWithRelations extends Application {
@@ -688,72 +689,35 @@ export default function EditApplicationPage() {
           
           // ⚡ PERFORMANCE: Process documents efficiently
           const documentMap: Record<string, { url: string; name: string }> = {};
-          const additionalDocsList: any[] = [];
-          
-          // Smart document classification based on file path patterns
+
+          // Standard/activity documents keyed by their field token from the storage path.
           for (const doc of documents) {
             if (doc.file_path && doc.name) {
               const publicUrl = getDocumentUrl(doc.file_path);
               if (publicUrl) {
-                console.log(`📋 Processing document: ${doc.name} (type: ${doc.type}, path: ${doc.file_path})`);
-                
                 const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
-                if (fieldName) {
-                  console.log(`📋 Identified field name from path: ${fieldName}`);
-                  
-                  // Check if it's an additional document
-                  if (fieldName.startsWith('additional_')) {
-                    additionalDocsList.push({
-                      id: doc.id || `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                      name: doc.name,
-                      category: 'additional',
-                      description: (doc as any).description || '',
-                      file: null,
-                      url: publicUrl
-                    });
-                  } else {
-                    // This is a standard/activity-specific document
-                    documentMap[fieldName] = {
-                      url: publicUrl,
-                      name: doc.name
-                    };
-                  }
-                } else {
-                  if (doc.type === 'other') {
-                    // This is likely an additional document
-                    additionalDocsList.push({
-                      id: doc.id || `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                      name: doc.name,
-                      category: 'additional',
-                      description: (doc as any).description || '',
-                      file: null,
-                      url: publicUrl
-                    });
-                  } else {
-                    // This is a standard document
-                    const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
-                    documentMap[fieldName] = {
-                      url: publicUrl,
-                      name: doc.name
-                    };
-                  }
+                if (fieldName && !fieldName.startsWith('additional_')) {
+                  documentMap[fieldName] = {
+                    url: publicUrl,
+                    name: doc.name
+                  };
                 }
               }
             }
           }
-          
-          // Add additional documents to form data
-          if (additionalDocsList.length > 0) {
-            formData.additionalDocuments = additionalDocsList;
-          }
-          
+
+          // Additional (annex "+ Add Document") entries: use the same shared merge
+          // as the view/staff pages so each doc keeps its annex category
+          // (parsed from the additional_<activity>_<ts> token) instead of being
+          // dumped into a catch-all bucket that no annex section renders.
+          const mergedFormData = mergeAdditionalDocumentUrls(formData, documents, getDocumentUrl);
+
           // NOW set the initial form data (after additionalDocuments are added)
-          setInitialFormData(formData);
+          setInitialFormData(mergedFormData);
           setInitialDocuments(documentMap);
           console.log('📋 Document processing complete:');
           console.log('📋 Standard documents found:', Object.keys(documentMap));
-          console.log('📋 Additional documents found:', additionalDocsList.length);
-          console.log('📋 Additional documents:', additionalDocsList);
+          console.log('📋 Additional documents found:', mergedFormData.additionalDocuments.length);
           console.log('✅ Application loaded for editing:', app);
           console.log('✅ Form data mapped:', formData);
         } else {
