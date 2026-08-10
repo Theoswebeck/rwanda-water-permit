@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
 import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
+import { PasswordStrength } from "@/components/auth/password-strength";
+import { validatePassword } from "@/lib/security/password";
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -53,8 +55,10 @@ function ResetPasswordContent() {
       return;
     }
 
-    if (password.length < 6) {
-      setError(tx("Password must be at least 6 characters long"));
+    // Same policy the /api/auth/password-reset/confirm route enforces.
+    const strength = validatePassword(password);
+    if (!strength.valid) {
+      setError(tx(strength.errors[0]));
       return;
     }
 
@@ -135,6 +139,7 @@ function ResetPasswordContent() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
+                <PasswordStrength password={password} />
               </div>
 
               <div className="space-y-2">

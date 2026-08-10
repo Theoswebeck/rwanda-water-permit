@@ -29,6 +29,8 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { MyDelegations } from "@/components/shared/my-delegations";
 import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
+import { PasswordStrength } from "@/components/auth/password-strength";
+import { validatePassword } from "@/lib/security/password";
 
 interface ProfileFormData {
   first_name?: string;
@@ -129,8 +131,14 @@ export function ProfileManagement() {
       return;
     }
 
-    if (passwordData.newPassword.length < 6) {
-      setError(tx("Password must be at least 6 characters long"));
+    // Same policy the /api/auth/change-password route enforces.
+    const strength = validatePassword(passwordData.newPassword, {
+      email: user?.email,
+      firstName: userProfile?.first_name,
+      lastName: userProfile?.last_name,
+    });
+    if (!strength.valid) {
+      setError(tx(strength.errors[0]));
       return;
     }
 
@@ -511,6 +519,15 @@ export function ProfileManagement() {
                       {showPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
+                  <PasswordStrength
+                    className="mt-2"
+                    password={passwordData.newPassword}
+                    context={{
+                      email: user?.email,
+                      firstName: userProfile?.first_name,
+                      lastName: userProfile?.last_name,
+                    }}
+                  />
                 </div>
 
                 <div>

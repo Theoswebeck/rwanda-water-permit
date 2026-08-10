@@ -1,31 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomInt } from 'crypto'
 import { query } from '@/lib/db/postgres'
 import { hashPassword } from '@/lib/auth/password'
-import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
+import { requireRole } from '@/lib/auth/require-role'
+import { PASSWORD_MIN_LENGTH, validatePassword } from '@/lib/security/password'
 import nodemailer from 'nodemailer'
 
-// Generate a secure random password
+/**
+ * Generates a temporary password using a CSPRNG.
+ *
+ * `Math.random()` is not cryptographically secure and must never be used to
+ * mint a credential — `crypto.randomInt` is.
+ *
+ * Random strings occasionally contain a run like "gfed", which our own policy
+ * rejects; retry until the result satisfies the policy the staff member will
+ * be held to when they change it.
+ */
 function generateTempPassword(length = 16): string {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const candidate = randomPassword(length)
+    if (validatePassword(candidate).valid) return candidate
+  }
+  return randomPassword(length)
+}
+
+function randomPassword(length: number): string {
   const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   const lowercase = 'abcdefghijklmnopqrstuvwxyz'
   const numbers = '0123456789'
   const special = '!@#$%^&*'
   const all = uppercase + lowercase + numbers + special
-  
-  // Ensure at least one of each type
-  let password = ''
-  password += uppercase[Math.floor(Math.random() * uppercase.length)]
-  password += lowercase[Math.floor(Math.random() * lowercase.length)]
-  password += numbers[Math.floor(Math.random() * numbers.length)]
-  password += special[Math.floor(Math.random() * special.length)]
-  
-  // Fill the rest randomly
-  for (let i = password.length; i < length; i++) {
-    password += all[Math.floor(Math.random() * all.length)]
+
+  const size = Math.max(length, PASSWORD_MIN_LENGTH)
+  const pick = (charset: string) => charset[randomInt(charset.length)]
+
+  // Ensure at least one of each type so the temp password satisfies the policy
+  const chars: string[] = [pick(uppercase), pick(lowercase), pick(numbers), pick(special)]
+  while (chars.length < size) {
+    chars.push(pick(all))
   }
-  
-  // Shuffle the password
-  return password.split('').sort(() => Math.random() - 0.5).join('')
+
+  // Fisher-Yates shuffle (an unbiased shuffle, unlike sort() with a random comparator)
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1)
+    ;[chars[i], chars[j]] = [chars[j], chars[i]]
+  }
+
+  return chars.join('')
 }
 
 // Valid staff roles (applicants must self-register)
@@ -33,9 +54,12 @@ const STAFF_ROLES = ['assessor', 'reviewer', 'verifier', 'inspector', 'admin', '
 
 export async function POST(req: NextRequest) {
   try {
-    const token = readSessionTokenFromRequest(req)
-    const claims = token ? await verifySessionToken(token) : null
-    const actorUserId = claims?.sub || null
+    // This endpoint mints accounts with any staff role, including `admin`.
+    // `middleware.ts` already gates /api/admin/*, but a matcher change or a
+    // route move would silently drop that; assert the requirement here too.
+    const auth = await requireRole(req, ['admin'])
+    if (!auth.ok) return auth.response
+    const actorUserId = auth.userId
 
     const body = await req.json().catch(() => null)
     

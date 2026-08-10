@@ -5,6 +5,8 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
+import { PasswordStrength } from "@/components/auth/password-strength";
+import { validatePassword as validatePasswordPolicy } from "@/lib/security/password";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -388,8 +390,10 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       setPasswordError(tx("Password is required."));
       return false;
     }
-    if (password.length < 6) {
-      setPasswordError(tx("Password must be at least 6 characters long."));
+    // Same policy the /api/auth/signup route enforces.
+    const result = validatePasswordPolicy(password, { email, firstName, lastName });
+    if (!result.valid) {
+      setPasswordError(tx(result.errors[0]));
       return false;
     }
     setPasswordError("");
@@ -967,7 +971,8 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                             )}
                           </button>
                         </div>
-                        {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
+                        <PasswordStrength password={password} context={{ email, firstName, lastName }} />
+{passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
                       </div>
 
                       <Button
@@ -1367,7 +1372,8 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                                 )}
                               </button>
                             </div>
-                            {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
+                            <PasswordStrength password={password} context={{ email, firstName, lastName }} />
+{passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
                           </div>
 
                           <Button

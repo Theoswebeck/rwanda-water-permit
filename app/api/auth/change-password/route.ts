@@ -2,22 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { hashPassword } from '@/lib/auth/password'
 import { readSessionTokenFromRequest, verifySessionToken, clearSessionCookie } from '@/lib/auth/session'
+import { passwordPolicyError, validatePassword } from '@/lib/security/password'
+import { AUTH_RATE_LIMITS, checkRateLimit, tooManyRequests } from '@/lib/security/rate-limit'
 
 export async function POST(req: NextRequest) {
   try {
     const { newPassword } = await req.json()
-    
-    if (!newPassword) {
-      return NextResponse.json({ 
-        success: false, 
-        message: 'New password is required' 
-      }, { status: 400 })
-    }
 
-    if (newPassword.length < 6) {
-      return NextResponse.json({ 
-        success: false, 
-        message: 'New password must be at least 6 characters long' 
+    if (!newPassword) {
+      return NextResponse.json({
+        success: false,
+        message: 'New password is required'
       }, { status: 400 })
     }
 
@@ -34,6 +29,21 @@ export async function POST(req: NextRequest) {
       const res = NextResponse.json({ success: false, message: 'Invalid session' }, { status: 401 })
       clearSessionCookie(res)
       return res
+    }
+
+    const rateCheck = checkRateLimit(
+      `changepassword:user:${claims.sub}`,
+      AUTH_RATE_LIMITS.changePasswordPerUser
+    )
+    if (!rateCheck.allowed) {
+      return tooManyRequests(rateCheck, 'Too many password change attempts. Please try again later.')
+    }
+
+    // Enforce the shared password policy. The identity is known here, so we can
+    // also reject passwords built from the user's own email.
+    const strength = validatePassword(newPassword, { email: claims.email })
+    if (!strength.valid) {
+      return NextResponse.json(passwordPolicyError(strength), { status: 400 })
     }
 
     const passwordHash = await hashPassword(newPassword)

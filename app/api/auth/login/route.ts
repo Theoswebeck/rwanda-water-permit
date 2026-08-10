@@ -3,6 +3,13 @@ import { query } from '@/lib/db/postgres'
 import { verifyPassword } from '@/lib/auth/password'
 import { createSessionToken, setSessionCookie } from '@/lib/auth/session'
 import { resolveEffectiveRoles } from '@/lib/auth/effective-roles'
+import {
+  AUTH_RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  resetRateLimit,
+  tooManyRequests,
+} from '@/lib/security/rate-limit'
 import type { AccountType, UserRole, UserStatus } from '@/types/database'
 
 type UserRow = {
@@ -25,6 +32,26 @@ export async function POST(req: NextRequest) {
 
     if (!email || !password) {
       return NextResponse.json({ success: false, message: 'Email and password are required' }, { status: 400 })
+    }
+
+    // SECURITY: throttle credential guessing. Per-account catches password
+    // guessing against one user; per-IP catches credential stuffing spread
+    // across many accounts. Both are checked before the bcrypt comparison, so
+    // a flood cannot burn CPU either.
+    const ipKey = `login:ip:${getClientIp(req)}`
+    const accountKey = `login:account:${email}`
+
+    const ipCheck = checkRateLimit(ipKey, AUTH_RATE_LIMITS.loginPerIp)
+    if (!ipCheck.allowed) {
+      return tooManyRequests(ipCheck, 'Too many sign-in attempts from this network. Please try again later.')
+    }
+
+    const accountCheck = checkRateLimit(accountKey, AUTH_RATE_LIMITS.loginPerAccount)
+    if (!accountCheck.allowed) {
+      return tooManyRequests(
+        accountCheck,
+        'Too many failed sign-in attempts for this account. Please wait before trying again, or reset your password.'
+      )
     }
 
     const result = await query<UserRow>(
@@ -59,6 +86,11 @@ export async function POST(req: NextRequest) {
         { status: 403 }
       )
     }
+
+    // Credentials verified: clear this account's failure counter so a user who
+    // fumbled their password is not locked out afterwards. The per-IP counter
+    // is intentionally left in place.
+    resetRateLimit(accountKey)
 
     const resolved = await resolveEffectiveRoles({
       userId: user.id,

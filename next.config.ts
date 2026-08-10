@@ -27,11 +27,30 @@ const nextConfig: NextConfig = {
   },
   // ⚡ PERFORMANCE: Add cache headers for static assets
   async headers() {
+    // 🔒 SECURITY: applied in every environment.
+    // `X-Robots-Tag` backs up `app/robots.ts` — robots.txt is advisory, this
+    // header also covers API responses and crawlers that skip robots.txt.
+    const securityHeaders = [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex, nofollow, noarchive, nosnippet, noimageindex',
+          },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+    ];
+
     // IMPORTANT (dev stability):
     // In development, aggressive caching for `/_next/static/*` can cause stale webpack runtime/chunk
     // mismatches, producing errors like "Cannot read properties of undefined (reading 'call')".
     if (process.env.NODE_ENV !== "production") {
       return [
+        ...securityHeaders,
         {
           source: "/_next/static/:path*",
           headers: [
@@ -45,6 +64,7 @@ const nextConfig: NextConfig = {
     }
 
     return [
+      ...securityHeaders,
       {
         source: '/:all*(svg|jpg|jpeg|png|gif|ico|webp)',
         headers: [

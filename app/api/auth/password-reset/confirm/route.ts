@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { query } from "@/lib/db/postgres";
 import { hashPassword } from "@/lib/auth/password";
+import { passwordPolicyError, validatePassword } from "@/lib/security/password";
+import {
+  AUTH_RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  tooManyRequests,
+} from "@/lib/security/rate-limit";
 
 function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input, "utf8").digest("hex");
@@ -19,11 +26,13 @@ export async function POST(req: NextRequest) {
     if (!resetToken) {
       return NextResponse.json({ success: false, message: "Missing reset token" }, { status: 400 });
     }
-    if (!newPassword || newPassword.length < 6) {
-      return NextResponse.json(
-        { success: false, message: "Password must be at least 6 characters long" },
-        { status: 400 }
-      );
+    // Throttle token redemption so the reset token cannot be guessed.
+    const ipCheck = checkRateLimit(
+      `pwreset:confirm:ip:${getClientIp(req)}`,
+      AUTH_RATE_LIMITS.passwordResetConfirmPerIp
+    );
+    if (!ipCheck.allowed) {
+      return tooManyRequests(ipCheck, "Too many attempts from this network. Please try again later.");
     }
 
     const tokenHash = sha256Hex(resetToken);
@@ -48,6 +57,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Invalid or expired reset token" }, { status: 400 });
     }
 
+    const email = String(tokenRow.email ?? "").trim().toLowerCase();
+
+    // Enforce the password policy *before* consuming the token, so a rejected
+    // password does not force the user through the whole reset flow again.
+    const strength = validatePassword(newPassword, { email });
+    if (!strength.valid) {
+      return NextResponse.json(passwordPolicyError(strength), { status: 400 });
+    }
+
     // Consume token (one-time)
     await query(
       `
@@ -57,8 +75,6 @@ export async function POST(req: NextRequest) {
       `,
       [tokenRow.id]
     );
-
-    const email = String(tokenRow.email ?? "").trim().toLowerCase();
 
     const userRes = await query<{ id: string }>(
       `

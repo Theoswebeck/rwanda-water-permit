@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { getQueryClient } from "@/lib/react-query-provider";
+import { purgeLegacyTokenStorage } from "@/lib/security/purge-legacy-token-storage";
 import type { User } from "@/types/database";
 import type { SignupAccountType } from "@/lib/auth/account-types";
 
@@ -80,6 +81,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // SECURITY: the session is a httpOnly `wp_session` cookie, but browsers that
+  // ran the older Supabase-based build may still hold auth tokens in web
+  // storage — where they never expire and any script can read them. Clear them.
+  useEffect(() => {
+    purgeLegacyTokenStorage();
+  }, []);
 
   const refreshProfile = async () => {
     try {

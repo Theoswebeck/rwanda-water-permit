@@ -1,18 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
+import { requireRole } from '@/lib/auth/require-role'
 
 const isUuid = (v: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
 
 export async function POST(req: NextRequest) {
-  // NOTE: This endpoint is powerful (service role). In production it must be protected by admin auth.
-  // The admin UI is currently intentionally unprotected for testing; keep this dev-focused.
   try {
+    // This endpoint destroys accounts. `middleware.ts` already gates
+    // /api/admin/*, but a matcher change or a route move would silently drop
+    // that; assert the requirement here too.
+    const auth = await requireRole(req, ['admin'])
+    if (!auth.ok) return auth.response
+
     const body = await req.json().catch(() => null)
     const userId = String(body?.userId || '').trim()
 
     if (!userId || !isUuid(userId)) {
       return NextResponse.json({ success: false, message: 'Invalid userId' }, { status: 400 })
+    }
+
+    // Deleting your own account leaves the caller in a broken session and can
+    // orphan the last admin.
+    if (userId === auth.userId) {
+      return NextResponse.json(
+        { success: false, message: 'You cannot delete your own account.' },
+        { status: 400 }
+      )
     }
 
     // Fetch profile for context + email-based cleanup
@@ -56,16 +70,17 @@ export async function POST(req: NextRequest) {
       await query(
         `
         insert into public.audit_logs (
-          action, entity_type, table_name, record_id, old_values, description, severity, status, request_id, created_at
-        ) values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, now())
+          action, entity_type, table_name, record_id, user_id, old_values, description, severity, status, request_id, created_at
+        ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, now())
         `,
         [
           'user.deleted',
           'user',
           'users',
           userId,
+          auth.userId,
           JSON.stringify({ email: email || null }),
-          `Deleted user account ${email || userId}`,
+          `Deleted user account ${email || userId} (by ${auth.email})`,
           'critical',
           'success',
           crypto.randomUUID(),

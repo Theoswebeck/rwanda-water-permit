@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { query } from "@/lib/db/postgres";
+import {
+  AUTH_RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  resetRateLimit,
+  tooManyRequests,
+} from "@/lib/security/rate-limit";
 
 const isValidEmail = (email: string) => /[^@\s]+@[^@\s]+\.[^@\s]+/.test(email);
 
@@ -26,6 +33,24 @@ export async function POST(req: NextRequest) {
     }
     if (!code) {
       return NextResponse.json({ success: false, message: "Missing code" }, { status: 400 });
+    }
+
+    // SECURITY: the OTP is six digits, so unthrottled guessing exhausts the
+    // keyspace quickly. Throttle per account and per source IP.
+    const ipKey = `pwreset:verify:ip:${getClientIp(req)}`;
+    const accountKey = `pwreset:verify:account:${email}`;
+
+    const ipCheck = checkRateLimit(ipKey, AUTH_RATE_LIMITS.passwordResetVerifyPerIp);
+    if (!ipCheck.allowed) {
+      return tooManyRequests(ipCheck, "Too many attempts from this network. Please try again later.");
+    }
+
+    const accountCheck = checkRateLimit(accountKey, AUTH_RATE_LIMITS.passwordResetVerifyPerAccount);
+    if (!accountCheck.allowed) {
+      return tooManyRequests(
+        accountCheck,
+        "Too many incorrect codes. Please request a new reset code and try again later."
+      );
     }
 
     const codeRes = await query<{ id: string; expires_at: string; consumed_at: string | null }>(
@@ -75,6 +100,9 @@ export async function POST(req: NextRequest) {
       `,
       [email, tokenHash, expiresAt]
     );
+
+    // A correct code clears the per-account guess counter.
+    resetRateLimit(accountKey);
 
     return NextResponse.json({ success: true, resetToken });
   } catch (err) {

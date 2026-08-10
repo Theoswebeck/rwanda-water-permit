@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomInt } from 'crypto'
 import { query } from '@/lib/db/postgres'
 import { setDevEmailCode } from '../dev-store'
+import {
+  AUTH_RATE_LIMITS,
+  checkRateLimit,
+  emailKey,
+  getClientIp,
+  tooManyRequests,
+} from '@/lib/security/rate-limit'
 import nodemailer from 'nodemailer'
 
 // Util: basic email validation
@@ -14,10 +22,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Invalid email' }, { status: 400 })
     }
 
+    // SECURITY: this endpoint sends mail on demand and is the entry point of
+    // the password-reset flow. Without a limit it can be used to flood an
+    // inbox or to churn through reset codes.
+    const ipCheck = checkRateLimit(
+      `emailcode:ip:${getClientIp(req)}`,
+      AUTH_RATE_LIMITS.passwordResetRequestPerIp
+    )
+    if (!ipCheck.allowed) {
+      return tooManyRequests(ipCheck, 'Too many code requests from this network. Please try again later.')
+    }
+
+    const accountCheck = checkRateLimit(
+      `emailcode:account:${String(purpose)}:${emailKey(email)}`,
+      AUTH_RATE_LIMITS.passwordResetRequestPerAccount
+    )
+    if (!accountCheck.allowed) {
+      return tooManyRequests(
+        accountCheck,
+        'A code was already sent recently. Please check your inbox (and spam) before requesting another.'
+      )
+    }
+
     const isDev = process.env.NODE_ENV !== 'production' || process.env.EMAIL_DEV_MODE === 'true'
 
-    // Create a new verification code (TTL 15 minutes)
-    const code = String(Math.floor(100000 + Math.random() * 900000))
+    // Create a new verification code (TTL 15 minutes).
+    // SECURITY: `Math.random()` is a predictable PRNG — an attacker who sees
+    // one code can derive others. A code that grants a password reset must
+    // come from a CSPRNG.
+    const code = String(randomInt(100000, 1000000))
     const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString()
     await query(
       `

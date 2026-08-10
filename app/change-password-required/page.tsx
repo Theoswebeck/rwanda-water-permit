@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, Key, Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { PasswordStrength } from "@/components/auth/password-strength";
+import { validatePassword } from "@/lib/security/password";
 
 export default function ChangePasswordRequiredPage() {
   const router = useRouter();
@@ -33,19 +35,14 @@ export default function ChangePasswordRequiredPage() {
       return;
     }
 
-    // Validate password length
-    if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters long");
-      return;
-    }
-
-    // Validate password strength (at least one uppercase, one lowercase, one number)
-    const hasUppercase = /[A-Z]/.test(newPassword);
-    const hasLowercase = /[a-z]/.test(newPassword);
-    const hasNumber = /\d/.test(newPassword);
-    
-    if (!hasUppercase || !hasLowercase || !hasNumber) {
-      setError("Password must contain at least one uppercase letter, one lowercase letter, and one number");
+    // Same policy the /api/auth/change-password route enforces.
+    const strength = validatePassword(newPassword, {
+      email: user?.email,
+      firstName: userProfile?.first_name,
+      lastName: userProfile?.last_name,
+    });
+    if (!strength.valid) {
+      setError(strength.errors[0]);
       return;
     }
 
@@ -153,6 +150,14 @@ export default function ChangePasswordRequiredPage() {
                   {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
+              <PasswordStrength
+                password={newPassword}
+                context={{
+                  email: user?.email,
+                  firstName: userProfile?.first_name,
+                  lastName: userProfile?.last_name,
+                }}
+              />
             </div>
 
             <div className="space-y-2">
