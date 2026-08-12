@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { buildApplicationInsertParts, getMissingApplicationColumnFromError } from '@/lib/db/application-payload'
-import { sanitizeApplicationEnumPayload } from '@/lib/db/application-enum-sanitizer'
+import {
+  getInvalidEnumFallbackFromError,
+  recordEnumCoercionInPayload,
+  sanitizeApplicationEnumPayload,
+} from '@/lib/db/application-enum-sanitizer'
 import { checkPermitPipelineConflict } from '@/lib/db/permit-application-guard'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
@@ -212,6 +216,8 @@ export async function POST(req: NextRequest) {
 
     const insertPayload: Record<string, unknown> = { ...payload }
     const droppedColumns: string[] = []
+    const coercedEnums: string[] = []
+    const pendingMigrations: string[] = []
 
     // Backward compatibility: tolerate missing DB columns when app code is newer than schema.
     while (true) {
@@ -236,9 +242,44 @@ export async function POST(req: NextRequest) {
         if (droppedColumns.length > 0) {
           console.warn('⚠️ dashboard applications POST ignored unknown columns:', droppedColumns)
         }
+        if (coercedEnums.length > 0) {
+          console.warn('⚠️ dashboard applications POST stored legacy enum fallbacks:', coercedEnums)
+        }
 
-        return NextResponse.json({ success: true, application: created.rows[0] || null })
+        return NextResponse.json({
+          success: true,
+          application: created.rows[0] || null,
+          // Never let a lossy enum coercion be visible only in the server log:
+          // the response carries it too, and the value itself is recorded in
+          // internal_notes.enumCoercions (see recordEnumCoercionInPayload).
+          ...(coercedEnums.length > 0
+            ? { enumCoercions: coercedEnums, pendingMigrations: pendingMigrations }
+            : {}),
+        })
       } catch (insertErr) {
+        // Schema older than the code, case 1: the enum value exists in the app's
+        // allow-set but its migration has not been applied yet (SQLSTATE 22P02).
+        // Retry once with the legacy value so the applicant is never blocked.
+        const enumFallback = getInvalidEnumFallbackFromError(insertErr, insertPayload)
+        if (enumFallback) {
+          console.warn(
+            `⚠️ dashboard applications POST: "${enumFallback.from}" is not a valid ${enumFallback.enumType} value in this database; ` +
+              `retrying with "${enumFallback.to}". APPLY MIGRATION ${enumFallback.migration} to store "${enumFallback.from}" correctly.`
+          )
+          coercedEnums.push(`${enumFallback.column}: ${enumFallback.from} -> ${enumFallback.to}`)
+          if (!pendingMigrations.includes(enumFallback.migration)) {
+            pendingMigrations.push(enumFallback.migration)
+          }
+          // Keep the intended value recoverable (internal_notes.enumCoercions)
+          // and keep intended_activities — which every classifier reads first —
+          // carrying the true activity, so the coerced column can never flip the
+          // permit variant. The migration backfills water_purpose afterwards.
+          recordEnumCoercionInPayload(insertPayload, enumFallback, { allowCreateColumns: true })
+          insertPayload[enumFallback.column] = enumFallback.to
+          continue
+        }
+
+        // Schema older than the code, case 2: the column does not exist yet.
         const missingColumn = getMissingApplicationColumnFromError(insertErr)
         if (!missingColumn || !(missingColumn in insertPayload)) {
           throw insertErr

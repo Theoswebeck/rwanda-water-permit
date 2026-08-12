@@ -18,7 +18,7 @@ import {
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
-import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
+import { sortBySubmissionDateDescending, getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
 import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
@@ -104,7 +104,7 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
       // Batch-fetch workflow dates
       const submittedAtMap: Record<string, string | null> = {};
       for (const app of processedApplications) {
-        submittedAtMap[app.id] = app.submitted_at || app.created_at;
+        submittedAtMap[app.id] = getEffectiveSubmissionDate(app) || null;
       }
       const dates = await batchFetchWorkflowDates(
         processedApplications.map((a) => a.id),
@@ -134,7 +134,8 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
       approved: "bg-green-100 text-green-700 border-green-200",
       rejected: "bg-red-100 text-red-700 border-red-200",
       revision_required: "bg-amber-100 text-amber-700 border-amber-200",
-      cancelled: "bg-gray-100 text-gray-700 border-gray-200"
+      cancelled: "bg-gray-100 text-gray-700 border-gray-200",
+      terminated: "bg-slate-200 text-slate-700 border-slate-300"
     };
     
     return <Badge variant="outline" className={statusColors[status]}>{status.replace('_', ' ').toUpperCase()}</Badge>;
@@ -220,7 +221,7 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
     
     return matchesSearch && matchesStatus && matchesType && matchesExternalFilter;
   });
-  const sortedApplications = sortBySubmissionDateDescending(filteredApplications, (app) => app.submitted_at || app.created_at);
+  const sortedApplications = sortBySubmissionDateDescending(filteredApplications, (app) => getEffectiveSubmissionDate(app));
 
   if (loading) {
     return (
@@ -297,6 +298,7 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="revision_required">Revision Required</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="terminated">Terminated (Exempted Use)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

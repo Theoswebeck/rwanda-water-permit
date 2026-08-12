@@ -18,6 +18,7 @@ import { buildContractPlaceholderContext } from "@/lib/contract-placeholders";
 import { getResolvedContractTerms } from "@/lib/document-slots";
 import { selectPermitVariant } from "@/lib/permit-variant";
 import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
+import { downloadDossierZip } from "@/components/shared/download-dossier-button";
 import type { LinkedPermitLite } from "@/lib/linked-permits";
 
 type ApprovedApp = {
@@ -28,7 +29,7 @@ type ApprovedApp = {
   internal_notes?: string | null;
 };
 
-type BusyKind = "permit_pdf" | "terms_pdf";
+type BusyKind = "permit_pdf" | "terms_pdf" | "dossier_zip";
 
 export type ApprovedApplicationActionsProps = {
   app: ApprovedApp;
@@ -132,6 +133,7 @@ export function ApprovedApplicationActions({
           estimated_usage_volume,
           usage_unit,
           proposed_duration_years,
+          assessor_recommended_volume_m3,
           concession_area,
           intended_activities,
           province,
@@ -242,7 +244,11 @@ export function ApprovedApplicationActions({
               </div>
               <div className="min-w-0">
                 <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {busy === "permit_pdf" ? "Opening Permit Page" : "Preparing Terms PDF"}
+                  {busy === "permit_pdf"
+                    ? "Opening Permit Page"
+                    : busy === "dossier_zip"
+                      ? "Preparing Dossier ZIP"
+                      : "Preparing Terms PDF"}
                 </div>
                 <div className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                   This can take a few seconds. Please keep this tab open.
@@ -295,6 +301,29 @@ export function ApprovedApplicationActions({
             <Download className="h-4 w-4 mr-2" />
           )}
           {busy === "terms_pdf" ? "Generating Terms PDF…" : "View Terms PDF"}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={async () => {
+            if (busy) return;
+            setBusy("dossier_zip");
+            try {
+              await downloadDossierZip(app.id, app.application_number);
+            } catch (e) {
+              console.error("❌ Failed to download dossier ZIP:", e);
+              alert(e instanceof Error ? e.message : "Failed to download the dossier ZIP.");
+            } finally {
+              setBusy(null);
+            }
+          }}
+          disabled={!!busy}
+          className="flex items-center cursor-pointer"
+        >
+          {busy === "dossier_zip" ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4 mr-2" />
+          )}
+          {busy === "dossier_zip" ? "Preparing Dossier ZIP…" : "Download Dossier (ZIP)"}
         </DropdownMenuItem>
       </DropdownMenuContent>
       </DropdownMenu>

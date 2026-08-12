@@ -78,6 +78,7 @@ export function formatWaterPurposeForDB(activity: string): Application['water_pu
     'construction_of_infrastructures': 'construction_of_infrastructures',
     'navigation': 'navigation',
     'port_construction': 'port_construction',
+    'other_concession': 'other_concession',
     'industry': 'industrial',
     'electricity': 'electricity_generation',
     'construction': 'industrial',
@@ -118,6 +119,7 @@ export function formatApplicationTypeForDB(activity: string): Application['appli
     'livestock': 'agricultural',
     'gaz_extraction': 'commercial',
     'other': 'domestic',
+    'other_concession': 'commercial',
   };
   return typeMap[activity] || 'domestic';
 }
@@ -302,7 +304,8 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     'recreation_activities': 'commercial',
     'livestock': 'agricultural',
     'gaz_extraction': 'commercial',
-    'other': 'domestic'
+    'other': 'domestic',
+    'other_concession': 'commercial'
   };
 
   const activityPurposeMap: Record<string, Application['water_purpose']> = {
@@ -325,7 +328,8 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     'recreation_activities': 'recreation',
     'livestock': 'livestock',
     'gaz_extraction': 'gaz_extraction',
-    'other': 'domestic'
+    'other': 'domestic',
+    'other_concession': 'other_concession'
   };
 
   // For drafts, provide default values for required fields that might be empty

@@ -33,8 +33,9 @@ export type ApplicationStatus =
   | 'approved_pending_permit'
   | 'expired'
   | 'rejected' 
-  | 'revision_required' 
+  | 'revision_required'
   | 'cancelled'
+  | 'terminated'               // Terminal: application falls under an EXEMPTED water use (no permit required)
   // Returned statuses - for applications sent back for corrections
   | 'returned_to_assessment'    // Returned to assessor by reviewer/verifier
   | 'returned_to_review'        // Returned to reviewer by verifier/approver  
@@ -91,6 +92,7 @@ export type WaterPurpose =
   | 'navigation'
   | 'port_construction'
   | 'other'
+  | 'other_concession'
 
 export type WaterReliability = 'always_available' | 'frequently_dry' | 'seasonal_dry'
 
@@ -350,6 +352,10 @@ export interface Application {
   
   // Workflow timestamps
   submitted_at?: string
+  // Latest resubmission after a return-for-revision. submitted_at keeps the
+  // ORIGINAL submission (expiration window); displays use
+  // getEffectiveSubmissionDate() which prefers this when present.
+  resubmitted_at?: string | null
   reviewed_at?: string
   inspected_at?: string
   approved_at?: string
@@ -366,6 +372,9 @@ export interface Application {
   // Additional metadata
   revision_notes?: string
   rejection_reason?: string
+  // Termination (exempted water use) — terminal status, distinct from return-for-revision
+  termination_reason?: string
+  terminated_at?: string
   internal_notes?: string
   
   // Modification tracking

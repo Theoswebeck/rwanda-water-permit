@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
+import { DownloadDossierButton } from "@/components/shared/download-dossier-button";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
 import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
@@ -847,6 +848,11 @@ export default function VerificationApplicationPage() {
             <div className="space-y-6">
               <div className="flex items-center">
                 <SmartBackButton fallbackHref={staffListHref("verification", "primary")} label="Back to Dashboard" size="sm" className="gap-2" />
+                <DownloadDossierButton
+                  applicationId={application.id}
+                  applicationNumber={application.application_number}
+                  className="ml-auto"
+                />
               </div>
 
               <div className="space-y-2">
@@ -1138,7 +1144,8 @@ export default function VerificationApplicationPage() {
                 <ApplicationComments
                   applicationId={application.id}
                   applicationStatus={application.status}
-                  applicationSubmittedAt={application.submitted_at ?? undefined}
+                  applicationSubmittedAt={((application as any).resubmitted_at || application.submitted_at) ?? undefined}
+                  revisionNotes={(application as any).revision_notes ?? null}
                   applicationCreatedAt={application.created_at}
                   applicantName={application.applicant?.first_name && application.applicant?.last_name 
                     ? `${application.applicant.first_name} ${application.applicant.last_name}`

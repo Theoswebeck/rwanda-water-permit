@@ -106,7 +106,7 @@ type ApplicantDashboardApplication = Application & {
 };
 
 type DashboardStatusPanelFilter = "all" | "draft" | "approved" | "rejected" | "expired";
-type ApplicantListStatusFilter = "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired";
+type ApplicantListStatusFilter = "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired" | "terminated";
 
 function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationStatus {
   // Applicant-visible statuses:
@@ -114,6 +114,8 @@ function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationSt
   // - plus: approved_pending_permit (approved pending signature/terms acceptance)
   // - plus: pending_payment (payment failed or not yet completed)
   // Returned workflow statuses are surfaced to applicants as revision_required.
+  // terminated (exempted water use) is terminal and applicant-visible — it must
+  // NOT be mapped to under_review or revision_required.
   // Any other internal status is mapped to under_review on the dashboard UI.
   if (
     status === "draft" ||
@@ -123,7 +125,8 @@ function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationSt
     status === "approved" ||
     status === "expired" ||
     status === "approved_pending_permit" ||
-    status === "pending_payment"
+    status === "pending_payment" ||
+    status === "terminated"
   ) {
     return status;
   }

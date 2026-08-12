@@ -11,14 +11,15 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   hasBalancedBoldMarkers,
   parseBoldRuns,
+  repairBoldMarkers,
 } from "@/lib/document-slots/bold-markers";
 
 import type { ClientResolvedSlot } from "./types";
 
 // Slots are considered "paragraph-style" when their soft cap allows more than
-// a one-line label. The bold-syntax hint is only worth surfacing on those —
-// the title, signatory line, and modified-permit badge would never want
-// inline emphasis and the hint just adds visual noise there.
+// a one-line label. The formatted-preview toggle is only worth surfacing on
+// those — the title, signatory line, and modified-permit badge would never
+// carry inline emphasis and the button just adds visual noise there.
 const HINT_MIN_SOFT_MAX = 200;
 
 /**
@@ -104,15 +105,26 @@ export function SlotRow({
   const showReset = !isDateBearing && (isOverridden || draft !== undefined);
   const formattedEditedAt = editedAt ? formatTimestamp(editedAt) : null;
 
-  // Inline-bold affordance state. Only shown for paragraph-style slots and
-  // only when the text already contains `**`, so the hint never appears
-  // unsolicited on simple labels.
+  // Formatted-preview state. The template's emphasis arrives automatically
+  // in the default text as `**…**` markers (assessors are never asked to
+  // type them — RWB feedback 2026-08); when markers are present we offer a
+  // preview so the rendered bolding is visible. Saving is never blocked and
+  // never requires the assessor to think about markers: the API auto-repairs
+  // unbalanced marks on save (`repairBoldMarkers`) and stores the repaired
+  // text, so a stray `**` can never reach the issued PDF. The amber hint
+  // below is purely informational — it just says what will happen.
   const [previewOpen, setPreviewOpen] = useState(false);
   const supportsBold = !slot.inline && (slot.softMaxLength ?? 0) >= HINT_MIN_SOFT_MAX;
   const containsMarkers = supportsBold && /\*\*/.test(value);
-  const balanced = !containsMarkers || hasBalancedBoldMarkers(value);
+  const unbalancedMarkers = containsMarkers && !hasBalancedBoldMarkers(value);
+  // Preview exactly what will be STORED and rendered: the server repairs the
+  // markers on save, so the preview repairs them too and the three views
+  // (editor preview, stored override, issued PDF) can never disagree.
   const previewRuns = useMemo(
-    () => (containsMarkers && previewOpen ? parseBoldRuns(value) : []),
+    () =>
+      containsMarkers && previewOpen
+        ? parseBoldRuns(repairBoldMarkers(value).text)
+        : [],
     [containsMarkers, previewOpen, value],
   );
 
@@ -167,16 +179,6 @@ export function SlotRow({
             Unsaved
           </Badge>
         )}
-        {containsMarkers && !balanced && (
-          <Badge
-            variant="outline"
-            className="border-red-300 bg-red-50 text-red-800"
-            title="Every opening ** needs a matching closing **. Type \\*\\* if you want a literal ** in the document."
-          >
-            <AlertTriangle className="mr-1 h-3 w-3" />
-            Unbalanced **…**
-          </Badge>
-        )}
         {slot.structuredField && (
           <Badge
             variant="secondary"
@@ -225,32 +227,34 @@ export function SlotRow({
         </p>
       )}
 
-      {supportsBold && !isDateBearing && (
+      {containsMarkers && !isDateBearing && (
         <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-          <span>
-            Use <code className="rounded bg-muted px-1 py-0.5">**bold**</code>{" "}
-            for emphasis. Type{" "}
-            <code className="rounded bg-muted px-1 py-0.5">{"\\*\\*"}</code>{" "}
-            for a literal <code className="rounded bg-muted px-1 py-0.5">**</code>.
-          </span>
-          {containsMarkers && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-[11px]"
-              onClick={() => setPreviewOpen((v) => !v)}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => setPreviewOpen((v) => !v)}
+          >
+            {previewOpen ? (
+              <>
+                <EyeOff className="mr-1 h-3 w-3" /> Hide formatted preview
+              </>
+            ) : (
+              <>
+                <Eye className="mr-1 h-3 w-3" /> Show formatted preview
+              </>
+            )}
+          </Button>
+          {unbalancedMarkers && (
+            <Badge
+              variant="outline"
+              className="border-amber-300 bg-amber-50 font-normal text-amber-800"
+              title="This text has an odd number of ** marks. You can save as-is: the system tidies the stray mark up automatically when saving, so no ** ever appears in the issued PDF. Reload after saving to see the exact stored text."
             >
-              {previewOpen ? (
-                <>
-                  <EyeOff className="mr-1 h-3 w-3" /> Hide preview
-                </>
-              ) : (
-                <>
-                  <Eye className="mr-1 h-3 w-3" /> Show preview
-                </>
-              )}
-            </Button>
+              <AlertTriangle className="mr-1 h-3 w-3" />
+              Formatting marks look unbalanced — they'll be tidied automatically on save
+            </Badge>
           )}
         </div>
       )}

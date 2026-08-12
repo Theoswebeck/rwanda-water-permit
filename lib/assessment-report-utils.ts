@@ -6,6 +6,7 @@
 import type { Application, Document } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import { getDocumentUrl } from "@/lib/supabase-storage";
+import { isPureConcessionActivity } from "@/lib/permit-variant";
 
 export type ReportType = 'abstraction' | 'concession';
 
@@ -177,13 +178,7 @@ export function determineReportType(
     const cleaned = activities
       .map((a) => (typeof a === "string" ? a.trim() : ""))
       .filter((a) => a.length > 0);
-    const pureConcessionActivities = new Set([
-      "fish_farming_lakes",
-      "recreation_activities",
-      "port_construction",
-      "gaz_extraction",
-    ]);
-    const hasPureConcessionActivity = cleaned.some((a) => pureConcessionActivities.has(a));
+    const hasPureConcessionActivity = cleaned.some(isPureConcessionActivity);
     if (hasPureConcessionActivity) {
       return "concession";
     }
@@ -195,7 +190,7 @@ export function determineReportType(
   }
 
   // Fallback to water_purpose (legacy format)
-  if (waterPurpose === 'fish_farming_lakes' || waterPurpose === 'recreation_activities' || waterPurpose === 'port_construction' || waterPurpose === 'gaz_extraction') {
+  if (isPureConcessionActivity(waterPurpose)) {
     return 'concession';
   }
 
@@ -273,6 +268,7 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   municipal_supply: "Municipal Supply",
   aquaculture: "Aquaculture",
   other: "Other",
+  other_concession: "Other Water Concession Activities",
 };
 
 export const ALL_WATER_ACTIVITY_CODES: string[] = Object.keys(ACTIVITY_LABELS);
@@ -397,8 +393,16 @@ export function prefillAssessmentReportFromApplication(
     (typeof applicantFromJoin?.email === 'string' ? applicantFromJoin.email : undefined) ||
     'Not provided';
   
-  // Extract water source information
-  const sourceName = getString(formData, 'nameSourceWater') || application.water_body_name || 'Not specified';
+  // Extract water source information — same fallback chain as the permit and
+  // contract resolvers (nameSourceWater → water_body_name → water_source), so
+  // all three documents name the same water source.
+  const sourceName =
+    getString(formData, 'nameSourceWater') ||
+    application.water_body_name ||
+    (typeof application.water_source === 'string' && application.water_source.trim()
+      ? application.water_source.replaceAll('_', ' ')
+      : '') ||
+    'Not specified';
   
   // Extract coordinates
   let sourceLatitude = '';

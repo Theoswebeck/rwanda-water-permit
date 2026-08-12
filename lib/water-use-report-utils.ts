@@ -1,22 +1,22 @@
 import type { Application, Permit, WaterUseReportTemplate, User } from '@/types/database'
+import { PURE_CONCESSION_ACTIVITIES } from '@/lib/permit-variant'
 
 /**
  * Activities that occupy a water body rather than abstract from it, and so
- * report on the concession template. Spelling variants are all listed because
+ * report on the concession template: the canonical pure-concession activities
+ * (PURE_CONCESSION_ACTIVITIES) plus spelling variants, because
  * `permit.purpose` and `application.intended_activities` are populated by
  * different code paths and disagree on some of them.
  *
- * Single source of truth — `getReportTemplate()` in hooks/useWaterUseReports
- * delegates here rather than keeping a second copy.
+ * Single source of truth for reporting — `getReportTemplate()` in
+ * hooks/useWaterUseReports delegates here rather than keeping a second copy.
  */
 export const CONCESSION_ACTIVITIES = new Set<string>([
+  ...PURE_CONCESSION_ACTIVITIES,
+  // Spelling variants seen in legacy `permit.purpose` values:
   'recreation',
-  'recreation_activities',
-  'fish_farming_lakes',
   'gas_extraction',
-  'gaz_extraction',
   'port',
-  'port_construction',
 ])
 
 export function isConcessionActivity(value?: string | null): boolean {

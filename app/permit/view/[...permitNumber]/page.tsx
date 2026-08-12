@@ -7,77 +7,24 @@ import { Badge } from "@/components/ui/badge";
 import type { PermitStatus } from "@/types/database";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 import { PermitPublicActions } from "@/components/public/permit-public-actions";
-import { getActivityLabel } from "@/lib/assessment-report-utils";
-import { isConcessionApplication } from "@/lib/permit-variant";
 import { PermitLocationMap } from "@/components/public/permit-location-map";
 import { Tx } from "@/components/ui/tx";
-import { geometryToCoordinatePolygons, type CoordinatePoint } from "@/lib/geoUtils";
-import { getEffectiveInternalNotes } from "@/lib/document-overrides";
 import { safeInternalPath } from "@/lib/safe-internal-path";
-
-function formatDate(dateString: string): string {
-  const raw = dateString.trim();
-  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
-  if (dateOnlyMatch) {
-    const [, year, month, day] = dateOnlyMatch;
-    // Date-only values should be interpreted in the viewer's local timezone.
-    return new Intl.DateTimeFormat("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }).format(new Date(Number(year), Number(month) - 1, Number(day)));
-  }
-
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return "N/A";
-  return parsed.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-function getCanonicalIssueDate(permit: Record<string, unknown>): string | null {
-  // Mirrors `lib/permit/resolve-issue-date.ts`: `permits.issued_date` is
-  // the locked legal value once the permit has been issued. Before that
-  // (registry-only permits, or a permit row that somehow exists without an
-  // issued_date) we fall back to `applications.approved_at` — the moment
-  // the Director General signed the application, which is the contractual
-  // effective date. We do NOT fall back to `terms_accepted_at` because the
-  // user can delay clicking accept arbitrarily long after approval.
-  const application = permit.application as Record<string, unknown> | null;
-  const issuedDate = typeof permit.issued_date === "string" ? permit.issued_date.trim() : "";
-  if (issuedDate) return issuedDate;
-  const approvedAt = typeof application?.approved_at === "string" ? application.approved_at.trim() : "";
-  return approvedAt || null;
-}
-
-function parsePositiveNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value.replace(/,/g, "").trim());
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return null;
-}
-
-/**
- * Effective internal notes for public rendering: starts from the parsed
- * `internal_notes` JSON, then flattens the assessor's `document_overrides.values`
- * onto the top-level keys (e.g. `waterSourceVillage`, `nameSourceWater`,
- * `intendedActivities`). Returns `null` for empty/unparseable input so callers
- * can keep their existing null-checks.
- *
- * `_assessorAdjustments` (recommendedVolumeM3, permitLengthYears) is preserved
- * intact under that key — read it directly from the returned object.
- */
-function parseInternalNotes(value: unknown): Record<string, unknown> | null {
-  if (value == null) return null;
-  if (typeof value === "string" && !value.trim()) return null;
-  const effective = getEffectiveInternalNotes(value);
-  if (!effective || typeof effective !== "object") return null;
-  return Object.keys(effective).length > 0 ? effective : null;
-}
+// All display derivations (holder, activity, area, location, dates,
+// concession classification, polygons) are shared with the printable map page
+// via lib/permit/permit-display.ts so the two pages can never diverge.
+import {
+  deriveConcessionAreaValue,
+  deriveConcessionPolygons,
+  derivePermitActivity,
+  derivePermitHolderName,
+  derivePermitLocation,
+  formatPermitDate,
+  getCanonicalIssueDate,
+  isConcessionPermitRecord,
+  parseInternalNotes,
+  parsePositiveNumber,
+} from "@/lib/permit/permit-display";
 
 function statusBadgeVariant(status: PermitStatus): { label: string; className: string } {
   switch (status) {
@@ -184,91 +131,50 @@ export default async function PublicPermitViewPage({
     );
   }
 
-  const applicantName = (() => {
-    if (permit.source === "permit_registry") {
-      return typeof permit.permit_holder === "string" && permit.permit_holder.trim() ? permit.permit_holder.trim() : "N/A";
-    }
-    const a = permit.application?.applicant;
-    if (!a) return "N/A";
-    if (a.account_type === "individual") {
-      return `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim() || "N/A";
-    }
-    return a.company_name ?? "N/A";
-  })();
-
-  const location = (() => {
-    if (permit.source === "permit_registry") {
-      return typeof permit.registry_location === "string" && permit.registry_location.trim()
-        ? permit.registry_location.trim()
-        : "N/A";
-    }
-    const app = permit.application;
-    if (!app) return "N/A";
-
-    // Effective notes flattens any assessor `document_overrides` (waterSourceVillage,
-    // waterSourceCell, …) onto the top level so an override always wins over the
-    // application-column fallback below.
-    const notes = parseInternalNotes(app.internal_notes);
-
-    const isBulk = !!(app as any).is_bulk;
-    const parts = isBulk
-      ? [
-          notes?.waterSourceDistrict ?? app.district,
-          notes?.waterSourceProvince ?? app.province,
-        ].filter(Boolean)
-      : [
-          notes?.waterSourceVillage ?? app.village,
-          notes?.waterSourceCell ?? app.cell,
-          notes?.waterSourceSector ?? app.sector,
-          notes?.waterSourceDistrict ?? app.district,
-          notes?.waterSourceProvince ?? app.province,
-        ].filter(Boolean);
-    return parts.length ? parts.join(", ") : "N/A";
-  })();
+  // Public visibility gate: deactivated permits (suspended/revoked, e.g. a
+  // disabled test permit) render an "inactive" notice instead of their details,
+  // and their QR scan resolves here. Expired/expiring permits are NOT hidden —
+  // verifying an expired permit is legitimate. See
+  // docs/superpowers/specs/2026-06-10-disable-test-permit-0925-design.md
+  if (String(permit.status) === "suspended" || String(permit.status) === "revoked") {
+    return (
+      <div className="container mx-auto px-4 py-10">
+        <Card>
+          <CardHeader>
+            <CardTitle><Tx>Permit verification</Tx></CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-sm font-medium text-amber-700">
+              <Tx>This permit is inactive.</Tx>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              <Tx>This permit is not currently active and its details are not available for public verification.</Tx>
+            </p>
+            <p className="text-sm">
+              <Tx>Permit number:</Tx> <span className="font-mono">{inputPermitNumber}</span>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              <Tx>If you believe this is an error, please contact support from the portal.</Tx>
+            </p>
+            <Link className="text-sm underline" href="/">
+              <Tx>Back to portal</Tx>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const badge = statusBadgeVariant(permit.status as PermitStatus);
   const application = permit.application as Record<string, unknown> | null;
   const internalNotes = parseInternalNotes(application?.internal_notes);
   const assessorAdjustments = (internalNotes?._assessorAdjustments ?? null) as Record<string, unknown> | null;
 
-  const intendedWaterActivity = (() => {
-    // Override (`document_overrides.values.intendedActivities`) is flattened
-    // onto `internalNotes.intendedActivities` by parseInternalNotes, so reading
-    // it from `internalNotes` first lets the assessor's edit win.
-    const overrideActivities = Array.isArray(internalNotes?.intendedActivities)
-      ? (internalNotes.intendedActivities as unknown[])
-          .filter((activity): activity is string => typeof activity === "string")
-          .map((activity) => activity.trim())
-          .filter((activity) => activity.length > 0)
-      : [];
-
-    const intendedActivities = overrideActivities.length
-      ? overrideActivities
-      : Array.isArray(application?.intended_activities)
-        ? (application.intended_activities as unknown[])
-            .filter((activity): activity is string => typeof activity === "string")
-            .map((activity) => activity.trim())
-            .filter((activity) => activity.length > 0)
-        : [];
-
-    const transferFormData = (internalNotes?.transferFormData ?? null) as
-      | Record<string, unknown>
-      | null;
-    const transferActivity =
-      !intendedActivities.length && typeof transferFormData?.waterPurpose === "string"
-        ? transferFormData.waterPurpose
-        : "";
-
-    const appWaterPurpose = typeof application?.water_purpose === "string" ? application.water_purpose.trim() : "";
-    const permitPurpose = typeof permit.purpose === "string" ? permit.purpose.trim() : "";
-    const primaryActivity = intendedActivities[0] || transferActivity || appWaterPurpose || permitPurpose;
-
-    return primaryActivity ? getActivityLabel(primaryActivity) : "N/A";
-  })();
-  const issueDate = getCanonicalIssueDate(permit as Record<string, unknown>);
-  const normalizedPurpose = typeof permit.purpose === "string" ? permit.purpose.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
-  const concessionPurposeHints = new Set(["fish_farming_lakes", "recreation", "recreation_activities", "port_construction", "gaz_extraction"]);
-  const isConcessionPermit = (application ? isConcessionApplication(application) : false) || concessionPurposeHints.has(normalizedPurpose);
+  const applicantName = derivePermitHolderName(permit);
+  const location = derivePermitLocation(permit, internalNotes);
+  const intendedWaterActivity = derivePermitActivity(permit, internalNotes);
+  const issueDate = getCanonicalIssueDate(permit);
+  const isConcessionPermit = isConcessionPermitRecord(permit);
 
   const abstractionValue = (() => {
     // Order matters: the assessor's latest adjustment (saved into
@@ -301,52 +207,9 @@ export default async function PublicPermitViewPage({
     return `${volume.toLocaleString()} ${unitCandidate || "m³/year"}`.trim();
   })();
 
-  const concessionAreaValue = (() => {
-    // Note: the assessor recommendations UI reuses `recommendedVolumeM3` as the
-    // payload key even when editing a concession permit's surface area in
-    // hectares (see components/inspection/assessor-recommendations.tsx). For a
-    // concession permit, treat that number as hectares.
-    const assessorArea = parsePositiveNumber(assessorAdjustments?.recommendedVolumeM3);
-    if (assessorArea) return `${assessorArea.toLocaleString()} ha`;
+  const concessionAreaValue = deriveConcessionAreaValue(permit, internalNotes, assessorAdjustments);
 
-    const dbArea = parsePositiveNumber(application?.concession_area);
-    if (dbArea) return `${dbArea.toLocaleString()} ha`;
-
-    const notesArea = parsePositiveNumber(internalNotes?.concessionArea);
-    if (notesArea) return `${notesArea.toLocaleString()} ha`;
-
-    const fishLakeHa = parsePositiveNumber(internalNotes?.fishLakeAreaHectares);
-    if (fishLakeHa) return `${fishLakeHa.toLocaleString()} ha`;
-
-    const recreationM2 = parsePositiveNumber(internalNotes?.recreationConcessionAreaM2);
-    if (recreationM2) return `${(recreationM2 / 10000).toLocaleString()} ha`;
-
-    const portConstructionM2 = parsePositiveNumber(internalNotes?.portConstructionConcessionAreaM2);
-    if (portConstructionM2) return `${(portConstructionM2 / 10000).toLocaleString()} ha`;
-
-    const gazExtractionM2 = parsePositiveNumber(internalNotes?.gazExtractionConcessionAreaM2);
-    if (gazExtractionM2) return `${(gazExtractionM2 / 10000).toLocaleString()} ha`;
-
-    if (permit.source === "permit_registry") {
-      const registryRaw = typeof permit.water_allowance === "string" ? permit.water_allowance.trim() : "";
-      if (registryRaw && registryRaw !== "0" && registryRaw !== "0.0" && registryRaw !== "0.00") {
-        return registryRaw;
-      }
-    }
-
-    return "N/A";
-  })();
-
-  const concessionPolygons: CoordinatePoint[][] = (() => {
-    if (!isConcessionPermit || !application) return [];
-    const geom = application.coordinates;
-    if (!geom) return [];
-    try {
-      return geometryToCoordinatePolygons(geom);
-    } catch {
-      return [];
-    }
-  })();
+  const concessionPolygons = deriveConcessionPolygons(permit);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -420,11 +283,11 @@ export default async function PublicPermitViewPage({
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500"><Tx>Issue date</Tx></div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{issueDate ? formatDate(issueDate) : <Tx>N/A</Tx>}</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{issueDate ? formatPermitDate(issueDate) : <Tx>N/A</Tx>}</div>
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500"><Tx>Expiry date</Tx></div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{permit.expiry_date ? formatDate(permit.expiry_date) : <Tx>N/A</Tx>}</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{permit.expiry_date ? formatPermitDate(permit.expiry_date) : <Tx>N/A</Tx>}</div>
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500"><Tx>Water source</Tx></div>
@@ -475,6 +338,7 @@ export default async function PublicPermitViewPage({
                 latitude={permit.latitude}
                 longitude={permit.longitude}
                 polygons={concessionPolygons}
+                printHref={`/permit/map/${encodeURIComponent(String(permit.permit_number || inputPermitNumber))}`}
               />
 
               {/* Child permit lookup notice */}

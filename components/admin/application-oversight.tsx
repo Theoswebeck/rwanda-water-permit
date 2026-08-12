@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,7 @@ interface Application {
   location: string;
   district: string;
   province: string;
-  status: "submitted" | "under_review" | "pending_assessment" | "pending_final_approval" | "approved" | "rejected" | "revision_required" | "draft" | "cancelled" | "expired";
+  status: "submitted" | "under_review" | "pending_assessment" | "pending_final_approval" | "approved" | "rejected" | "revision_required" | "draft" | "cancelled" | "expired" | "terminated";
   submittedDate: string;
   lastUpdated: string;
   assignedReviewer?: string;
@@ -159,7 +160,7 @@ export function ApplicationOversight() {
           district: app.district || 'Unknown',
           province: app.province || 'Unknown',
           status: app.status,
-          submittedDate: app.created_at.split('T')[0],
+          submittedDate: (getEffectiveSubmissionDate(app) || app.created_at).split('T')[0],
           lastUpdated: app.updated_at.split('T')[0],
           assignedReviewer: reviewerName,
           assignedInspector: inspectorName,
@@ -253,6 +254,12 @@ export function ApplicationOversight() {
           label: "Cancelled",
           icon: <XCircle className="h-4 w-4" />,
           className: "bg-gray-100 text-gray-700 border-0 hover:bg-gray-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "terminated":
+        return {
+          label: "Terminated (Exempted Use)",
+          icon: <XCircle className="h-4 w-4" />,
+          className: "bg-slate-200 text-slate-700 border-0 hover:bg-slate-200 px-3 py-2 rounded-full font-medium"
         };
       default:
         return {

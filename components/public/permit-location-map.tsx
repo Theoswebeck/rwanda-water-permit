@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import type { AbstractionPointMapProps } from "@/components/maps/AbstractionPointMap";
 import type { MultiPolygonMapProps } from "@/components/maps/MultiPolygonMap";
 import type { CoordinatePoint } from "@/lib/geoUtils";
@@ -29,6 +30,11 @@ interface PermitLocationMapProps {
   latitude: number | null;
   longitude: number | null;
   polygons?: CoordinatePoint[][];
+  /**
+   * Link to the printable concession boundary map. Only rendered when the
+   * permit actually has boundary polygons to print.
+   */
+  printHref?: string | null;
 }
 
 // Colours must stay in sync with POLYGON_COLORS in MultiPolygonMap.tsx
@@ -47,7 +53,7 @@ function toNum(v: string | number): number {
   return typeof v === "string" ? parseFloat(v) : v;
 }
 
-export function PermitLocationMap({ latitude, longitude, polygons }: PermitLocationMapProps) {
+export function PermitLocationMap({ latitude, longitude, polygons, printHref }: PermitLocationMapProps) {
   const [language, setLanguage] = useState<AppLanguage>("en");
   const tx = useCallback((value: string) => translateText(value, language), [language]);
 
@@ -70,9 +76,24 @@ export function PermitLocationMap({ latitude, longitude, polygons }: PermitLocat
 
   return (
     <div className="mt-6 space-y-3">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-        {tx("Permit Map Location")}
-      </h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          {tx("Permit Map Location")}
+        </h3>
+        {hasPolygons && printHref ? (
+          <Link
+            href={printHref}
+            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 9V2h12v7" />
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+              <rect x="6" y="14" width="12" height="8" />
+            </svg>
+            {tx("Printable map")}
+          </Link>
+        ) : null}
+      </div>
 
       {hasPolygons ? (
         <>

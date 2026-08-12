@@ -196,8 +196,10 @@ export function getAnnexRequirementForActivity(
       };
 
     // No annex specified in the original annex list for these activities
+    // ("other_concession" mirrors "other": free-form additional attachments only)
     case "navigation":
     case "other":
+    case "other_concession":
     default:
       return { annexTitle: undefined, attachments: [] };
   }

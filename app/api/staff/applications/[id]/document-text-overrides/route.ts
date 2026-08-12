@@ -39,11 +39,11 @@ import {
   type SlotEditor,
   writeEnvelopeIntoNotes,
 } from "@/lib/document-slots";
-import { hasBalancedBoldMarkers } from "@/lib/document-slots/bold-markers";
 import {
   buildContractSlotContext,
   buildPermitSlotContext,
 } from "@/lib/document-slots/build-context";
+import { repairBoldMarkers } from "@/lib/document-slots/bold-markers";
 import type { PermitApplication } from "@/lib/permit/permit-text-data";
 import { selectPermitVariant } from "@/lib/permit-variant";
 import { resolvePermitRenderDatesFromNotes } from "@/lib/permit/resolve-render-dates-from-notes";
@@ -95,6 +95,7 @@ const APPLICATION_QUERY = `
     a.max_yearly_volume_m3,
     a.internal_notes::text AS internal_notes,
     a.water_taking_method,
+    ST_AsGeoJSON(a.coordinates)::json AS coordinates,
     a.is_modification,
     u.first_name,
     u.last_name,
@@ -147,6 +148,9 @@ function rowToPermitApplication(row: Record<string, unknown>): PermitApplication
       row.internal_notes != null ? (row.internal_notes as string) : undefined,
     water_taking_method:
       row.water_taking_method != null ? String(row.water_taking_method) : undefined,
+    // GeoJSON geometry — feeds resolveLatLng's Point fallback so editor
+    // previews show the same coordinates as the contract and assessment report.
+    coordinates: row.coordinates ?? undefined,
     applicant: {
       first_name: row.first_name != null ? String(row.first_name) : undefined,
       last_name: row.last_name != null ? String(row.last_name) : undefined,
@@ -383,9 +387,13 @@ type PostBody = {
   patches?: unknown;
 };
 
+type BoldMarkerRepairNote = { slotId: string; kind: string };
+
 function sanitizePatches(
   raw: unknown,
-): { ok: true; patches: DocumentTextPatch[] } | { ok: false; message: string } {
+):
+  | { ok: true; patches: DocumentTextPatch[]; repairedSlots: BoldMarkerRepairNote[] }
+  | { ok: false; message: string } {
   if (!Array.isArray(raw) || raw.length === 0) {
     return { ok: false, message: "patches must be a non-empty array" };
   }
@@ -393,6 +401,7 @@ function sanitizePatches(
     return { ok: false, message: "Too many patches in one request" };
   }
   const out: DocumentTextPatch[] = [];
+  const repairedSlots: BoldMarkerRepairNote[] = [];
   const seen = new Set<string>();
   for (const item of raw) {
     if (!item || typeof item !== "object") {
@@ -442,19 +451,37 @@ function sanitizePatches(
         message: `Patch ${o.slotId}: text exceeds ${HARD_MAX_SLOT_LENGTH}-char hard limit`,
       };
     }
-    // Reject unbalanced **…** markers up front so the assessor sees a
-    // friendly error instead of relying on the renderer's defensive
-    // normalisation (which would silently fold the trailing typo into the
-    // surrounding text). Use `\*\*` to produce a literal `**` in the PDF.
-    if (!hasBalancedBoldMarkers(o.text)) {
+    // Bold markers (RWB feedback 2026-08): assessors are never instructed
+    // about `**…**` emphasis — the markers arrive baked into the slot
+    // DEFAULTS — so we neither reject unbalanced markers (that would ask them
+    // to reason about a syntax they were never taught) nor let them through
+    // (an unmatched marker renders as a literal `**` inside the SIGNED,
+    // ISSUED permit PDF, because `parseBoldRuns` folds it back as literal
+    // text). Instead we AUTO-REPAIR and store the repaired string, so the
+    // stored override, the preview and the PDF all agree and the assessor has
+    // to do nothing. Escaped `\*\*` literals are preserved untouched.
+    const repair = repairBoldMarkers(o.text);
+    if (repair.changed) {
+      repairedSlots.push({ slotId: o.slotId, kind: repair.kind });
+    }
+    if (repair.text.length > HARD_MAX_SLOT_LENGTH) {
       return {
         ok: false,
-        message: `Patch ${o.slotId}: unbalanced **…** markers — every opening ** needs a matching closing **. Type \\*\\* if you want a literal ** in the document.`,
+        message: `Patch ${o.slotId}: text exceeds ${HARD_MAX_SLOT_LENGTH}-char hard limit`,
       };
     }
-    out.push({ slotId: o.slotId, text: o.text });
+    if (repair.text === "") {
+      // Only reachable when the submitted text was nothing but formatting
+      // marks (e.g. "**"): there is no real content to store, and an empty
+      // override is not a valid envelope entry.
+      return {
+        ok: false,
+        message: `Patch ${o.slotId}: the text contains no content (use "Reset to default" to clear this field)`,
+      };
+    }
+    out.push({ slotId: o.slotId, text: repair.text });
   }
-  return { ok: true, patches: out };
+  return { ok: true, patches: out, repairedSlots };
 }
 
 export async function POST(
@@ -626,10 +653,22 @@ export async function POST(
       );
     }
 
+    if (sanitized.repairedSlots.length > 0) {
+      console.warn("document-text-overrides auto-repaired bold markers", {
+        applicationId: id,
+        repaired: sanitized.repairedSlots,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       envelope: result.envelope,
       appliedCount: result.appliedCount,
+      // Informational: the saved text differs slightly from what was typed
+      // because stray `**` marks were tidied up before storing.
+      ...(sanitized.repairedSlots.length > 0
+        ? { repairedSlots: sanitized.repairedSlots }
+        : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Server error";

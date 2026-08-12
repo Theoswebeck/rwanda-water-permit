@@ -1,10 +1,12 @@
 /**
  * Permit document slot catalogue.
  *
- * Each slot's `defaultResolver` reproduces the EXACT string the renderer in
- * `lib/pdf-permit-server.ts` used to emit at that position before the slot
- * refactor. When no override is set for a slot, the rendered PDF must be
- * byte-equivalent to the pre-refactor output.
+ * Each slot's `defaultResolver` supplies the template text the renderer in
+ * `lib/pdf-permit-server.ts` emits at that position, including the
+ * template's automatic `**bold**` emphasis on key values (RWB feedback
+ * 2026-08 — assessors must never have to type emphasis markers themselves).
+ * `scripts/check-permit-slots-parity.ts` asserts the exact expected string
+ * for every slot; keep the two in lockstep.
  *
  * Self-registers on import — `lib/document-slots/index.ts` imports this file
  * for its registration side-effect.
@@ -52,7 +54,6 @@ import {
   resolvePumpingRateM3Day,
   resolveLakeName,
   resolveLatLng,
-  resolveNotes,
   resolveOrgAddress,
   resolveOrgAddressKinyarwanda,
   resolveOrgRep,
@@ -187,8 +188,15 @@ function titleSlot(variant: PermitVariant): DocumentTextSlot {
   };
 }
 
+// NOTE (RWB feedback 2026-08): the emphasis the permit template requires is
+// baked into these defaults as `**…**` markers — the renderer emits the
+// wrapped runs bold automatically, so assessors never have to type markers
+// themselves. Every variant now carries the same emphasis conventions the
+// abstraction_organization defaults established (law number in para_1; the
+// applicant/organization name and the key authorization values in para_2).
+
 function rwLegalBasis(): string {
-  return "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,";
+  return "Hashingiwe ku Itegeko **N° 49/2018 ryo ku wa 13/08/2018** rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,";
 }
 
 function rwValidity(ctx: SlotResolverContext): string {
@@ -214,7 +222,7 @@ const concessionIndividualSlots: DocumentTextSlot[] = [
     label: "Paragraph 1 — Legal basis",
     softMaxLength: 400,
     defaultResolver: () =>
-      `Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,`,
+      `Pursuant to **Law N°49/2018 of 13/08/2018** determining the use and management of water resources in Rwanda,`,
   },
   {
     id: "permit.concession_individual.en.para_2",
@@ -233,7 +241,8 @@ const concessionIndividualSlots: DocumentTextSlot[] = [
       const lake = resolveLakeName(app);
       const loc = resolveAdminLocation(app);
       const prov = fmtProvince(loc.province);
-      return `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to carry out ${acts} on the surface area of ${areaStr} (Concession area) in ${lake}, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov} as shown on the attached map. This permit applies for activities conducted solely within the water body.`;
+      // Template emphasis applied automatically: name, activities, area, lake.
+      return `\u201C**${name}**\u201D, with ID Number: ${idNum}, is authorized to carry out **${acts}** on the surface area of **${areaStr}** (Concession area) in **${lake}**, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov} as shown on the attached map. This permit applies for activities conducted solely within the water body.`;
     },
   },
   {
@@ -288,7 +297,9 @@ const concessionIndividualSlots: DocumentTextSlot[] = [
       const areaStr = area != null ? `${fmtNum(area)} Hectare` : "N/A Hectare";
       const lake = resolveLakeName(app);
       const loc = resolveAdminLocation(app);
-      return `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe gukora ${actsRw} ku buso bungana na ${areaStr} (ahakorerwa ibikorwa) muri ${lake}, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
+      // Template emphasis applied automatically — bold parity with the
+      // English paragraph is required.
+      return `"**${name}**", ufite Indangamuntu nimero: ${idNum}, yemerewe gukora **${actsRw}** ku buso bungana na **${areaStr}** (ahakorerwa ibikorwa) muri **${lake}**, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
     },
   },
   {
@@ -327,7 +338,7 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
     label: "Paragraph 1 — Legal basis",
     softMaxLength: 400,
     defaultResolver: () =>
-      `Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,`,
+      `Pursuant to **Law N°49/2018 of 13/08/2018**, determining the use and management of water resources in Rwanda,`,
   },
   {
     id: "permit.abstraction_individual.en.para_2",
@@ -351,7 +362,9 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
       const prGw = isGw ? resolvePumpingRateM3Day(app) : undefined;
       const rateWord = isGw ? "pumping rate" : "flow rate";
       const rateStr = isGw && prGw != null ? `${fmtNum(prGw)} m³/day` : yearlyStr;
-      return `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract ${isGw ? "ground water" : "water"} from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a ${rateWord} of ${rateStr}. Water abstracted will be used for ${acts}.`;
+      // Template emphasis applied automatically: name, water source, rate,
+      // activities (same convention as abstraction_organization).
+      return `\u201C**${name}**\u201D, with ID Number: ${idNum}, is authorized to abstract ${isGw ? "ground water" : "water"} from **${wsName}** located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a ${rateWord} of **${rateStr}**. Water abstracted will be used for **${acts}**.`;
     },
   },
   {
@@ -412,16 +425,18 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
       // "Nayikondo ya <name>" without duplication.
       const gwClean = (n: string) =>
         n.replace(/\s*\bborehole\b/gi, "").replace(/^\s*Nayikondo\s+ya\s*/i, "").trim() || n;
+      // Template emphasis applied automatically — bold parity with the
+      // English paragraph is required.
       const wsLocPhrase = isGw
-        ? `ava muri Nayikondo ya ${gwClean(wsName)}, iherereye mu`
-        : `ava ku ${wsName} iherereye mu`;
+        ? `ava muri Nayikondo ya **${gwClean(wsName)}**, iherereye mu`
+        : `ava ku **${wsName}** iherereye mu`;
       // Groundwater: value comes first ("angana na <rate> ku munsi, ava muri Nayikondo ya …"),
       // matching the organization/sample wording. Surface keeps the trailing "ku gipimo cya …".
-      const rwValuePrefix = isGw ? `angana na ${yearlyStr}, ` : ``;
-      const rwValueSuffix = isGw ? `` : `, ku gipimo cya ${yearlyStr}`;
+      const rwValuePrefix = isGw ? `angana na **${yearlyStr}**, ` : ``;
+      const rwValueSuffix = isGw ? `` : `, ku gipimo cya **${yearlyStr}**`;
       // Groundwater uses "gukoresha" (to use) rather than the pumping-system verb.
       const rwVerb = isGw ? "gukoresha" : systemTypeRw;
-      return `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe ${rwVerb} amazi ${rwValuePrefix}${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}${rwValueSuffix}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+      return `"**${name}**", ufite Indangamuntu nimero: ${idNum}, yemerewe ${rwVerb} amazi ${rwValuePrefix}${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}${rwValueSuffix}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;
     },
   },
   {
@@ -449,22 +464,24 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
 
 // ─── concession_organization ─────────────────────────────────────────────────
 
+/** True when a resolved admin-location part carries real information. */
+function hasLocPart(v: string): boolean {
+  return Boolean(v) && v !== "N/A";
+}
+
 function concessionOrgWaterSourceLocation(ctx: SlotResolverContext): string {
-  const app = appOf(ctx);
-  const notes = resolveNotes(app);
-  const waterSourceSector =
-    typeof notes?.waterSourceSector === "string" ? notes.waterSourceSector.trim() : "";
-  const waterSourceDistrict =
-    typeof notes?.waterSourceDistrict === "string" ? notes.waterSourceDistrict.trim() : "";
-  const waterSourceProvince =
-    typeof notes?.waterSourceProvince === "string" ? notes.waterSourceProvince.trim() : "";
+  // Water-source location is APPLICATION data: notes overrides (assessor
+  // manual edits flattened into notes) win, then the application's own
+  // sector/district/province columns — the exact chain the contract
+  // placeholders use, so permit and contract stay consistent.
+  const loc = resolveAdminLocation(appOf(ctx));
   return [
-    waterSourceSector ? `${waterSourceSector} Sector` : null,
-    waterSourceDistrict ? `${waterSourceDistrict} District` : null,
-    waterSourceProvince
-      ? waterSourceProvince.toLowerCase() === "kigali"
+    hasLocPart(loc.sector) ? `${loc.sector} Sector` : null,
+    hasLocPart(loc.district) ? `${loc.district} District` : null,
+    hasLocPart(loc.province)
+      ? loc.province.toLowerCase() === "kigali"
         ? "City OF Kigali"
-        : `${waterSourceProvince} Province`
+        : `${loc.province} Province`
       : null,
   ]
     .filter(Boolean)
@@ -472,18 +489,11 @@ function concessionOrgWaterSourceLocation(ctx: SlotResolverContext): string {
 }
 
 function concessionOrgWaterSourceLocationRw(ctx: SlotResolverContext): string {
-  const app = appOf(ctx);
-  const notes = resolveNotes(app);
-  const waterSourceSector =
-    typeof notes?.waterSourceSector === "string" ? notes.waterSourceSector.trim() : "";
-  const waterSourceDistrict =
-    typeof notes?.waterSourceDistrict === "string" ? notes.waterSourceDistrict.trim() : "";
-  const waterSourceProvince =
-    typeof notes?.waterSourceProvince === "string" ? notes.waterSourceProvince.trim() : "";
+  const loc = resolveAdminLocation(appOf(ctx));
   return [
-    waterSourceSector ? `Umurenge wa ${waterSourceSector}` : null,
-    waterSourceDistrict ? `Akarere ka ${waterSourceDistrict}` : null,
-    waterSourceProvince ? formatIntaraOrUmujyiWaKigali(waterSourceProvince) : null,
+    hasLocPart(loc.sector) ? `Umurenge wa ${loc.sector}` : null,
+    hasLocPart(loc.district) ? `Akarere ka ${loc.district}` : null,
+    hasLocPart(loc.province) ? formatIntaraOrUmujyiWaKigali(loc.province) : null,
   ]
     .filter(Boolean)
     .join(", ") || "N/A";
@@ -500,7 +510,7 @@ const concessionOrganizationSlots: DocumentTextSlot[] = [
     label: "Paragraph 1 — Legal basis",
     softMaxLength: 400,
     defaultResolver: () =>
-      `Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,`,
+      `Pursuant to **Law N°49/2018 of 13/08/2018** determining the use and management of water resources in Rwanda,`,
   },
   {
     id: "permit.concession_organization.en.para_2",
@@ -520,7 +530,9 @@ const concessionOrganizationSlots: DocumentTextSlot[] = [
       const loc = resolveAdminLocation(app);
       const prov = fmtProvince(loc.province);
       const wsLocParts = concessionOrgWaterSourceLocation(ctx);
-      return `\u201C${orgName}\u201D, with its water source location as follows: ${wsLocParts}; represented by ${rep.name}; is authorized to carry out ${acts} on the surface area of ${areaStr} in ${lake}, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov}, as shown on the attached map. This permit applies to activities conducted solely within the water body.`;
+      // Template emphasis applied automatically: org name, activities,
+      // area, lake.
+      return `\u201C**${orgName}**\u201D, with its water source location as follows: ${wsLocParts}; represented by ${rep.name}; is authorized to carry out **${acts}** on the surface area of **${areaStr}** in **${lake}**, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov}, as shown on the attached map. This permit applies to activities conducted solely within the water body.`;
     },
   },
   {
@@ -576,7 +588,9 @@ const concessionOrganizationSlots: DocumentTextSlot[] = [
       const lake = resolveLakeName(app);
       const loc = resolveAdminLocation(app);
       const wsLocParts = concessionOrgWaterSourceLocationRw(ctx);
-      return `"${orgName}", ifite aho ifatira amazi hakurikira: ${wsLocParts}; ihagarariwe na ${rep.name}; yemerewe gukora ${actsRw} ku buso bungana na ${areaStr} muri ${lake}, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
+      // Template emphasis applied automatically — bold parity with the
+      // English paragraph is required.
+      return `"**${orgName}**", ifite aho ifatira amazi hakurikira: ${wsLocParts}; ihagarariwe na ${rep.name}; yemerewe gukora **${actsRw}** ku buso bungana na **${areaStr}** muri **${lake}**, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
     },
   },
   {

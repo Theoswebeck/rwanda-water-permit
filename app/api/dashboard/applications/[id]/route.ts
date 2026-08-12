@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { buildApplicationUpdateParts, getMissingApplicationColumnFromError } from '@/lib/db/application-payload'
-import { sanitizeApplicationEnumPayload } from '@/lib/db/application-enum-sanitizer'
+import {
+  getInvalidEnumFallbackFromError,
+  recordEnumCoercionInPayload,
+  sanitizeApplicationEnumPayload,
+} from '@/lib/db/application-enum-sanitizer'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 // Emails that are always treated as superusers (kept in sync with middleware.ts).
@@ -232,6 +236,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     payload.updated_at = new Date().toISOString()
     const updatePayload: Record<string, unknown> = { ...payload }
     const droppedColumns: string[] = []
+    const coercedEnums: string[] = []
+    const pendingMigrations: string[] = []
 
     while (true) {
       const keys = Object.keys(updatePayload)
@@ -263,6 +269,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         if (droppedColumns.length > 0) {
           console.warn('⚠️ dashboard applications PATCH ignored unknown columns:', droppedColumns)
         }
+        if (coercedEnums.length > 0) {
+          console.warn('⚠️ dashboard applications PATCH stored legacy enum fallbacks:', coercedEnums)
+        }
 
         const updatedApplication = updated.rows[0] || null
 
@@ -292,8 +301,36 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         return NextResponse.json({
           success: true,
           application: updatedApplication ? { ...updatedApplication, applicant } : null,
+          // Never let a lossy enum coercion be visible only in the server log.
+          ...(coercedEnums.length > 0
+            ? { enumCoercions: coercedEnums, pendingMigrations: pendingMigrations }
+            : {}),
         })
       } catch (updateErr) {
+        // Schema older than the code, case 1: the enum value exists in the app's
+        // allow-set but its migration has not been applied yet (SQLSTATE 22P02).
+        // Retry once with the legacy value so the applicant is never blocked.
+        const enumFallback = getInvalidEnumFallbackFromError(updateErr, updatePayload)
+        if (enumFallback) {
+          console.warn(
+            `⚠️ dashboard applications PATCH: "${enumFallback.from}" is not a valid ${enumFallback.enumType} value in this database; ` +
+              `retrying with "${enumFallback.to}". APPLY MIGRATION ${enumFallback.migration} to store "${enumFallback.from}" correctly.`
+          )
+          coercedEnums.push(`${enumFallback.column}: ${enumFallback.from} -> ${enumFallback.to}`)
+          if (!pendingMigrations.includes(enumFallback.migration)) {
+            pendingMigrations.push(enumFallback.migration)
+          }
+          // Keep the intended value recoverable (internal_notes.enumCoercions,
+          // only when this PATCH already writes internal_notes so we never
+          // clobber stored notes) and keep intended_activities — which every
+          // classifier reads first — carrying the true activity. The migration
+          // backfills water_purpose afterwards.
+          recordEnumCoercionInPayload(updatePayload, enumFallback)
+          updatePayload[enumFallback.column] = enumFallback.to
+          continue
+        }
+
+        // Schema older than the code, case 2: the column does not exist yet.
         const missingColumn = getMissingApplicationColumnFromError(updateErr)
         if (!missingColumn || !(missingColumn in updatePayload)) {
           throw updateErr

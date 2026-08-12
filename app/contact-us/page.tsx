@@ -148,7 +148,9 @@ function ContactUsContent() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">Phone</p>
-                        <p className="text-gray-600">+250 782 985 880</p>
+                        <p className="text-gray-600 font-bold">
+                          <a href="tel:9977" className="hover:underline">Toll Free Line: 9977</a>
+                        </p>
                       </div>
                     </div>
                     
@@ -301,7 +303,7 @@ function ContactUsContent() {
                             <Input
                               id="phone"
                               type="tel"
-                              placeholder="+250 782 985 880"
+                              placeholder="+250 7XX XXX XXX"
                               value={formData.phone}
                               onChange={(e) => handleInputChange("phone", e.target.value)}
                             />

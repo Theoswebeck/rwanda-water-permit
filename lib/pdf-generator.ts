@@ -316,6 +316,7 @@ function getActivityLabel(activity: string): string {
     gaz_extraction: "Gas Extraction",
     livestock: "Livestock",
     other: "Other",
+    other_concession: "Other Water Concession Activities",
   };
   return activityLabels[activity] || activity;
 }
@@ -351,6 +352,7 @@ function getActivityLabelKinyarwanda(activity: string): string {
     water_supply: "gutanga amazi",
     municipal_supply: "gutanga amazi",
     other: "ibindi",
+    other_concession: "ibindi",
   };
   return activityLabels[activity] || getActivityLabel(activity);
 }

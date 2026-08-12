@@ -54,7 +54,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         status,
         application_type,
         created_at,
-        submitted_at,
+        -- Effective (latest) submission date. to_jsonb keeps this tolerant of
+        -- the resubmitted_at column not existing yet (missing key -> NULL).
+        coalesce(
+          ((to_jsonb(applications) ->> 'resubmitted_at'))::timestamptz,
+          submitted_at
+        ) as submitted_at,
         is_renewal,
         is_modification
       from public.applications
@@ -76,7 +81,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         status,
         application_type,
         created_at,
-        submitted_at,
+        -- Effective (latest) submission date. to_jsonb keeps this tolerant of
+        -- the resubmitted_at column not existing yet (missing key -> NULL).
+        coalesce(
+          ((to_jsonb(applications) ->> 'resubmitted_at'))::timestamptz,
+          submitted_at
+        ) as submitted_at,
         is_renewal,
         is_modification
       from public.applications

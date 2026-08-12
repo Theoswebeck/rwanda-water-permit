@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +14,8 @@ import {
   Archive,
   CheckCircle,
   Clock,
-  XCircle
+  XCircle,
+  AlertCircle
 } from 'lucide-react';
 import { 
   getDocumentUrl, 
@@ -32,6 +33,12 @@ interface DocumentViewerProps {
   allowView?: boolean;
   showStatus?: boolean;
   emptyMessage?: string;
+  /**
+   * When provided, the viewer asks the server which of this application's
+   * document records point to files that no longer exist (lost in the
+   * 2026-07-08 uploads incident) and badges them honestly.
+   */
+  applicationId?: string;
 }
 
 export function DocumentViewer({
@@ -41,8 +48,42 @@ export function DocumentViewer({
   allowDownload = true,
   allowView = true,
   showStatus = true,
-  emptyMessage = "No documents uploaded yet"
+  emptyMessage = "No documents uploaded yet",
+  applicationId
 }: DocumentViewerProps) {
+
+  const [missingDocIds, setMissingDocIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!applicationId) return;
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    // `partial` means the server ran out of probe budget; retry once so the
+    // remaining documents get a verdict. Unverified files stay un-badged —
+    // only a confirmed miss is badged.
+    const check = async (attempt: number) => {
+      try {
+        const res = await fetch(
+          `/api/dashboard/applications/${applicationId}/documents/health`,
+          { cache: 'no-store', credentials: 'include' }
+        );
+        const json = await res.json().catch(() => null);
+        if (!cancelled && res.ok && json?.success && Array.isArray(json.missingDocumentIds)) {
+          setMissingDocIds(new Set(json.missingDocumentIds as string[]));
+          if (json.partial && attempt === 0) {
+            retryTimer = setTimeout(() => void check(1), 2000);
+          }
+        }
+      } catch {
+        // Health info is advisory only — never block the documents list.
+      }
+    };
+    void check(0);
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [applicationId]);
 
   console.log('📄 DocumentViewer received documents:', documents);
   console.log('📄 DocumentViewer documents count:', documents?.length || 0);
@@ -178,6 +219,16 @@ export function DocumentViewer({
                     </p>
                     {showStatus && (
                       <div>{getStatusBadge(doc.verification_status)}</div>
+                    )}
+                    {doc.id && missingDocIds.has(doc.id) && (
+                      <Badge
+                        variant="outline"
+                        className="bg-amber-50 text-amber-800 border-amber-300"
+                        title="This document is missing from the server and is being recovered — contact RWB if urgent."
+                      >
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        File missing — being recovered
+                      </Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">

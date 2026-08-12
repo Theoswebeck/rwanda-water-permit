@@ -242,6 +242,7 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       'recreation': 'recreation_activities',
       'port_construction': 'port_construction',
       'gaz_extraction': 'gaz_extraction',
+      'other_concession': 'other_concession',
       'livestock': 'livestock'
     };
     
@@ -1039,8 +1040,11 @@ export default function InspectorApplicationView() {
             </div>
           </div>
 
-          {/* Revision Requirements - Prominent Notice */}
-          {application.status === 'revision_required' && application.revision_notes && (
+          {/* Revision Requirements - Prominent Notice.
+              Kept visible after the applicant resubmits (revision_notes is no
+              longer cleared on resubmission) so staff retain the reason that
+              was sent to the applicant. */}
+          {application.revision_notes && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1052,19 +1056,25 @@ export default function InspectorApplicationView() {
                 <AlertDescription>
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-orange-900 text-lg">⚠️ Revision Required</h3>
+                      <h3 className="font-semibold text-orange-900 text-lg">
+                        {application.status === 'revision_required' ? '⚠️ Revision Required' : '⚠️ Previously Returned for Revision'}
+                      </h3>
                       <Badge className="border border-orange-300 text-orange-700 bg-orange-100">
-                        Action Needed
+                        {application.status === 'revision_required' ? 'Awaiting Applicant' : 'Resubmitted'}
                       </Badge>
                     </div>
                     <div className="space-y-2">
-                      <p className="font-medium text-orange-800">Required Changes:</p>
+                      <p className="font-medium text-orange-800">
+                        {application.status === 'revision_required' ? 'Required Changes:' : 'Reason sent to the applicant on the last return:'}
+                      </p>
                       <div className="bg-white/50 rounded-md p-3 border border-orange-200">
                         <p className="text-orange-900 leading-relaxed whitespace-pre-wrap">{application.revision_notes}</p>
                       </div>
-                      <p className="text-sm text-orange-700 mt-2">
-                        <strong>Note:</strong> Please review the specific requirements above and make the necessary changes before resubmitting your application.
-                      </p>
+                      {application.status === 'revision_required' && (
+                        <p className="text-sm text-orange-700 mt-2">
+                          <strong>Note:</strong> The applicant has been asked to make these changes and resubmit.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </AlertDescription>
@@ -1337,7 +1347,8 @@ export default function InspectorApplicationView() {
                 <ApplicationComments 
                   applicationId={application.id}
                   applicationStatus={application.status}
-                  applicationSubmittedAt={application.submitted_at ?? undefined}
+                  applicationSubmittedAt={((application as any).resubmitted_at || application.submitted_at) ?? undefined}
+                  revisionNotes={(application as any).revision_notes ?? null}
                   applicationCreatedAt={application.created_at}
                   applicantName={application.applicant?.first_name && application.applicant?.last_name 
                     ? `${application.applicant.first_name} ${application.applicant.last_name}`

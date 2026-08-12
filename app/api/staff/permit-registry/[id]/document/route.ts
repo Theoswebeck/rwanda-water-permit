@@ -2,8 +2,16 @@ import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/postgres";
+import { MISSING_FILE_CODE, MISSING_FILE_MESSAGE } from "@/lib/documents/file-availability";
 
 export const runtime = "nodejs";
+
+/**
+ * Cap on the same-origin static fallback. The on-prem server cannot resolve
+ * its own public hostname, so an unbounded fetch here stalls for seconds and
+ * then rejects into the catch-all as a misleading 500.
+ */
+const STATIC_PROXY_TIMEOUT_MS = 3000;
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -99,15 +107,26 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       fileBytes = await tryReadLocalFile(filePath);
       if (!fileBytes) {
         const sameOriginFileUrl = new URL(filePath.startsWith("/") ? filePath : `/${filePath}`, req.url).toString();
-        const proxied = await fetch(sameOriginFileUrl);
-        if (proxied.ok) {
-          fileBytes = Buffer.from(await proxied.arrayBuffer());
+        try {
+          const proxied = await fetch(sameOriginFileUrl, {
+            signal: AbortSignal.timeout(STATIC_PROXY_TIMEOUT_MS),
+          });
+          const contentType = proxied.headers.get("content-type") || "";
+          // An HTML body here is an error page, not the document.
+          if (proxied.ok && !contentType.includes("text/html")) {
+            fileBytes = Buffer.from(await proxied.arrayBuffer());
+          }
+        } catch {
+          // Timeout or unreachable self-origin — treat as missing file.
         }
       }
     }
 
     if (!fileBytes) {
-      return NextResponse.json({ success: false, message: "Document file is missing on server" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, code: MISSING_FILE_CODE, message: MISSING_FILE_MESSAGE },
+        { status: 404 }
+      );
     }
 
     const filename = String(row.uploaded_doc_name || path.basename(filePath) || "permit-document").replace(/"/g, "");

@@ -32,7 +32,8 @@ import {
   XCircle,
   ClipboardCheck,
   User2,
-  Mail
+  Mail,
+  Ban
 } from "lucide-react";
 import Link from "next/link";
 import { SmartBackButton } from "@/components/ui/back-button";
@@ -47,6 +48,7 @@ import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-document
 import { buildSyntheticPermitFromNotes, buildSyntheticRenewalPermit } from "@/lib/permit/build-synthetic-permit";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
+import { DownloadDossierButton } from "@/components/shared/download-dossier-button";
 import { RegistryPermitComparisonCard } from "@/components/inspection/registry-permit-comparison-card";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
@@ -210,6 +212,10 @@ export default function ReviewApplicationPage() {
   const [revisionNotes, setRevisionNotes] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showSendToVerificationDialog, setShowSendToVerificationDialog] = useState(false);
+  // Terminate (exempted water use) — terminal action, distinct from return-for-revision
+  const [showTerminateDialog, setShowTerminateDialog] = useState(false);
+  const [terminationReason, setTerminationReason] = useState("");
+  const [terminateLoading, setTerminateLoading] = useState(false);
   const [sendToVerificationLoading, setSendToVerificationLoading] = useState(false);
   
   // ApplicationForm state
@@ -1004,6 +1010,50 @@ export default function ReviewApplicationPage() {
     router.push('/review');
   };
 
+  const handleTerminateExempted = async () => {
+    if (!application || !terminationReason.trim()) return;
+
+    try {
+      setTerminateLoading(true);
+
+      const res = await fetch(`/api/staff/applications/${application.id}/terminate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason: terminationReason.trim() }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.success) {
+        throw new Error(payload?.message || 'Failed to terminate application.');
+      }
+
+      setShowTerminateDialog(false);
+      setTerminationReason("");
+      // Only claim the applicant was notified when the server confirms delivery.
+      persistBanner({
+        scope: params.id as string,
+        kind: payload?.emailSent ? "success" : "info",
+        title: "Application terminated",
+        description: payload?.emailSent
+          ? "The water use is exempted — no permit is required. The applicant has been notified by email."
+          : `The water use is exempted — no permit is required. ${
+              payload?.warning ||
+              "The confirmation email to the applicant could not be delivered — please follow up with them directly."
+            }`,
+      });
+      router.push('/review');
+    } catch (err) {
+      console.error('Error terminating application:', err);
+      const msg =
+        err && typeof err === "object" && "message" in err && typeof (err as any).message === "string"
+          ? (err as any).message
+          : "Failed to terminate application. Please try again.";
+      setBanner({ kind: "error", title: "Action failed", description: msg });
+    } finally {
+      setTerminateLoading(false);
+    }
+  };
+
   // Get application type badge for display - shows New, Modification, Transfer, or Renewal
   const getApplicationTypeBadge = () => {
     if (!application) return null;
@@ -1060,6 +1110,7 @@ export default function ReviewApplicationPage() {
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
+      terminated: { label: "Terminated (exempted use)", variant: "destructive" },
       // Returned statuses
       returned_to_assessment: { label: "🔄 Returned to Assessor", variant: "secondary" },
       returned_to_review: { label: "🔄 Returned to Reviewer", variant: "secondary" },
@@ -1151,6 +1202,11 @@ export default function ReviewApplicationPage() {
           <div className="space-y-6">
             <div className="flex items-center">
               <SmartBackButton fallbackHref={staffListHref("review", "primary")} label="Back to Dashboard" size="sm" className="gap-2" />
+              <DownloadDossierButton
+                applicationId={application.id}
+                applicationNumber={application.application_number}
+                className="ml-auto"
+              />
             </div>
             
             <div className="space-y-2">
@@ -1173,8 +1229,11 @@ export default function ReviewApplicationPage() {
             </div>
           </div>
 
-          {/* Revision Requirements - Prominent Notice */}
-          {application.status === 'revision_required' && application.revision_notes && (
+          {/* Revision Requirements - Prominent Notice.
+              Kept visible after the applicant resubmits (revision_notes is no
+              longer cleared on resubmission) so staff retain the reason that
+              was sent to the applicant. */}
+          {application.revision_notes && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1186,19 +1245,25 @@ export default function ReviewApplicationPage() {
                 <AlertDescription>
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-orange-900 text-lg">⚠️ Revision Required</h3>
+                      <h3 className="font-semibold text-orange-900 text-lg">
+                        {application.status === 'revision_required' ? '⚠️ Revision Required' : '⚠️ Previously Returned for Revision'}
+                      </h3>
                       <Badge className="border border-orange-300 text-orange-700 bg-orange-100">
-                        Action Needed
+                        {application.status === 'revision_required' ? 'Awaiting Applicant' : 'Resubmitted'}
                       </Badge>
                     </div>
                     <div className="space-y-2">
-                      <p className="font-medium text-orange-800">Required Changes:</p>
+                      <p className="font-medium text-orange-800">
+                        {application.status === 'revision_required' ? 'Required Changes:' : 'Reason sent to the applicant on the last return:'}
+                      </p>
                       <div className="bg-white/50 rounded-md p-3 border border-orange-200">
                         <p className="text-orange-900 leading-relaxed whitespace-pre-wrap">{application.revision_notes}</p>
                       </div>
-                      <p className="text-sm text-orange-700 mt-2">
-                        <strong>Note:</strong> Please review the specific requirements above and make the necessary changes before resubmitting your application.
-                      </p>
+                      {application.status === 'revision_required' && (
+                        <p className="text-sm text-orange-700 mt-2">
+                          <strong>Note:</strong> The applicant has been asked to make these changes and resubmit.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </AlertDescription>
@@ -1284,6 +1349,17 @@ export default function ReviewApplicationPage() {
                 >
                   <X className="h-4 w-4" />
                   Return to Assessment
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                  onClick={() => setShowTerminateDialog(true)}
+                  title="Close this application because the water use is exempted and no permit is required."
+                >
+                  <Ban className="h-4 w-4" />
+                  Terminate — Exempted Use
                 </Button>
               </div>
 
@@ -1543,7 +1619,8 @@ export default function ReviewApplicationPage() {
                 <ApplicationComments
                   applicationId={application.id}
                   applicationStatus={application.status}
-                  applicationSubmittedAt={application.submitted_at ?? undefined}
+                  applicationSubmittedAt={((application as any).resubmitted_at || application.submitted_at) ?? undefined}
+                  revisionNotes={(application as any).revision_notes ?? null}
                   applicationCreatedAt={application.created_at}
                   applicantName={(application as any).applicant?.first_name && (application as any).applicant?.last_name 
                     ? `${(application as any).applicant.first_name} ${(application as any).applicant.last_name}`
@@ -1634,6 +1711,59 @@ export default function ReviewApplicationPage() {
             >
               <X className="h-4 w-4" />
               Return to Assessment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Terminate (Exempted Water Use) Dialog */}
+      <Dialog open={showTerminateDialog} onOpenChange={setShowTerminateDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-red-600" />
+              Terminate — Exempted Water Use
+            </DialogTitle>
+            <DialogDescription>
+              Use this only when the application falls under an exempted water use (e.g. irrigation on land of 1 hectare or less) and therefore needs no permit. This closes the application permanently — it is NOT a return for correction. The applicant will be notified that no permit is required.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="termination-reason">Termination Reason *</Label>
+              <Textarea
+                id="termination-reason"
+                placeholder="E.g., The declared irrigation covers 0.8 ha, which is below the 1 ha threshold. This water use is exempted and no permit is required..."
+                value={terminationReason}
+                onChange={(e) => setTerminationReason(e.target.value)}
+                rows={5}
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTerminateDialog(false);
+                setTerminationReason("");
+              }}
+              disabled={terminateLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleTerminateExempted}
+              disabled={!terminationReason.trim() || terminateLoading}
+              className="gap-2"
+            >
+              {terminateLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Ban className="h-4 w-4" />
+              )}
+              {terminateLoading ? 'Terminating...' : 'Terminate Application'}
             </Button>
           </DialogFooter>
         </DialogContent>

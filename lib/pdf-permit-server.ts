@@ -6,8 +6,13 @@
  * As of 2026-04-23, every editorial text emission is routed through the
  * document-slots catalogue (`lib/document-slots/permit-slots.ts`). The slot
  * resolver returns an assessor's saved override when one exists; otherwise
- * the slot's `defaultResolver` reproduces the exact string this file used to
- * emit before the refactor. Layout / fonts / coordinates are unchanged.
+ * the slot's `defaultResolver` supplies the template text (including the
+ * template's automatic `**bold**` emphasis on key values).
+ *
+ * As of 2026-08 (RWB feedback), every variant renders through ONE shared
+ * body layout (`renderPermitBodyPages`): identical margins, body start
+ * position, font size and paragraph spacing across abstraction / concession
+ * / bulk permits, with justified body text.
  *
  * Spec: docs/superpowers/specs/2026-04-23-document-text-editor-design.md
  */
@@ -15,7 +20,7 @@ import path from "node:path";
 import fs from "node:fs";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
-import { selectPermitVariant } from "@/lib/permit-variant";
+import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
 import { addPermitExpiry } from "./date-math";
 import { getEffectiveInternalNotes } from "./document-overrides";
 import {
@@ -92,12 +97,22 @@ const FOOTER_TOP_OFFSET = 44 * PT;
 const BODY_BOTTOM_PAD = 2 * PT;
 
 /**
- * Body vertical rhythm (PDF points, not mm). Smaller = tighter blocks without
- * changing fonts. Used by all variant renderers so EN/RW spacing stays consistent.
+ * Shared body typography + vertical rhythm (PDF points, not mm).
+ *
+ * Every permit variant (abstraction / concession, individual / organization,
+ * bulk) renders its body through `renderPermitBodyPages`, so these constants
+ * are the single source of truth for the body layout. RWB feedback
+ * (2026-08): the abstraction and concession permits used to differ in font
+ * size and spacing — they must be geometrically identical.
  */
-const PERMIT_PARA_GAP_PT = 1;
-const PERMIT_EN_RW_RULE_PAD_BEFORE_PT = 3;
-const PERMIT_EN_RW_RULE_PAD_AFTER_PT = 3;
+const PERMIT_BODY_FONT_SIZE = 10;
+const PERMIT_BODY_LINE_GAP = 0.5;
+/** Gap between the title underline and the first body paragraph. */
+const PERMIT_BODY_TOP_PAD_PT = 2;
+/** Space after every paragraph — clearly separated, never overcrowded. */
+const PERMIT_PARA_GAP_PT = 4;
+const PERMIT_EN_RW_RULE_PAD_BEFORE_PT = 4;
+const PERMIT_EN_RW_RULE_PAD_AFTER_PT = 6;
 const PERMIT_BEFORE_CLOSING_PT = 8;
 
 function contentBottomY(doc: PDFKit.PDFDocument): number {
@@ -263,66 +278,258 @@ function drawLogo(doc: PDFKit.PDFDocument): number {
 // `lib/document-slots/bold-markers.ts` so the renderer and the slot-overrides
 // API speak the same dialect (review I1).
 //
-// Assessor edits stay in plain text — they see and edit the markers directly,
-// which gives them simple, predictable control over emphasis.
+// The emphasis the template requires is baked into the slot DEFAULTS —
+// assessors are never asked to type markers themselves (RWB feedback
+// 2026-08). Legacy overrides that do contain `**…**` still render bold, and
+// escaped `\*\*` still renders as a literal `**`; unbalanced markers are
+// silently normalised by `parseBoldRuns` instead of being rejected.
 
 interface RichTextOptions {
   width: number;
+  fontSize: number;
   lineGap?: number;
-  // NOTE: `align: "justify"` is not safe with `continued: true` chains
-  // because PDFKit computes justification per `text()` call rather than
-  // across the logical line, so a paragraph with inline bold runs can
-  // come out unevenly spaced. We deliberately omit it from this type.
-  align?: "left" | "right" | "center";
+  /**
+   * `"justify"` stretches inter-word gaps so every line except the last one
+   * of a paragraph ends flush at `width` (standard book justification; the
+   * final line stays left-aligned). Implemented by our own line-breaker
+   * below — PDFKit's native `align: "justify"` is not safe with
+   * `continued: true` chains, so mixed regular/bold paragraphs need manual
+   * layout anyway.
+   */
+  align?: "left" | "justify";
+}
+
+interface RichFrag {
+  text: string;
+  bold: boolean;
+  width: number;
+}
+interface RichWord {
+  frags: RichFrag[];
+  width: number;
+}
+interface RichLine {
+  words: RichWord[];
+  /** Width with single spaces between words (before justification). */
+  naturalWidth: number;
+  /** True when the line ends a logical paragraph (or an explicit `\n`) — such
+   *  lines are never stretched. */
+  hardBreak: boolean;
+}
+
+interface RichLayout {
+  lines: RichLine[];
+  lineHeight: number;
+  spaceWidth: number;
 }
 
 /**
- * Estimate the rendered height of a paragraph that may contain `**bold**`
- * runs. We measure the visible plain text (with markers stripped and escapes
- * unescaped) using the bold font, which gives a small upper bound — bold
- * glyphs are wider for Segoe so a bold-only measurement never under-allocates
- * the page-break budget.
+ * Split a single word that is wider than `maxWidth` into pieces that each
+ * fit, breaking at character granularity (the same mid-word split PDFKit's
+ * native `doc.text` + `width` performs). Regular/bold attribution is kept:
+ * fragments are cut in place and each chunk is re-measured with
+ * `widthOfString` in its own face, so kerning inside a chunk stays exact.
+ * The returned pieces behave like ordinary words afterwards — the caller
+ * lays out every full piece on its own line and lets the final remainder
+ * flow (and justify) like any other word.
  */
-function heightOfRichText(
+function splitOverwideWord(
+  doc: PDFKit.PDFDocument,
+  word: RichWord,
+  fontSize: number,
+  maxWidth: number,
+): RichWord[] {
+  const pieces: RichWord[] = [];
+  let piece: RichWord = { frags: [], width: 0 };
+  const flushPiece = () => {
+    if (piece.frags.length > 0) {
+      pieces.push(piece);
+      piece = { frags: [], width: 0 };
+    }
+  };
+  for (const frag of word.frags) {
+    doc.font(frag.bold ? FONT_BOLD : FONT_REGULAR).fontSize(fontSize);
+    let rest = frag.text;
+    while (rest !== "") {
+      // Largest prefix of `rest` that keeps the current piece within maxWidth.
+      // Found by binary search rather than by decrementing one character at a
+      // time: prefix width grows monotonically with prefix length, so the
+      // largest fitting prefix is a classic "last true" search. The old linear
+      // scan re-measured the whole prefix on every step, making a split
+      // quadratic in token length — a pasted ~3,000-character unbroken token
+      // cost tens of millions of glyph measurements and stalled generation.
+      let take = 0;
+      let lo = 1;
+      let hi = rest.length;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (piece.width + doc.widthOfString(rest.slice(0, mid)) <= maxWidth) {
+          take = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      if (take === 0) {
+        if (piece.frags.length > 0) {
+          // No room left on this piece — close it and retry on a fresh one.
+          flushPiece();
+          continue;
+        }
+        // A single glyph wider than the block cannot be split further; emit
+        // it anyway rather than looping forever.
+        take = 1;
+      }
+      const chunk = rest.slice(0, take);
+      const w = doc.widthOfString(chunk);
+      piece.frags.push({ text: chunk, bold: frag.bold, width: w });
+      piece.width += w;
+      rest = rest.slice(take);
+      // Leftover chars mean this piece is full to the line width — close it.
+      if (rest !== "") flushPiece();
+    }
+  }
+  flushPiece();
+  return pieces;
+}
+
+/**
+ * Break a paragraph that may contain `**bold**` runs into lines that fit
+ * `options.width`. Words are maximal non-whitespace sequences and may span a
+ * regular/bold boundary (e.g. `**Law**,`) without introducing a gap. A word
+ * wider than the block itself is split at character granularity (see
+ * `splitOverwideWord`) instead of overflowing the right edge. The same
+ * layout drives both height measurement and drawing, so the page-break
+ * budget is exact by construction.
+ */
+function layoutRichText(
   doc: PDFKit.PDFDocument,
   text: string,
   options: RichTextOptions,
-): number {
-  const plain = parseBoldRuns(text).map((r) => r.text).join("");
-  doc.font(FONT_BOLD);
-  return doc.heightOfString(plain, options);
+): RichLayout {
+  const { width, fontSize } = options;
+  const lineGap = options.lineGap ?? 0;
+
+  type Token = { kind: "word"; word: RichWord } | { kind: "break" };
+  const tokens: Token[] = [];
+  let current: RichWord | null = null;
+  const flushWord = () => {
+    if (current) {
+      tokens.push({ kind: "word", word: current });
+      current = null;
+    }
+  };
+  for (const run of parseBoldRuns(text)) {
+    if (run.text === "") continue;
+    doc.font(run.bold ? FONT_BOLD : FONT_REGULAR).fontSize(fontSize);
+    for (const part of run.text.split(/(\s+)/)) {
+      if (part === "") continue;
+      if (/^\s+$/.test(part)) {
+        flushWord();
+        // Explicit newlines force a line break; other whitespace is a word gap.
+        const newlines = part.split("\n").length - 1;
+        for (let i = 0; i < newlines; i++) tokens.push({ kind: "break" });
+      } else {
+        const w = doc.widthOfString(part);
+        if (!current) current = { frags: [], width: 0 };
+        current.frags.push({ text: part, bold: run.bold, width: w });
+        current.width += w;
+      }
+    }
+  }
+  flushWord();
+
+  doc.font(FONT_REGULAR).fontSize(fontSize);
+  const spaceWidth = doc.widthOfString(" ");
+  // Line height measured with the bold face — marginally taller for some
+  // faces, so mixed-weight lines never collide (same upper-bound rationale
+  // as the previous bold-font heightOfString measurement).
+  doc.font(FONT_BOLD).fontSize(fontSize);
+  const lineHeight = doc.currentLineHeight() + lineGap;
+
+  const lines: RichLine[] = [];
+  let line: RichLine = { words: [], naturalWidth: 0, hardBreak: false };
+  const pushLine = (hard: boolean) => {
+    line.hardBreak = hard;
+    lines.push(line);
+    line = { words: [], naturalWidth: 0, hardBreak: false };
+  };
+  for (const token of tokens) {
+    if (token.kind === "break") {
+      pushLine(true);
+      continue;
+    }
+    let w = token.word;
+    if (line.words.length > 0 && line.naturalWidth + spaceWidth + w.width > width) {
+      pushLine(false);
+    }
+    if (line.words.length === 0 && w.width > width) {
+      // Token wider than the whole block: split it so each piece fits. Full
+      // pieces take a line each; the remainder stays as the open line's
+      // first word and flows (and justifies) like a normal word.
+      const pieces = splitOverwideWord(doc, w, fontSize, width);
+      w = pieces.pop() as RichWord;
+      for (const piece of pieces) {
+        line.words.push(piece);
+        line.naturalWidth = piece.width;
+        pushLine(false);
+      }
+    }
+    if (line.words.length === 0) {
+      line.words.push(w);
+      line.naturalWidth = w.width;
+    } else {
+      line.words.push(w);
+      line.naturalWidth += spaceWidth + w.width;
+    }
+  }
+  if (line.words.length > 0) pushLine(true);
+
+  return { lines, lineHeight, spaceWidth };
 }
 
 /**
- * Render a paragraph that may contain `**bold**` runs. When the parsed text
- * collapses to a single non-bold visible run, falls back to a single
- * regular-weight `text()` call (cheap path).
+ * Draw the half-open line range `[from, to)` of an already-computed layout at
+ * `(x, y)`, rendering the `**bold**` runs in their own face. With
+ * `align: "justify"` every full line is stretched to the block width by
+ * distributing the slack across inter-word gaps; the last line of each
+ * paragraph (and any line ended by an explicit `\n`) stays left-aligned.
+ *
+ * Splitting the emission from the layout is what lets a paragraph continue
+ * across a page break: the line breaking — and therefore every bold run and
+ * every justification decision, which depend only on `line.hardBreak` — is
+ * computed ONCE for the whole paragraph by `drawParagraphPaginated` and then
+ * emitted in as many chunks as the pages allow. (The previous
+ * height-then-draw pair also ran the line breaker twice per paragraph.)
  */
-function drawRichText(
+function drawRichLines(
   doc: PDFKit.PDFDocument,
-  text: string,
+  layout: RichLayout,
   x: number,
   y: number,
   options: RichTextOptions,
+  from: number,
+  to: number,
 ): void {
-  const runs = parseBoldRuns(text).filter((r) => r.text !== "");
-  if (runs.length === 0) {
-    return;
-  }
-  if (runs.length === 1 && !runs[0].bold) {
-    doc.font(FONT_REGULAR);
-    doc.text(runs[0].text, x, y, options);
-    return;
-  }
-  for (let i = 0; i < runs.length; i++) {
-    const run = runs[i];
-    const isLast = i === runs.length - 1;
-    doc.font(run.bold ? FONT_BOLD : FONT_REGULAR);
-    if (i === 0) {
-      doc.text(run.text, x, y, { ...options, continued: !isLast });
-    } else {
-      doc.text(run.text, { ...options, continued: !isLast });
+  const { lines, lineHeight, spaceWidth } = layout;
+  const justify = options.align === "justify";
+  let cy = y;
+  for (const line of lines.slice(from, to)) {
+    const gaps = line.words.length - 1;
+    let gapExtra = 0;
+    if (justify && !line.hardBreak && gaps > 0) {
+      gapExtra = Math.max(0, (options.width - line.naturalWidth) / gaps);
     }
+    let cx = x;
+    for (const word of line.words) {
+      for (const frag of word.frags) {
+        doc.font(frag.bold ? FONT_BOLD : FONT_REGULAR).fontSize(options.fontSize);
+        doc.text(frag.text, cx, cy, { lineBreak: false });
+        cx += frag.width;
+      }
+      cx += spaceWidth + gapExtra;
+    }
+    cy += lineHeight;
   }
 }
 
@@ -500,215 +707,143 @@ function drawClosingLine(
   return yPos + 16;
 }
 
-// ─── Variant renderers ──────────────────────────────────────────────────────
+// ─── Variant renderers ───────────────────────────────────────────────────────────
 
-async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffer> {
-  const { application: app, permitNumber, isModified } = opts;
-  const issueDate = opts.issuedDate ?? new Date();
-  const expiryDate =
-    opts.expiryDate ??
-    addPermitExpiry(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
-  const ctx = buildSlotCtx(opts, issueDate, expiryDate);
+/** Y position where body text resumes on a continuation page. */
+const PERMIT_CONT_PAGE_TOP_Y = 30 * PT;
 
-  const doc = createDoc();
-
+/** Start a fresh body page (watermark + border) and return the new body top Y. */
+async function startContinuationPage(doc: PDFKit.PDFDocument): Promise<number> {
+  doc.addPage();
   await drawWatermark(doc);
-  const logoBottomY = drawLogo(doc);
-
-  let y = drawTitle(doc, resolveSlotText("permit.concession_individual.title.en", ctx), logoBottomY);
-
-  if (isModified) drawModifiedBadge(doc, ctx);
-
-  const leftX = PERMIT_MARGIN_X;
-  const maxW = pageWidth(doc) - leftX * 2;
-  const fontSize = 10;
-  const lineGap = 0.5;
-  const paraGap = PERMIT_PARA_GAP_PT;
-
-  const englishParagraphs = [
-    resolveSlotText("permit.concession_individual.en.para_1", ctx),
-    resolveSlotText("permit.concession_individual.en.para_2", ctx),
-    resolveSlotText("permit.concession_individual.en.para_3", ctx),
-    resolveSlotText("permit.concession_individual.en.para_4", ctx),
-  ];
-  const rwParagraphs = [
-    resolveSlotText("permit.concession_individual.rw.para_1", ctx),
-    resolveSlotText("permit.concession_individual.rw.para_2", ctx),
-    resolveSlotText("permit.concession_individual.rw.para_3", ctx),
-    resolveSlotText("permit.concession_individual.rw.para_4", ctx),
-  ];
-
-  y += 2;
-  doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
-  for (const p of englishParagraphs) {
-    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
-    y += h + paraGap;
-  }
-
-  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
-  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
-  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
-
-  for (const p of rwParagraphs) {
-    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
-    y += h + paraGap;
-  }
-
-  if (y > contentBottomY(doc) - 22) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-
-  y += PERMIT_BEFORE_CLOSING_PT;
-  drawClosingLine(doc, y, ctx);
-
-  if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
-
-  return docToBuffer(doc);
+  doc.fillColor("#000000");
+  return PERMIT_CONT_PAGE_TOP_Y;
 }
 
-async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buffer> {
-  const { application: app, permitNumber, isModified } = opts;
-  const issueDate = opts.issuedDate ?? new Date();
-  const expiryDate =
-    opts.expiryDate ??
-    addPermitExpiry(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
-  const ctx = buildSlotCtx(opts, issueDate, expiryDate);
+/**
+ * Draw one paragraph starting at `y`, breaking it ACROSS PAGES at line
+ * granularity when it does not fit, and return the Y just below the last line
+ * drawn (on whatever page that turned out to be).
+ *
+ * Behaviour, in order of preference:
+ *  1. The paragraph fits in the space left on the current page → drawn there.
+ *  2. It does not fit here but would fit on a page of its own → the whole
+ *     paragraph moves to a fresh page (no orphaned first lines). This is the
+ *     pre-existing behaviour and keeps every real permit's output identical.
+ *  3. It is taller than a full page → lines are emitted until the content
+ *     bottom, a new page starts, and the remaining lines continue there.
+ *
+ * Before this, `drawRichText` emitted every line unconditionally at
+ * `cy += lineHeight`, so an over-long paragraph was drawn straight off the
+ * bottom of the sheet — over the QR/signature footer and past the page border.
+ */
+async function drawParagraphPaginated(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  options: RichTextOptions,
+): Promise<number> {
+  const layout = layoutRichText(doc, text, options);
+  const { lines, lineHeight } = layout;
+  if (lines.length === 0) return y;
 
-  const doc = createDoc();
-  await drawWatermark(doc);
-  const logoBottomY = drawLogo(doc);
-  let y = drawTitle(doc, resolveSlotText("permit.abstraction_individual.title.en", ctx), logoBottomY);
+  const bottom = contentBottomY(doc);
+  const totalH = lines.length * lineHeight;
+  const fullPageCapacity = bottom - PERMIT_CONT_PAGE_TOP_Y;
 
-  if (isModified) drawModifiedBadge(doc, ctx);
-
-  const leftX = PERMIT_MARGIN_X;
-  const maxW = pageWidth(doc) - leftX * 2;
-  const fontSize = 10;
-  const lineGap = 0.5;
-  const paraGap = PERMIT_PARA_GAP_PT;
-
-  const englishParagraphs = [
-    resolveSlotText("permit.abstraction_individual.en.para_1", ctx),
-    resolveSlotText("permit.abstraction_individual.en.para_2", ctx),
-    resolveSlotText("permit.abstraction_individual.en.para_3", ctx),
-    resolveSlotText("permit.abstraction_individual.en.para_4", ctx),
-  ];
-  const rwParagraphs = [
-    resolveSlotText("permit.abstraction_individual.rw.para_1", ctx),
-    resolveSlotText("permit.abstraction_individual.rw.para_2", ctx),
-    resolveSlotText("permit.abstraction_individual.rw.para_3", ctx),
-    resolveSlotText("permit.abstraction_individual.rw.para_4", ctx),
-  ];
-
-  y += 2;
-  doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
-  for (const p of englishParagraphs) {
-    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
-    y += h + paraGap;
+  let cy = y;
+  // Case 2: keep a page-sized paragraph together by moving it wholesale.
+  if (cy + totalH > bottom && totalH <= fullPageCapacity) {
+    cy = await startContinuationPage(doc);
   }
 
-  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
-  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
-  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
-
-  for (const p of rwParagraphs) {
-    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
-    y += h + paraGap;
-  }
-
-  if (y > contentBottomY(doc) - 22) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += PERMIT_BEFORE_CLOSING_PT;
-  drawClosingLine(doc, y, ctx);
-
-  if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
-  return docToBuffer(doc);
-}
-
-async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Buffer> {
-  const { application: app, permitNumber, isModified } = opts;
-  const issueDate = opts.issuedDate ?? new Date();
-  const expiryDate =
-    opts.expiryDate ??
-    addPermitExpiry(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
-  const ctx = buildSlotCtx(opts, issueDate, expiryDate);
-
-  const doc = createDoc();
-  await drawWatermark(doc);
-  const logoBottomY = drawLogo(doc);
-  let y = drawTitle(doc, resolveSlotText("permit.abstraction_organization.title.en", ctx), logoBottomY);
-
-  if (isModified) drawModifiedBadge(doc, ctx);
-
-  const leftX = PERMIT_MARGIN_X;
-  const maxW = pageWidth(doc) - leftX * 2;
-  // Tightened typography so the bilingual EN+RW blocks plus closing block
-  // fit on a single A4-landscape page (the user's hard requirement). The
-  // sample uses a single page; paragraphs were previously spilling onto
-  // page 2 after the inline-bold expansion grew them by ~1 line each.
-  const fontSize = 11;
-  const lineGap = 0.5;
-  const paraGap = PERMIT_PARA_GAP_PT;
-
-  const englishParagraphs = [
-    resolveSlotText("permit.abstraction_organization.en.para_1", ctx),
-    resolveSlotText("permit.abstraction_organization.en.para_2", ctx),
-    resolveSlotText("permit.abstraction_organization.en.para_3", ctx),
-    resolveSlotText("permit.abstraction_organization.en.para_4", ctx),
-  ];
-  const rwParagraphs = [
-    resolveSlotText("permit.abstraction_organization.rw.para_1", ctx),
-    resolveSlotText("permit.abstraction_organization.rw.para_2", ctx),
-    resolveSlotText("permit.abstraction_organization.rw.para_3", ctx),
-    resolveSlotText("permit.abstraction_organization.rw.para_4", ctx),
-  ];
-
-  y += 2;
-  doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
-  for (const p of englishParagraphs) {
-    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
-    y += h + paraGap;
-  }
-
-  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
-  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
-  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
-
-  for (const p of rwParagraphs) {
-    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) {
-      doc.addPage();
-      await drawWatermark(doc);
-      y = 30 * PT;
+  let i = 0;
+  while (i < lines.length) {
+    let capacity = Math.floor((contentBottomY(doc) - cy) / lineHeight);
+    if (capacity <= 0) {
+      cy = await startContinuationPage(doc);
+      capacity = Math.floor((contentBottomY(doc) - cy) / lineHeight);
+      // Degenerate geometry (line taller than a whole page): emit one line
+      // rather than loop forever adding blank pages.
+      if (capacity <= 0) capacity = 1;
     }
-    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
-    y += h + paraGap;
+    const take = Math.min(capacity, lines.length - i);
+    drawRichLines(doc, layout, x, cy, options, i, i + take);
+    cy += take * lineHeight;
+    i += take;
+  }
+  return cy;
+}
+
+interface PermitBodyContent {
+  title: string;
+  englishParagraphs: string[];
+  rwParagraphs: string[];
+}
+
+/**
+ * Shared page layout for EVERY permit variant: watermark + border, centered
+ * logo, underlined bilingual title, justified English block, separator rule,
+ * justified Kinyarwanda block, closing signature row and footer (QR band or
+ * DRAFT banner). All geometry comes from the PERMIT_* constants above, so
+ * abstraction and concession permits are geometrically identical in margins,
+ * body start position, font size and spacing (RWB feedback 2026-08).
+ */
+async function renderPermitBodyPages(
+  doc: PDFKit.PDFDocument,
+  opts: PermitRenderOpts,
+  ctx: SlotResolverContext,
+  content: PermitBodyContent,
+): Promise<void> {
+  await drawWatermark(doc);
+  const logoBottomY = drawLogo(doc);
+  let y = drawTitle(doc, content.title, logoBottomY);
+
+  if (opts.isModified) drawModifiedBadge(doc, ctx);
+
+  const leftX = PERMIT_MARGIN_X;
+  const maxW = pageWidth(doc) - leftX * 2;
+  const rich: RichTextOptions = {
+    width: maxW,
+    fontSize: PERMIT_BODY_FONT_SIZE,
+    lineGap: PERMIT_BODY_LINE_GAP,
+    align: "justify",
+  };
+
+  y += PERMIT_BODY_TOP_PAD_PT;
+  doc.fillColor("#000000");
+  for (const p of content.englishParagraphs) {
+    y = await drawParagraphPaginated(doc, p, leftX, y, rich) + PERMIT_PARA_GAP_PT;
   }
 
-  if (y > contentBottomY(doc) - 22) {
-    doc.addPage();
-    await drawWatermark(doc);
-    y = 30 * PT;
+  if (y > contentBottomY(doc) - 50) { y = await startContinuationPage(doc); }
+  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
+  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
+  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
+
+  for (const p of content.rwParagraphs) {
+    y = await drawParagraphPaginated(doc, p, leftX, y, rich) + PERMIT_PARA_GAP_PT;
   }
+
+  if (y > contentBottomY(doc) - 22) { y = await startContinuationPage(doc); }
   y += PERMIT_BEFORE_CLOSING_PT;
   drawClosingLine(doc, y, ctx);
 
-  if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
-  return docToBuffer(doc);
+  if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, opts.permitNumber, ctx); }
 }
 
-async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buffer> {
-  const { application: app, permitNumber, isModified } = opts;
+/**
+ * Renderer shared by the four standard slot-driven variants
+ * (abstraction/concession × individual/organization). The only difference
+ * between them is which slot ids supply the text — the layout itself is
+ * fully shared via `renderPermitBodyPages`.
+ */
+async function renderStandardPermit(
+  opts: PermitRenderOpts,
+  variant: Exclude<PermitVariant, "bulk_water_supply" | "fallback_generic">,
+): Promise<Buffer> {
+  const { application: app } = opts;
   const issueDate = opts.issuedDate ?? new Date();
   const expiryDate =
     opts.expiryDate ??
@@ -716,58 +851,15 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   const ctx = buildSlotCtx(opts, issueDate, expiryDate);
 
   const doc = createDoc();
-  await drawWatermark(doc);
-  const logoBottomY = drawLogo(doc);
-
-  let y = drawTitle(doc, resolveSlotText("permit.concession_organization.title.en", ctx), logoBottomY);
-
-  if (isModified) drawModifiedBadge(doc, ctx);
-
-  const leftX = PERMIT_MARGIN_X;
-  const maxW = pageWidth(doc) - leftX * 2;
-  const fontSize = 10;
-  const lineGap = 0.5;
-  const paraGap = PERMIT_PARA_GAP_PT;
-
-  const englishParagraphs = [
-    resolveSlotText("permit.concession_organization.en.para_1", ctx),
-    resolveSlotText("permit.concession_organization.en.para_2", ctx),
-    resolveSlotText("permit.concession_organization.en.para_3", ctx),
-    resolveSlotText("permit.concession_organization.en.para_4", ctx),
-  ];
-  const rwParagraphs = [
-    resolveSlotText("permit.concession_organization.rw.para_1", ctx),
-    resolveSlotText("permit.concession_organization.rw.para_2", ctx),
-    resolveSlotText("permit.concession_organization.rw.para_3", ctx),
-    resolveSlotText("permit.concession_organization.rw.para_4", ctx),
-  ];
-
-  y += 2;
-  doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
-  for (const p of englishParagraphs) {
-    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
-    y += h + paraGap;
-  }
-
-  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
-  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
-  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
-
-  for (const p of rwParagraphs) {
-    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
-    y += h + paraGap;
-  }
-
-  if (y > contentBottomY(doc) - 22) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += PERMIT_BEFORE_CLOSING_PT;
-  drawClosingLine(doc, y, ctx);
-
-  if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
+  await renderPermitBodyPages(doc, opts, ctx, {
+    title: resolveSlotText(`permit.${variant}.title.en`, ctx),
+    englishParagraphs: [1, 2, 3, 4].map((i) =>
+      resolveSlotText(`permit.${variant}.en.para_${i}`, ctx),
+    ),
+    rwParagraphs: [1, 2, 3, 4].map((i) =>
+      resolveSlotText(`permit.${variant}.rw.para_${i}`, ctx),
+    ),
+  });
   return docToBuffer(doc);
 }
 
@@ -785,33 +877,28 @@ function resolveBulkNetworks(app: PermitApplication): Array<Record<string, unkno
 }
 
 async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
-  const { application: app, permitNumber, isModified } = opts;
+  const { application: app, permitNumber } = opts;
   const issueDate = opts.issuedDate ?? new Date();
+  // Fallback only — callers that already know the permit's validity window
+  // (terms page, permits row, contract, registry) pass `expiryDate` explicitly.
+  // When they do not, the expiry must be computed with the SAME semantics as
+  // every other variant (`addPermitExpiry` = +N years − 1 day). Using
+  // `addYearsSafe` here printed a bulk permit expiring one day later than the
+  // permits row / contract / registry showed for the same permit.
   const expiryDate =
     opts.expiryDate ??
     addPermitExpiry(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
   const ctx = buildSlotCtx(opts, issueDate, expiryDate);
 
   const doc = createDoc();
-  await drawWatermark(doc);
-  const logoBottomY = drawLogo(doc);
-
-  // Reuse the abstraction_organization slot key for the bilingual title
-  const titleText = resolveSlotText("permit.abstraction_organization.title.en", ctx);
-  let y = drawTitle(doc, titleText, logoBottomY);
-  if (isModified) drawModifiedBadge(doc, ctx);
-
-  const leftX = PERMIT_MARGIN_X;
-  const maxW = pageWidth(doc) - leftX * 2;
-  const fontSize = 11;
-  const lineGap = 1.0;
-  const paraGap = PERMIT_PARA_GAP_PT;
 
   // Resolve networks early so we can adjust para_4 text accordingly
   const networks = resolveBulkNetworks(app);
   const hasNetworks = networks.length > 0;
 
-  // Build bulk-specific para_2 (authorization sentence — no coordinates/sector/cell)
+  // Build bulk-specific para_2 (authorization sentence — no coordinates/sector/cell).
+  // Template emphasis (`**…**`) is applied here automatically — assessors
+  // never need to type bold markers themselves.
   const orgName = resolveApplicantName(app);
   const orgAddr = resolveOrgAddress(app);
   const orgAddrRw = resolveOrgAddressKinyarwanda(app);
@@ -820,8 +907,8 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   const networkCount = networks.length;
   const networkCountLabel = `${networkCount} water supply network${networkCount !== 1 ? "s" : ""}`;
 
-  const bulkPara2En = `"${orgName}" with its registered office address as follows: ${orgAddr}; represented by ${rep.name} "${rep.title}", is authorized to abstract water from ${networkCountLabel} located in ${adminLoc.district} District as specified in the attached annex. Water abstracted will be used for water supply.`;
-  const bulkPara2Rw = `"${orgName}" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "${rep.title}", yemerewe gukoresha amazi y'imiyoboro ${networkCount} iherereye mu Akarere ka ${adminLoc.district} nkuko bigaragara ku mugereka. Aya mazi yemerewe gukoreshwa mu bikorwa byo gukwirakwiza amazi.`;
+  const bulkPara2En = `"**${orgName}**" with its registered office address as follows: ${orgAddr}; represented by ${rep.name} "**${rep.title}**", is authorized to abstract water from **${networkCountLabel}** located in ${adminLoc.district} District as specified in the attached annex. Water abstracted will be used for **water supply**.`;
+  const bulkPara2Rw = `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe gukoresha amazi y'imiyoboro **${networkCount}** iherereye mu Akarere ka ${adminLoc.district} nkuko bigaragara ku mugereka. Aya mazi yemerewe gukoreshwa mu bikorwa byo **gukwirakwiza amazi**.`;
 
   const englishParagraphs = [
     resolveSlotText("permit.abstraction_organization.en.para_1", ctx),
@@ -840,32 +927,14 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
       : "Uretse ibyemejwe n'itegeko rivugwaho haruguru, uyu Uruhushya rugengwa n'amategeko n'ibisabwa bisobanurwa mu masezerano agenye.",
   ];
 
-  y += 2;
-  doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
-  for (const p of englishParagraphs) {
-    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
-    y += h + paraGap;
-  }
-
-  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
-  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
-  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
-
-  for (const p of rwParagraphs) {
-    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
-    y += h + paraGap;
-  }
-
-  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += PERMIT_BEFORE_CLOSING_PT;
-  drawClosingLine(doc, y, ctx);
-
-  if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
+  // Body layout is fully shared with the standard variants — same margins,
+  // font size, justification and spacing (reuses the
+  // abstraction_organization slot key for the bilingual title).
+  await renderPermitBodyPages(doc, opts, ctx, {
+    title: resolveSlotText("permit.abstraction_organization.title.en", ctx),
+    englishParagraphs,
+    rwParagraphs,
+  });
 
   // ─── Annex page: distribution networks table ────────────────────────────
   if (hasNetworks) {
@@ -992,16 +1061,13 @@ export async function generatePermitPdfBuffer(opts: PermitRenderOpts): Promise<B
   const variant = selectPermitVariant(opts.application as Parameters<typeof selectPermitVariant>[0]);
   switch (variant) {
     case "concession_individual":
-      return renderConcessionIndividual(opts);
     case "concession_organization":
-      return renderConcessionOrganization(opts);
     case "abstraction_individual":
-      return renderAbstractionIndividual(opts);
     case "abstraction_organization":
-      return renderAbstractionOrganization(opts);
+      return renderStandardPermit(opts, variant);
     case "bulk_water_supply":
       return renderBulkWaterSupply(opts);
     default:
-      return renderConcessionIndividual(opts);
+      return renderStandardPermit(opts, "concession_individual");
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 import { hasAnyRole, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
+import { isPureConcessionActivity } from '@/lib/permit-variant'
 
 type JsonRecord = Record<string, unknown>
 
@@ -116,7 +117,7 @@ function isConcessionApplication(activitiesRaw: unknown, notes: JsonRecord | nul
   const direct = normalizeActivities(activitiesRaw)
   const notesActivities = normalizeActivities(notes?.intendedActivities)
   const activities = direct.length ? direct : notesActivities
-  return activities.includes('fish_farming_lakes') || activities.includes('recreation_activities') || activities.includes('port_construction') || activities.includes('gaz_extraction')
+  return activities.some(isPureConcessionActivity)
 }
 
 function resolveOriginalApplicationId(mod: ModificationRow, notes: JsonRecord | null): string | null {

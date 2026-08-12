@@ -1,0 +1,74 @@
+<h2>Which new data is highest priority?</h2>
+<p class="subtitle">The API already computes some of these but they're not shown yet. Select all that feel important.</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="geo" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Geographic breakdown</h3>
+      <p>Permits by province — top districts by permit count. Helps citizens see where water abstraction is concentrated.</p>
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+        <span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:99px;font-size:11px">Kigali — 142</span>
+        <span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:99px;font-size:11px">Northern — 89</span>
+        <span style="background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:99px;font-size:11px">Southern — 74</span>
+        <span style="background:#e2e8f0;color:#475569;padding:2px 8px;border-radius:99px;font-size:11px">Eastern — 61</span>
+        <span style="background:#e2e8f0;color:#475569;padding:2px 8px;border-radius:99px;font-size:11px">Western — 55</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="source" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Permits by water source</h3>
+      <p>Breakdown by river, lake, groundwater, borehole, dam. Already computed by the API — just not displayed yet.</p>
+      <div style="margin-top:8px;display:flex;gap:4px;align-items:center">
+        <div style="height:8px;width:110px;background:#059669;border-radius:4px"></div>
+        <span style="font-size:11px;color:#64748b">River/Stream — 44%</span>
+      </div>
+      <div style="margin-top:4px;display:flex;gap:4px;align-items:center">
+        <div style="height:8px;width:70px;background:#34d399;border-radius:4px"></div>
+        <span style="font-size:11px;color:#64748b">Groundwater — 28%</span>
+      </div>
+      <div style="margin-top:4px;display:flex;gap:4px;align-items:center">
+        <div style="height:8px;width:40px;background:#a7f3d0;border-radius:4px"></div>
+        <span style="font-size:11px;color:#64748b">Lake — 16%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="expiry" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Expiry & compliance stats</h3>
+      <p>Expiring soon count, active vs expired ratio, compliance rate. Shows health of the permit system over time.</p>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <div style="background:#fef9c3;color:#713f12;padding:4px 10px;border-radius:8px;font-size:11px">⚠ 23 expiring in 30 days</div>
+        <div style="background:#dcfce7;color:#14532d;padding:4px 10px;border-radius:8px;font-size:11px">✓ 78% active rate</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="trends" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Extended trends & growth</h3>
+      <p>Month-over-month growth %, year-over-year comparison, 24-month view (API already has 24 months of data, currently shows 12).</p>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+        <div style="background:#dcfce7;color:#14532d;padding:4px 10px;border-radius:8px;font-size:11px">↑ +12% vs last month</div>
+        <div style="background:#f1f5f9;color:#475569;padding:4px 10px;border-radius:8px;font-size:11px">↑ +31% vs last year</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="catchment" onclick="toggleSelect(this)">
+    <div class="letter">E</div>
+    <div class="content">
+      <h3>Catchment / basin breakdown</h3>
+      <p>Permits grouped by catchment area (level 1 & 2). Useful for watershed management transparency and IWRM reporting.</p>
+      <div style="margin-top:8px;font-size:11px;color:#64748b">Catchment_1 • Catchment_2 breakdown with permit counts per basin</div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px">Select all that apply, then let me know in the terminal.</p>

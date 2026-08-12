@@ -98,13 +98,8 @@ export async function POST(request: NextRequest) {
     
     switch (decision) {
       case 'approved':
-        const projectInfo = projectTitle ? ` for ${projectTitle}` : '';
-        message = `Dear ${applicantName}, 
-
-Congratulations! Your water permit application ${applicationNumber}${projectInfo} has been APPROVED by Rwanda Water Resources Board.
-
-For inquiries: info@rwb.rw
-Rwanda Water Resources Board`;
+        const approvalPortalHost = getPortalUrl().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+        message = `Your water permit application ${applicationNumber} has been APPROVED. Log in at ${approvalPortalHost} to accept the terms and conditions to receive your permit. RWB`;
         break;
 
       case 'rejected':

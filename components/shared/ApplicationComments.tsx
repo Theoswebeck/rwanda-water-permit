@@ -33,6 +33,13 @@ interface ApplicationCommentsProps {
   applicationSubmittedAt?: string;
   applicationCreatedAt?: string;
   applicantName?: string;
+  /**
+   * Last return-for-revision reason sent to the applicant
+   * (applications.revision_notes). It is kept after the applicant resubmits so
+   * staff retain traceability; shown on the latest "revision_required"
+   * timeline event (the trigger-logged workflow row has no comment).
+   */
+  revisionNotes?: string | null;
 }
 
 type WorkflowEvent = {
@@ -61,7 +68,8 @@ export function ApplicationComments({
   applicationStatus,
   applicationSubmittedAt,
   applicationCreatedAt,
-  applicantName 
+  applicantName,
+  revisionNotes
 }: ApplicationCommentsProps) {
   const [language, setLanguage] = useState<AppLanguage>("en");
   useEffect(() => {
@@ -409,6 +417,12 @@ export function ApplicationComments({
               {eventsLoading ? (
                 <div className="text-center py-6 text-muted-foreground">{tx("Loading timeline...")}</div>
               ) : events.length > 0 ? (
+                (() => {
+                  // The status-change trigger logs revision_required transitions
+                  // without a comment; attach the persisted revision reason to the
+                  // most recent one so staff still see it after resubmission.
+                  const latestRevisionEventId = events.find((e) => e.toStatus === "revision_required")?.id;
+                  return (
                 <div className="space-y-4">
                   {events.map((evt, idx) => (
                     <div key={evt.id} className="relative flex gap-4">
@@ -443,11 +457,18 @@ export function ApplicationComments({
 
                         {evt.comment ? (
                           <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">{evt.comment}</p>
+                        ) : evt.id === latestRevisionEventId && revisionNotes?.trim() ? (
+                          <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">
+                            <span className="font-medium">{tx("Reason sent to applicant")}: </span>
+                            {revisionNotes}
+                          </p>
                         ) : null}
                       </div>
                     </div>
                   ))}
                 </div>
+                  );
+                })()
               ) : (
                 <div className="text-sm text-muted-foreground">{tx("No workflow events yet.")}</div>
               )}

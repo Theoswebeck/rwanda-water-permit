@@ -698,6 +698,12 @@ export default function TermsConditionsPage() {
 
       // Enforce expiration: if more than 6 months since submission and permit not yet issued, block issuance.
       const expiration = getApplicationExpiration({
+        // IMPORTANT: the statutory 6-month window runs from the ORIGINAL
+        // submitted_at, never from resubmitted_at. Restarting the clock on each
+        // resubmission would let repeated resubmissions keep an application
+        // alive indefinitely and let an expired application reach permit
+        // issuance. Only DISPLAY and SORTING use the latest (re)submission date
+        // (getEffectiveSubmissionDate).
         submitted_at: applicationData.submitted_at ?? null,
         hasPermit: false,
       });

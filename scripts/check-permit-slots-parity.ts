@@ -3,8 +3,10 @@
  *
  * For each fixture (one per variant) and each slot in the catalogue, computes
  * the slot's `defaultResolver` output and compares it to the EXPECTED string
- * — which is the literal that `lib/pdf-permit-server.ts` emitted for that
- * position before the Phase 2 slot refactor (commit 208660a).
+ * — originally the literal that `lib/pdf-permit-server.ts` emitted for that
+ * position before the Phase 2 slot refactor (commit 208660a). As of 2026-08
+ * (RWB feedback) the expected strings additionally carry the template's
+ * automatic `**bold**` emphasis on key values, for every variant.
  *
  * If a slot's default doesn't match its expected string, the slot catalogue
  * has drifted from the renderer's prior output and the next regenerated PDF
@@ -92,6 +94,11 @@ function buildPermitCtx(app: PermitApplication): SlotResolverContext {
     permitNumber: PERMIT_NUMBER,
     issueDate: ISSUE_DATE,
     expiryDate: EXPIRY_DATE,
+    // signingDate was added to PermitSlotContextExtras for the modification
+    // flow (closing date = approval date). For new permits it equals the
+    // issue date — without it the closing.date resolver crashes on
+    // `fmtDMY(undefined)`, which had silently broken this script.
+    signingDate: ISSUE_DATE,
     isModified: false,
     skipQr: false,
     headerYear: ISSUE_DATE.getFullYear(),
@@ -347,7 +354,7 @@ group("abstraction_individual", () => {
 
   // Para 1
   eq(resolveSlotText("permit.abstraction_individual.en.para_1", ctx),
-     `Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,`,
+     `Pursuant to **Law N°49/2018 of 13/08/2018**, determining the use and management of water resources in Rwanda,`,
      "en.para_1");
 
   // Para 2: replicate pre-refactor template literal exactly.
@@ -360,7 +367,7 @@ group("abstraction_individual", () => {
   const vols = resolveVolumes(fxAbsInd);
   const yearlyStr = vols.yearly != null ? `${fmtNum(vols.yearly)} m³/year` : "N/A m³/year";
   const acts = resolveActivities(fxAbsInd);
-  const expectedPara2 = `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract water from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a flow rate of ${yearlyStr}. Water abstracted will be used for ${acts}.`;
+  const expectedPara2 = `\u201C**${name}**\u201D, with ID Number: ${idNum}, is authorized to abstract water from **${wsName}** located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a flow rate of **${yearlyStr}**. Water abstracted will be used for **${acts}**.`;
   eq(resolveSlotText("permit.abstraction_individual.en.para_2", ctx), expectedPara2, "en.para_2");
 
   // Para 3
@@ -374,11 +381,11 @@ group("abstraction_individual", () => {
      "en.para_4");
 
   eq(resolveSlotText("permit.abstraction_individual.rw.para_1", ctx),
-     "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
+     "Hashingiwe ku Itegeko **N° 49/2018 ryo ku wa 13/08/2018** rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
      "rw.para_1");
   const actsRw = resolveActivitiesKinyarwanda(fxAbsInd);
   const systemTypeRw = resolveKinyarwandaSystemType(fxAbsInd);
-  const expectedRw2 = `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe ${systemTypeRw} amazi ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}, ku gipimo cya ${resolveFlowRateKinyarwanda(fxAbsInd)}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+  const expectedRw2 = `"**${name}**", ufite Indangamuntu nimero: ${idNum}, yemerewe ${systemTypeRw} amazi ava ku **${wsName}** iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}, ku gipimo cya **${resolveFlowRateKinyarwanda(fxAbsInd)}**. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;
   eq(resolveSlotText("permit.abstraction_individual.rw.para_2", ctx), expectedRw2, "rw.para_2");
   eq(resolveSlotText("permit.abstraction_individual.rw.para_3", ctx),
      `Uru ruhushya rufite agaciro kuva ${fmtDMY(ISSUE_DATE)} kugeza ${fmtDMY(EXPIRY_DATE)}.`,
@@ -397,7 +404,7 @@ group("concession_individual", () => {
      `WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI N° ${titleNum}`, "title.en");
 
   eq(resolveSlotText("permit.concession_individual.en.para_1", ctx),
-     `Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,`,
+     `Pursuant to **Law N°49/2018 of 13/08/2018** determining the use and management of water resources in Rwanda,`,
      "en.para_1");
 
   const name = resolveApplicantName(fxConcInd);
@@ -408,7 +415,7 @@ group("concession_individual", () => {
   const lake = resolveLakeName(fxConcInd);
   const loc = resolveAdminLocation(fxConcInd);
   const prov = fmtProvince(loc.province);
-  const expectedPara2 = `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to carry out ${acts} on the surface area of ${areaStr} (Concession area) in ${lake}, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov} as shown on the attached map. This permit applies for activities conducted solely within the water body.`;
+  const expectedPara2 = `\u201C**${name}**\u201D, with ID Number: ${idNum}, is authorized to carry out **${acts}** on the surface area of **${areaStr}** (Concession area) in **${lake}**, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov} as shown on the attached map. This permit applies for activities conducted solely within the water body.`;
   eq(resolveSlotText("permit.concession_individual.en.para_2", ctx), expectedPara2, "en.para_2");
 
   eq(resolveSlotText("permit.concession_individual.en.para_3", ctx),
@@ -420,10 +427,10 @@ group("concession_individual", () => {
      "en.para_4");
 
   eq(resolveSlotText("permit.concession_individual.rw.para_1", ctx),
-     "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
+     "Hashingiwe ku Itegeko **N° 49/2018 ryo ku wa 13/08/2018** rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
      "rw.para_1");
   const actsRw = resolveActivitiesKinyarwanda(fxConcInd);
-  const expectedRw2 = `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe gukora ${actsRw} ku buso bungana na ${areaStr} (ahakorerwa ibikorwa) muri ${lake}, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
+  const expectedRw2 = `"**${name}**", ufite Indangamuntu nimero: ${idNum}, yemerewe gukora **${actsRw}** ku buso bungana na **${areaStr}** (ahakorerwa ibikorwa) muri **${lake}**, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
   eq(resolveSlotText("permit.concession_individual.rw.para_2", ctx), expectedRw2, "rw.para_2");
   eq(resolveSlotText("permit.concession_individual.rw.para_3", ctx),
      `Uru ruhushya rufite agaciro kuva ${fmtDMY(ISSUE_DATE)} kugeza ${fmtDMY(EXPIRY_DATE)}.`,
@@ -442,7 +449,7 @@ group("concession_organization", () => {
      `WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI N° ${titleNum}`, "title.en");
 
   eq(resolveSlotText("permit.concession_organization.en.para_1", ctx),
-     `Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,`,
+     `Pursuant to **Law N°49/2018 of 13/08/2018** determining the use and management of water resources in Rwanda,`,
      "en.para_1");
 
   // Para 2 — replicate the pre-refactor inline computation of wsLocParts +
@@ -464,7 +471,7 @@ group("concession_organization", () => {
     wsDist ? `${wsDist} District` : null,
     wsProv ? (wsProv.toLowerCase() === "kigali" ? "City OF Kigali" : `${wsProv} Province`) : null,
   ].filter(Boolean).join(", ") || "N/A";
-  const expectedPara2 = `\u201C${orgName}\u201D, with its water source location as follows: ${wsLocParts}; represented by ${rep.name}; is authorized to carry out ${acts} on the surface area of ${areaStr} in ${lake}, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov}, as shown on the attached map. This permit applies to activities conducted solely within the water body.`;
+  const expectedPara2 = `\u201C**${orgName}**\u201D, with its water source location as follows: ${wsLocParts}; represented by ${rep.name}; is authorized to carry out **${acts}** on the surface area of **${areaStr}** in **${lake}**, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov}, as shown on the attached map. This permit applies to activities conducted solely within the water body.`;
   eq(resolveSlotText("permit.concession_organization.en.para_2", ctx), expectedPara2, "en.para_2");
 
   eq(resolveSlotText("permit.concession_organization.en.para_3", ctx),
@@ -476,7 +483,7 @@ group("concession_organization", () => {
      "en.para_4");
 
   eq(resolveSlotText("permit.concession_organization.rw.para_1", ctx),
-     "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
+     "Hashingiwe ku Itegeko **N° 49/2018 ryo ku wa 13/08/2018** rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
      "rw.para_1");
   const wsLocPartsRw = [
     wsSector ? `Umurenge wa ${wsSector}` : null,
@@ -484,7 +491,7 @@ group("concession_organization", () => {
     wsProv ? formatIntaraOrUmujyiWaKigali(wsProv) : null,
   ].filter(Boolean).join(", ") || "N/A";
   const actsRw = resolveActivitiesKinyarwanda(fxConcOrg);
-  const expectedRw2 = `"${orgName}", ifite aho ifatira amazi hakurikira: ${wsLocPartsRw}; ihagarariwe na ${rep.name}; yemerewe gukora ${actsRw} ku buso bungana na ${areaStr} muri ${lake}, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
+  const expectedRw2 = `"**${orgName}**", ifite aho ifatira amazi hakurikira: ${wsLocPartsRw}; ihagarariwe na ${rep.name}; yemerewe gukora **${actsRw}** ku buso bungana na **${areaStr}** muri **${lake}**, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
   eq(resolveSlotText("permit.concession_organization.rw.para_2", ctx), expectedRw2, "rw.para_2");
   eq(resolveSlotText("permit.concession_organization.rw.para_3", ctx),
      `Uru ruhushya rufite agaciro kuva ${fmtDMY(ISSUE_DATE)} kugeza ${fmtDMY(EXPIRY_DATE)}.`,
@@ -630,7 +637,7 @@ group("abstraction_individual — N/A branches (no coords, no volume)", () => {
   eq(vols.yearly === null ? "ok" : "fail", "ok", "vols.yearly is null");
   const sysType = resolveSystemType(fxAbsIndMinimal);
   const acts = resolveActivities(fxAbsIndMinimal);
-  const expected = `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract water from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: N/A, Longitude: N/A, by a ${sysType} with a flow rate of N/A m³/year. Water abstracted will be used for ${acts}.`;
+  const expected = `\u201C**${name}**\u201D, with ID Number: ${idNum}, is authorized to abstract water from **${wsName}** located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: N/A, Longitude: N/A, by a ${sysType} with a flow rate of **N/A m³/year**. Water abstracted will be used for **${acts}**.`;
   eq(resolveSlotText("permit.abstraction_individual.en.para_2", ctx), expected, "en.para_2 (N/A branches)");
 });
 
@@ -643,7 +650,7 @@ group("concession_individual — Kigali province + N/A area", () => {
   const loc = resolveAdminLocation(fxConcIndKigaliNoArea);
   // fmtProvince("Kigali") → "CITY OF KIGALI" (uppercase). Verify.
   eq(fmtProvince(loc.province), "CITY OF KIGALI", "fmtProvince(Kigali)");
-  const expected = `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to carry out ${acts} on the surface area of N/A Hectare (Concession area) in ${lake}, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, CITY OF KIGALI as shown on the attached map. This permit applies for activities conducted solely within the water body.`;
+  const expected = `\u201C**${name}**\u201D, with ID Number: ${idNum}, is authorized to carry out **${acts}** on the surface area of **N/A Hectare** (Concession area) in **${lake}**, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, CITY OF KIGALI as shown on the attached map. This permit applies for activities conducted solely within the water body.`;
   eq(resolveSlotText("permit.concession_individual.en.para_2", ctx), expected, "en.para_2 (Kigali + N/A area)");
 });
 
@@ -658,8 +665,11 @@ group("concession_organization — minimal data (rep fallback, N/A area)", () =>
   const lake = resolveLakeName(fxConcOrgMinimal);
   const loc = resolveAdminLocation(fxConcOrgMinimal);
   const prov = fmtProvince(loc.province);
-  // No waterSourceSector/District/Province in notes → wsLocParts === "N/A"
-  const expected = `\u201C${orgName}\u201D, with its water source location as follows: N/A; represented by ${rep.name}; is authorized to carry out ${acts} on the surface area of N/A hectares in ${lake}, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov}, as shown on the attached map. This permit applies to activities conducted solely within the water body.`;
+  // No waterSourceSector/District/Province in notes → resolveAdminLocation
+  // falls back to the application's own sector/district/province (RWB 2026-08
+  // consistency fix: permit, contract and assessment report agree on the
+  // water source location instead of printing N/A).
+  const expected = `\u201C**${orgName}**\u201D, with its water source location as follows: ${loc.sector} Sector, ${loc.district} District, ${prov}; represented by ${rep.name}; is authorized to carry out **${acts}** on the surface area of **N/A hectares** in **${lake}**, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov}, as shown on the attached map. This permit applies to activities conducted solely within the water body.`;
   eq(resolveSlotText("permit.concession_organization.en.para_2", ctx), expected, "en.para_2 (rep+area+ws fallback)");
 });
 
@@ -746,7 +756,7 @@ group("override beats default for non-date permit slots", () => {
   const vols = resolveVolumes(fxAbsInd);
   const yearlyStr = vols.yearly != null ? `${fmtNum(vols.yearly)} m³/year` : "N/A m³/year";
   const acts = resolveActivities(fxAbsInd);
-  const expectedPara2 = `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract water from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a flow rate of ${yearlyStr}. Water abstracted will be used for ${acts}.`;
+  const expectedPara2 = `\u201C**${name}**\u201D, with ID Number: ${idNum}, is authorized to abstract water from **${wsName}** located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a flow rate of **${yearlyStr}**. Water abstracted will be used for **${acts}**.`;
   eq(resolveSlotText("permit.abstraction_individual.en.para_2", ctx), expectedPara2, "sibling para_2 unaffected");
 });
 
@@ -892,7 +902,9 @@ group("bold-marker parser (lib/document-slots/bold-markers.ts)", () => {
     "plain: no markers",
   );
 
-  // hasBalancedBoldMarkers — the API gate.
+  // hasBalancedBoldMarkers — legacy helper (no longer an API gate; the
+  // overrides API silently accepts unbalanced markers and the renderer
+  // normalises them). Behaviour must stay stable for any remaining callers.
   if (hasBalancedBoldMarkers("foo **bold** rest")) { passes++; console.log("  ✓ balanced ⇒ true"); } else { failures++; console.error("  ✗ balanced ⇒ true"); }
   if (!hasBalancedBoldMarkers("foo **unclosed")) { passes++; console.log("  ✓ unbalanced ⇒ false"); } else { failures++; console.error("  ✗ unbalanced ⇒ false"); }
   if (hasBalancedBoldMarkers("\\*\\*literal\\*\\*")) { passes++; console.log("  ✓ escaped ⇒ true (no real markers)"); } else { failures++; console.error("  ✗ escaped ⇒ true"); }

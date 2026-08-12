@@ -19,7 +19,7 @@ import {
   Loader2 
 } from "lucide-react";
 import { getApplicationsPendingApproval } from "@/lib/supabase";
-import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
+import { sortBySubmissionDateDescending, getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline, formatDate } from "@/lib/utils";
 
 type RawPendingApprovalApplication = {
@@ -156,7 +156,7 @@ export function FinalDecisions() {
           waterSource: app.water_source,
           waterPurpose: app.water_purpose || '',
           location: getWaterSourceLocation(app),
-          submittedDate: app.submitted_at || app.created_at,
+          submittedDate: getEffectiveSubmissionDate(app) || app.created_at,
           reviewCompletedDate: app.reviewed_at || undefined,
           inspectionCompletedDate: app.inspected_at || undefined,
           estimatedValue: app.project_value || undefined,

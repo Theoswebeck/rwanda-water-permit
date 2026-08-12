@@ -51,6 +51,7 @@ import {
 } from '@/lib/rwanda-administrative-data';
 import { validatePolygons, type ValidationResponse } from '@/lib/polygonValidation';
 import { isValidCoordinate, isWithinRwanda } from "@/lib/geoUtils";
+import { isPureConcessionActivity } from "@/lib/permit-variant";
 import { getAnnexRequirementForActivity, getAnnexRequirementsForSelection } from "@/lib/annex-requirements";
 import { ModificationBadge, ModificationChangesSummary } from "@/components/dashboard/modified-field-marker";
 import {
@@ -530,8 +531,7 @@ const applicationFormSchema = z.object({
     return;
   }
 
-  const pureConcessionActs = ["fish_farming_lakes", "recreation_activities", "port_construction", "gaz_extraction"];
-  const isPureConcessionAct = selectedActivities.some((a) => pureConcessionActs.includes(a));
+  const isPureConcessionAct = selectedActivities.some((a) => isPureConcessionActivity(a));
   const effectiveCategory = isPureConcessionAct ? "concession" : (data.waterUseCategory ?? "abstraction");
 
   if (effectiveCategory === "concession") {
@@ -742,6 +742,7 @@ const applicationFormSchema = z.object({
   const selectedActivity = selectedActivities[0];
   switch (selectedActivity) {
     case "other":
+    case "other_concession":
       requireText(data.intendedActivityOther, ["intendedActivityOther"], "Please specify the 'Other' intended activity.");
       break;
     case "irrigation":
@@ -1844,8 +1845,7 @@ export function ApplicationForm({
   // Derived: effective water use category.
   // Fish farming in lakes & recreational activities → always concession.
   // All other activities → user-selectable, defaulting to abstraction.
-  const pureConcessionActivities = ["fish_farming_lakes", "recreation_activities", "port_construction", "gaz_extraction"];
-  const isPureConcession = watchedIntendedActivities?.some((a: string) => pureConcessionActivities.includes(a)) ?? false;
+  const isPureConcession = watchedIntendedActivities?.some((a: string) => isPureConcessionActivity(a)) ?? false;
   const effectiveWaterUseCategory: "abstraction" | "concession" = isPureConcession
     ? "concession"
     : (watchedWaterUseCategory ?? "abstraction");
@@ -2066,8 +2066,7 @@ export function ApplicationForm({
 
     const intended = form.getValues('intendedActivities') || [];
     const selectedActivity = intended[0];
-    const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities', 'port_construction', 'gaz_extraction'];
-    const isPureConcessionAct = intended.some((a: string) => pureConcessionActs.includes(a));
+    const isPureConcessionAct = intended.some((a: string) => isPureConcessionActivity(a));
     const savedCategory = form.getValues('waterUseCategory');
     const effectiveCat = isPureConcessionAct ? 'concession' : (savedCategory ?? 'abstraction');
     const requiresConcessionPolygons = effectiveCat === 'concession';
@@ -2098,6 +2097,7 @@ export function ApplicationForm({
     let hasMissingActivityFields = false;
     switch (selectedActivity) {
       case 'other':
+      case 'other_concession':
         hasMissingActivityFields = !requireTextField('intendedActivityOther', form.getValues('intendedActivityOther'), "Please specify the 'Other' intended activity.");
         break;
       case 'irrigation':
@@ -2669,6 +2669,7 @@ export function ApplicationForm({
         let hasActivityFields = true;
         switch (selectedActivity) {
           case 'other':
+          case 'other_concession':
             hasActivityFields = hasText(form.watch('intendedActivityOther') ?? form.getValues('intendedActivityOther'));
             break;
           case 'irrigation':
@@ -2768,8 +2769,7 @@ export function ApplicationForm({
           return !hasRequiredDocs;
         }
 
-        const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities', 'port_construction', 'gaz_extraction'];
-        const isPureConcessionAct = intendedActivities.some((a: string) => pureConcessionActs.includes(a));
+        const isPureConcessionAct = intendedActivities.some((a: string) => isPureConcessionActivity(a));
         const savedCat = form.getValues('waterUseCategory');
         const effectiveCat = isPureConcessionAct ? 'concession' : (savedCat ?? 'abstraction');
         const isConcessionActivity = effectiveCat === 'concession';
@@ -4760,7 +4760,8 @@ export function ApplicationForm({
                               { value: "recreation_activities", label: tx("Recreational activities") },
                               { value: "water_supply", label: tx("Water supply") },
                               { value: "district_water_supply", label: tx("District Water Supply") },
-                              { value: "other", label: tx("Other (specify)") },
+                              { value: "other", label: tx("Other water abstraction activities (specify)") },
+                              { value: "other_concession", label: tx("Other water concession activities (specify)") },
                             ].map((opt) => (
                               <div key={opt.value} className="flex items-center gap-3">
                                 <RadioGroupItem value={opt.value} id={`activity-${opt.value}`} />
@@ -4981,7 +4982,7 @@ export function ApplicationForm({
                   )}
 
                   {/* Other activity specification */}
-                  {watchedIntendedActivities?.includes("other") && (
+                  {(watchedIntendedActivities?.includes("other") || watchedIntendedActivities?.includes("other_concession")) && (
                     <div className="space-y-4">
                       <FormField
                         control={form.control}

@@ -53,7 +53,7 @@ import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
-import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
+import { sortBySubmissionDateDescending, getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
@@ -109,6 +109,7 @@ const REVIEWER_CHIPS: StatusChipDef[] = [
   { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "downstream" },
   { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
   { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
+  { id: "terminated", label: "Terminated", statuses: ["terminated"], priority: "downstream" },
   { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
@@ -232,7 +233,7 @@ function ReviewerDashboardContent() {
         // Batch-fetch workflow dates
         const submittedAtMap: Record<string, string | null> = {};
         for (const app of processedApplications) {
-          submittedAtMap[app.id] = app.submitted_at || app.created_at;
+          submittedAtMap[app.id] = getEffectiveSubmissionDate(app) || null;
         }
         const dates = await batchFetchWorkflowDates(
           processedApplications.map((a) => a.id),
@@ -465,6 +466,7 @@ function ReviewerDashboardContent() {
       approved: { label: "Approved", className: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800" },
       approved_pending_permit: { label: "Pending Terms", className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800" },
       rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800" },
+      terminated: { label: "Terminated (exempted use)", className: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-700" },
       returned_to_assessment: { label: "🔄 Returned to Assessor", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
       returned_to_review: { label: "🔄 Returned for Review", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
       returned_to_verification: { label: "🔄 Returned to Verifier", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
@@ -504,7 +506,7 @@ function ReviewerDashboardContent() {
 
   const ApplicationTable = ({ applications, emptyMessage }: { applications: ReviewApplication[]; emptyMessage: string }) => {
     const filteredApps = filterApplications(applications);
-    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
+    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => getEffectiveSubmissionDate(app));
 
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">

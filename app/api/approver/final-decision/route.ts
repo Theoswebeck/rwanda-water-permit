@@ -46,7 +46,10 @@ function buildDecisionCopy(params: { decision: Decision; applicantName: string; 
   const orgName = 'Rwanda Water Resources Board'
 
   if (decision === 'approve') {
-    const sms = `Rwanda Water Resources Board: Dear ${applicantName}, your water permit application ${applicationNumber} has been APPROVED. Please log in and accept the Terms and Conditions for the permit to be issued. Once issued, you will be able to download the permit from your dashboard. Support: ${supportEmail}.`
+    // Keep the approval SMS short (single SMS segment where possible) while
+    // still telling the applicant they must accept the T&Cs before issuance.
+    const portalHost = portalUrl.replace(/^https?:\/\//i, '').replace(/\/+$/, '')
+    const sms = `Your water permit application ${applicationNumber} has been APPROVED. Log in at ${portalHost} to accept the terms and conditions to receive your permit. RWB`
     const subject = `Application approved — ${applicationNumber}`
     const title = 'Application Approved'
     const text = [
@@ -278,10 +281,10 @@ export async function POST(req: NextRequest) {
     const applicantName = getApplicantName(applicant as ApplicantContact)
     const applicantPhone = getApplicantPhone(applicant as ApplicantContact)
     const applicantEmail = String(applicant.email || '').trim().toLowerCase()
-    if (!isNonEmptyString(applicantEmail) || !isNonEmptyString(applicantPhone)) {
+    if (!isNonEmptyString(applicantEmail)) {
       logFinalDecision('warn', traceId, 'applicant contact info missing', {
         applicationId,
-        applicantEmail: isNonEmptyString(applicantEmail) ? maskEmail(applicantEmail) : '(missing-email)',
+        applicantEmail: '(missing-email)',
         applicantPhone: isNonEmptyString(applicantPhone) ? maskPhone(applicantPhone) : '(missing-phone)',
       })
       return NextResponse.json({ success: false, message: 'Applicant contact info missing' }, { status: 400 })
@@ -291,7 +294,7 @@ export async function POST(req: NextRequest) {
       applicationId,
       applicantName,
       applicantEmail: maskEmail(applicantEmail),
-      applicantPhone: maskPhone(applicantPhone),
+      applicantPhone: isNonEmptyString(applicantPhone) ? maskPhone(applicantPhone) : '(missing-phone)',
     })
 
     const copy = buildDecisionCopy({ decision, applicantName, applicationNumber, reason })
@@ -299,19 +302,19 @@ export async function POST(req: NextRequest) {
       applicationId,
       decision,
     })
-    // Pre-validate the SMS phone for any decision that triggers an applicant
-    // notification, BEFORE we open the approval transaction. This way a bad
-    // phone number can't ever leave the application in a partially-approved
-    // state where the row was updated but the SMS failed.
+    // SMS must never block the decision flow (RWB point 13): a missing or
+    // invalid applicant phone downgrades to "skip the SMS" (logged) instead of
+    // aborting the approval. Email remains the guaranteed channel.
+    let smsEligible = false
     if (decision !== 'return_to_assessment') {
       const senderNamePre = process.env.PINDO_SENDER_NAME || 'RWB'
       const pindoPre = new PindoClient(process.env.PINDO_API_KEY, senderNamePre)
-      if (!pindoPre.isValidRwandanPhone(applicantPhone)) {
-        logFinalDecision('warn', traceId, 'aborting because applicant phone format is invalid', {
+      smsEligible = isNonEmptyString(applicantPhone) && pindoPre.isValidRwandanPhone(applicantPhone)
+      if (!smsEligible) {
+        logFinalDecision('warn', traceId, 'skipping applicant SMS because phone is missing or invalid', {
           applicationId,
-          applicantPhone: maskPhone(applicantPhone),
+          applicantPhone: isNonEmptyString(applicantPhone) ? maskPhone(applicantPhone) : '(missing-phone)',
         })
-        return NextResponse.json({ success: false, message: 'Invalid applicant phone number format' }, { status: 400 })
       }
     }
 
@@ -421,10 +424,17 @@ export async function POST(req: NextRequest) {
         applicationId,
         isTransferApplication,
       })
+      // Post-commit: a throw here must not fail the approval either.
       const transferNotifyResult = await notifyOnTransferPendingTerms(applicationId, {
         traceId,
         source: 'approver-final-decision',
-      })
+      }).catch((err) => ({
+        ok: false as const,
+        status: 'error' as const,
+        message: err instanceof Error ? err.message : String(err),
+        smsSent: false,
+        emailSent: false,
+      }))
       if (!transferNotifyResult.ok) {
         logFinalDecision('warn', traceId, 'transferee pending-terms notification did not complete fully', {
           applicationId,
@@ -489,25 +499,56 @@ export async function POST(req: NextRequest) {
     // way an approval that was aborted by the override gate (review I1) never
     // sends an "approved" SMS, and an SMS retry can never land before the
     // status row reflects the decision.
+    let applicantSmsSent = false
+    let applicantEmailSent = false
+    let applicantEmailError: string | null = null
     if (decision !== 'return_to_assessment') {
       const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
-      const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
       logFinalDecision('log', traceId, 'sending applicant decision notifications', {
         applicationId,
-        smsTo: maskPhone(applicantPhone),
+        smsEligible,
+        smsTo: isNonEmptyString(applicantPhone) ? maskPhone(applicantPhone) : '(missing-phone)',
         emailTo: maskEmail(applicantEmail),
         senderName,
       })
-      await pindo.sendSMS(applicantPhone, copy.sms, senderName)
-      logFinalDecision('log', traceId, 'applicant SMS sent successfully', {
-        applicationId,
-        smsTo: maskPhone(applicantPhone),
-      })
-      await sendSmtpEmail({ to: applicantEmail, subject: copy.email.subject, title: copy.email.title, text: copy.email.text })
-      logFinalDecision('log', traceId, 'applicant email sent successfully', {
-        applicationId,
-        emailTo: maskEmail(applicantEmail),
-      })
+      // NON-BLOCKING SMS: a Pindo failure is logged but must never fail the
+      // approval flow — the DB status is already committed at this point.
+      if (smsEligible && isNonEmptyString(applicantPhone)) {
+        try {
+          const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
+          await pindo.sendSMS(applicantPhone, copy.sms, senderName)
+          applicantSmsSent = true
+          logFinalDecision('log', traceId, 'applicant SMS sent successfully', {
+            applicationId,
+            smsTo: maskPhone(applicantPhone),
+          })
+        } catch (smsErr) {
+          logFinalDecision('error', traceId, 'applicant SMS failed; continuing decision flow', {
+            applicationId,
+            smsTo: maskPhone(applicantPhone),
+            error: smsErr instanceof Error ? smsErr.message : String(smsErr),
+          })
+        }
+      }
+      // NON-BLOCKING EMAIL: the decision is already COMMITTED to the database
+      // at this point. An SMTP blip must never 500 the request — that would
+      // also skip the notifications + audit_logs rows below, and the approver
+      // could not retry (the application is no longer pending_final_approval).
+      try {
+        await sendSmtpEmail({ to: applicantEmail, subject: copy.email.subject, title: copy.email.title, text: copy.email.text })
+        applicantEmailSent = true
+        logFinalDecision('log', traceId, 'applicant email sent successfully', {
+          applicationId,
+          emailTo: maskEmail(applicantEmail),
+        })
+      } catch (emailErr) {
+        applicantEmailError = emailErr instanceof Error ? emailErr.message : String(emailErr)
+        logFinalDecision('error', traceId, 'applicant email failed; decision stands, continuing', {
+          applicationId,
+          emailTo: maskEmail(applicantEmail),
+          error: applicantEmailError,
+        })
+      }
     }
 
     await query(
@@ -521,8 +562,9 @@ export async function POST(req: NextRequest) {
         copy.email.text,
         copy.email.type,
         applicationId,
-        decision !== 'return_to_assessment',
-        decision !== 'return_to_assessment',
+        // Record what actually happened, not what was attempted.
+        applicantEmailSent,
+        applicantSmsSent,
       ]
     ).catch(() => undefined)
     logFinalDecision('log', traceId, 'application notification row inserted', {
@@ -562,8 +604,20 @@ export async function POST(req: NextRequest) {
       applicationId,
       decision,
       applicationNumber,
+      applicantEmailSent,
+      applicantSmsSent,
     })
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      emailSent: applicantEmailSent,
+      smsSent: applicantSmsSent,
+      // Surfaced so the approver is told the truth: the decision was recorded,
+      // but the applicant did not receive the email.
+      warning:
+        decision !== 'return_to_assessment' && !applicantEmailSent
+          ? `The decision was recorded successfully, but the notification email to the applicant could not be sent${applicantEmailError ? ` (${applicantEmailError})` : ''}. Please follow up with them directly.`
+          : undefined,
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Server error'
     if (message.includes('Invalid session') || message.includes('JWT')) {

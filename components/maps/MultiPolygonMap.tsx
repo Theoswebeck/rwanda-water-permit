@@ -5,7 +5,7 @@
 // Rwanda Water Resources Board - Water Permit System
 // =============================================
 
-import { MapContainer, TileLayer, Marker, Polygon, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polygon, Popup, ScaleControl, useMap } from "react-leaflet";
 import L from "leaflet";
 import { useEffect } from "react";
 import type { Feature, Polygon as GeoPolygon } from "geojson";
@@ -62,6 +62,12 @@ export interface MultiPolygonMapProps {
    * "active" polygon.
    */
   showMarkersForAll?: boolean;
+  /**
+   * When true a metric scale bar is rendered in the bottom-left corner.
+   * Used by the printable concession map so the printout carries a scale
+   * indication.
+   */
+  showScale?: boolean;
 }
 
 export function MultiPolygonMap({
@@ -70,6 +76,7 @@ export function MultiPolygonMap({
   height,
   fitAllPolygons = false,
   showMarkersForAll = false,
+  showScale = false,
 }: MultiPolygonMapProps) {
   const rwandaCenter: [number, number] = [-1.9403, 29.8739];
 
@@ -100,6 +107,8 @@ export function MultiPolygonMap({
         />
 
         <FitBounds coords={allCoords} />
+
+        {showScale && <ScaleControl position="bottomleft" imperial={false} />}
 
         {/* Markers for active polygon */}
         {active.map((coord, index) => {

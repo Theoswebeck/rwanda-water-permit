@@ -22,7 +22,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
-import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
+import { sortBySubmissionDateDescending, getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
@@ -56,6 +56,7 @@ const ASSESSOR_CHIPS: StatusChipDef[] = [
   { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "downstream" },
   { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
   { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
+  { id: "terminated", label: "Terminated", statuses: ["terminated"], priority: "downstream" },
   { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
@@ -71,7 +72,10 @@ function AssessmentDashboardContent() {
     ["assessment", "inspections", "water-reports", "permit-registry"]
   );
   const [activeChipId, setActiveChipId] = useState("pending_assessment");
-  const [activeInnerTab, setActiveInnerTab] = useState<"all_applications" | "map">("all_applications");
+  // "my_assignments" = applications assigned to me (actionable queue).
+  // "all_applications" = every application in the pipeline (read-only tracking:
+  // progress feedback for applicants + access to approved permits/contracts for archiving).
+  const [activeInnerTab, setActiveInnerTab] = useState<"my_assignments" | "all_applications" | "map">("my_assignments");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
   const [permitByApplicationId, setPermitByApplicationId] = useState<Record<string, LinkedPermitLite>>({});
 
@@ -121,13 +125,17 @@ function AssessmentDashboardContent() {
         setLoading(true);
         setError(null);
 
+        // Fetch ALL pipeline applications (not just the ones assigned to this
+        // assessor). Assessors must be able to see and track the status of every
+        // application (read-only outside their stage) — the "My Assignments" /
+        // "All Applications" tabs below scope the view client-side, matching the
+        // review/verification dashboards which already load the full pipeline.
         const { data: allData, error: allError } = await supabase
           .from('applications')
           .select(`
             *,
             applicant:users!applicant_id(first_name, last_name, company_name)
           `)
-          .eq('assigned_assessor_id', user.id)
           .neq('status', 'draft')
           .neq('status', 'pending_payment')
           .not('application_number', 'like', 'REG-%')
@@ -149,10 +157,10 @@ function AssessmentDashboardContent() {
           setPermitByApplicationId({});
         }
 
-        // Batch-fetch workflow dates
+        // Batch-fetch workflow dates (Applied = latest (re)submission date)
         const submittedAtMap: Record<string, string | null> = {};
         for (const app of processedAll) {
-          submittedAtMap[app.id] = app.submitted_at || app.created_at;
+          submittedAtMap[app.id] = getEffectiveSubmissionDate(app) || null;
         }
         const dates = await batchFetchWorkflowDates(
           processedAll.map((a) => a.id),
@@ -185,6 +193,13 @@ function AssessmentDashboardContent() {
     const chip = ASSESSOR_CHIPS.find((c) => c.id === activeChipId);
     return chip?.statuses ?? [];
   }, [activeChipId]);
+
+  // Scope the loaded pipeline to the active tab:
+  // "My Assignments" (default) = needs-my-action queue; everything else = read-only tracking.
+  const scopedApplications = useMemo(() => {
+    if (activeInnerTab !== "my_assignments") return allApplications;
+    return allApplications.filter((app) => !!user?.id && app.assigned_assessor_id === user.id);
+  }, [allApplications, activeInnerTab, user?.id]);
 
   const filterApplications = useCallback(
     (applications: AssessmentApplication[]) => {
@@ -220,6 +235,7 @@ function AssessmentDashboardContent() {
       approved: { label: "Approved", className: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800" },
       approved_pending_permit: { label: "Pending Terms", className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800" },
       rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800" },
+      terminated: { label: "Terminated (exempted use)", className: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-700" },
       returned_to_assessment: { label: "🔄 Returned for Corrections", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
       returned_to_review: { label: "🔄 Returned to Reviewer", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
       returned_to_verification: { label: "🔄 Returned to Verifier", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
@@ -260,7 +276,7 @@ function AssessmentDashboardContent() {
   // ─── Application Table ──────────────────────────────────────────────────────
   const ApplicationTable = ({ applications, emptyMessage }: { applications: AssessmentApplication[]; emptyMessage: string }) => {
     const filteredApps = filterApplications(applications);
-    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
+    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => getEffectiveSubmissionDate(app));
 
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
@@ -443,7 +459,7 @@ function AssessmentDashboardContent() {
               chips={ASSESSOR_CHIPS}
               activeChipId={activeChipId}
               onChipChange={setActiveChipId}
-              applications={allApplications}
+              applications={scopedApplications}
             />
             <Card>
               <CardHeader className="pb-3">
@@ -454,15 +470,27 @@ function AssessmentDashboardContent() {
               </CardHeader>
               <CardContent>
                 <Tabs value={activeInnerTab} onValueChange={(v) => setActiveInnerTab(v as any)} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="all_applications">Applications</TabsTrigger>
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="my_assignments">My Assignments</TabsTrigger>
+                    <TabsTrigger value="all_applications">All Applications</TabsTrigger>
                     <TabsTrigger value="map" className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
                       Consolidated Map
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="all_applications" className="space-y-4 mt-4">
+                  {/* Shared panel for both scopes — "My Assignments" shows the
+                      needs-my-action queue, "All Applications" shows the whole
+                      pipeline read-only for status tracking and archiving. */}
+                  {(["my_assignments", "all_applications"] as const).map((scopeTab) => (
+                    <TabsContent key={scopeTab} value={scopeTab} className="space-y-4 mt-4">
+                      {scopeTab === "all_applications" && (
+                        <p className="text-sm text-muted-foreground">
+                          Read-only overview of every application in the pipeline. Applications outside your
+                          stage open in view-only mode; use it to track progress and access approved
+                          permits, contracts and documents.
+                        </p>
+                      )}
                   {/* Search and Filter Controls */}
                     <div className="flex flex-col md:flex-row gap-4 p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
                     <div className="flex-1 relative">
@@ -489,8 +517,9 @@ function AssessmentDashboardContent() {
                       </Select>
                     </div>
                   </div>
-                    <ApplicationTable applications={allApplications} emptyMessage={activeChipLabel} />
+                    <ApplicationTable applications={scopedApplications} emptyMessage={activeChipLabel} />
                 </TabsContent>
+                  ))}
 
                   <TabsContent value="map" className="space-y-4 mt-4">
                   <WaterConcessionMap />

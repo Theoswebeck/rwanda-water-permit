@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/postgres";
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from "@/lib/auth/session";
 import { isEffectiveStaffUser, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
+import { MISSING_FILE_CODE, MISSING_FILE_MESSAGE } from "@/lib/documents/file-availability";
 
 export const runtime = "nodejs";
 
@@ -28,16 +29,20 @@ function escapeHtml(value: string): string {
  * file. Render a readable page for real navigations and keep JSON for
  * programmatic callers.
  */
-function toError(message: string, status: number, req?: NextRequest) {
+function toError(message: string, status: number, req?: NextRequest, code?: string) {
   const wantsHtml = (req?.headers.get("accept") || "").includes("text/html");
   if (!wantsHtml) {
-    return NextResponse.json({ success: false, message }, { status });
+    return NextResponse.json(
+      code ? { success: false, code, message } : { success: false, message },
+      { status }
+    );
   }
 
+  const heading = code === MISSING_FILE_CODE ? "Document missing" : "Document unavailable";
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Document unavailable</title>
+<title>${escapeHtml(heading)}</title>
 <style>
   body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
          background:#f8fafc; color:#0f172a;
@@ -53,7 +58,7 @@ function toError(message: string, status: number, req?: NextRequest) {
   }
 </style></head>
 <body><div class="card">
-  <h1>Document unavailable</h1>
+  <h1>${escapeHtml(heading)}</h1>
   <p>${escapeHtml(message)}</p>
 </div></body></html>`;
 
@@ -268,11 +273,10 @@ export async function GET(req: NextRequest) {
         // of an honest "the file is missing" message.
         fileBytes = await tryProxyStaticFile(documentRow.file_path, req.url);
         if (!fileBytes) {
-          return toError(
-            "This document's file is no longer available on the server. Please ask the applicant to re-upload it.",
-            404,
-            req
-          );
+          // Row exists but the file is gone — a lost upload (2026-07-08
+          // incident), not a system failure. Distinguish it with a code so
+          // the UI can badge it instead of showing a generic error.
+          return toError(MISSING_FILE_MESSAGE, 404, req, MISSING_FILE_CODE);
         }
         mimeType = documentRow.mime_type;
       } else {

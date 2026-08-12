@@ -216,7 +216,8 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     'mining': 'mining',
     'recreation': 'recreation_activities',
     'port_construction': 'port_construction',
-    'gaz_extraction': 'gaz_extraction'
+    'gaz_extraction': 'gaz_extraction',
+    'other_concession': 'other_concession'
   };
   
   // Prefer the explicit persisted multi-select list if present.
@@ -636,6 +637,11 @@ export default function EditApplicationPage() {
             .limit(1)
             .maybeSingle();
 
+          // IMPORTANT: the statutory 6-month window runs from the ORIGINAL
+          // submitted_at, never from resubmitted_at. Restarting the clock on
+          // each resubmission would let repeated resubmissions keep an
+          // application alive indefinitely. Only DISPLAY and SORTING use the
+          // latest (re)submission date (getEffectiveSubmissionDate).
           const expiration = getApplicationExpiration({
             submitted_at: (app as any).submitted_at ?? null,
             hasPermit: Boolean(permitRow?.id),
@@ -763,11 +769,29 @@ export default function EditApplicationPage() {
       
       // Map form data to application schema with appropriate status
       const applicationData = mapFormDataToApplication(formData, resubmissionStatus as any, userProfile?.id);
-      
-      // If returning to assessor, clear the revision notes since applicant has made corrections
-      if (wasReturnedByAssessor) {
-        (applicationData as any).revision_notes = null;
+
+      // Record the LATEST (re)submission date. submitted_at keeps the ORIGINAL
+      // submission (it drives the statutory 6-month expiration window); staff
+      // tables and detail pages display getEffectiveSubmissionDate() =
+      // resubmitted_at first.
+      const isResubmission = application?.status === 'revision_required';
+      let resubmittedAtStamp: string | null = null;
+      if (isResubmission) {
+        resubmittedAtStamp = new Date().toISOString();
+        (applicationData as any).resubmitted_at = resubmittedAtStamp;
+        // Preserve the ORIGINAL submission date on resubmission (the shared
+        // mapper stamps submitted_at = now for status 'submitted'; the
+        // pending_assessment path already deletes it in mapFormDataToApplication).
+        if ('submitted_at' in applicationData) {
+          delete (applicationData as any).submitted_at;
+        }
       }
+
+      // NOTE: revision_notes is intentionally NOT cleared on resubmission.
+      // RWB staff must still see the last return-for-revision reason after the
+      // applicant resubmits (traceability). Applicant-facing "Revision Required"
+      // banners are all gated on status === 'revision_required', so keeping the
+      // notes does not resurface the banner once the status moves on.
       
       console.log('📋 Mapped application data:', applicationData);
       
@@ -783,6 +807,23 @@ export default function EditApplicationPage() {
       
       if (updatedApplication) {
         console.log('✅ Application updated and submitted successfully:', updatedApplication);
+
+        // Degradation check: the PATCH route silently drops columns the database
+        // does not have yet, so on an un-migrated database resubmitted_at never
+        // lands and staff tables keep showing the original submission date.
+        // We deliberately do NOT compensate by overwriting submitted_at: that
+        // column is the statutory 6-month expiration anchor and must stay on the
+        // ORIGINAL submission. The resubmission is therefore still recorded (via
+        // status + workflow history + audit log) and the only lost bit is the
+        // displayed date, with a loud warning naming the migration to apply.
+        if (isResubmission && !(updatedApplication as any).resubmitted_at) {
+          console.error(
+            '⚠️ Resubmission date was NOT persisted: applications.resubmitted_at is missing from this database. ' +
+              'Staff tables will keep showing the original submission date until database/add-application-resubmitted-at.sql is applied. ' +
+              'submitted_at was intentionally left unchanged (statutory 6-month expiration anchor).',
+            { application_id: application.id, attempted_resubmitted_at: resubmittedAtStamp }
+          );
+        }
 
         // Create audit log for resubmission
         try {
@@ -1110,6 +1151,7 @@ export default function EditApplicationPage() {
           {application?.documents && (
             <DocumentViewer
               documents={application.documents}
+              applicationId={application.id}
               title="Application Documents"
               description="Documents currently uploaded for this application"
               allowDownload={true}

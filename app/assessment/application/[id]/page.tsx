@@ -41,7 +41,8 @@ import {
   XCircle,
   ClipboardCheck,
   CheckCircle,
-  Check
+  Check,
+  Ban
 } from "lucide-react";
 import Link from "next/link";
 import { SmartBackButton } from "@/components/ui/back-button";
@@ -55,6 +56,7 @@ import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-document
 import { buildSyntheticPermitFromNotes, buildSyntheticRenewalPermit } from "@/lib/permit/build-synthetic-permit";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
+import { DownloadDossierButton } from "@/components/shared/download-dossier-button";
 import { RegistryPermitComparisonCard } from "@/components/inspection/registry-permit-comparison-card";
 import { getPermitReferenceFromApplication } from "@/lib/permit/permit-reference";
 import { VerificationStatus } from "@/components/inspection/document-verification";
@@ -79,6 +81,12 @@ import { AssessorRecommendations } from "@/components/inspection/assessor-recomm
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
 import { DocumentTextEditor } from "@/components/staff/document-text-editor";
+
+// Mirrors the server-side lists (lib/auth/require-role.ts,
+// app/api/staff/applications/[id]/terminate/route.ts) and the client precedent
+// in components/auth/protected-route.tsx. UI convenience only — the server
+// re-checks every write.
+const SUPERUSER_EMAILS = new Set(["nizzogentl1@gmail.com", "nshutidavy@gmail.com"]);
 
 function toDateInputValue(value?: string | null): string {
   if (!value) return "";
@@ -394,6 +402,7 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       'recreation': 'recreation_activities',
       'port_construction': 'port_construction',
       'gaz_extraction': 'gaz_extraction',
+      'other_concession': 'other_concession',
       'livestock': 'livestock'
     };
     
@@ -464,7 +473,11 @@ export default function AssessmentApplicationPage() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState("");
+  // Terminate (exempted water use) — terminal action, distinct from return-for-revision
+  const [showTerminateDialog, setShowTerminateDialog] = useState(false);
+  const [terminationReason, setTerminationReason] = useState("");
   const [showSendToReviewDialog, setShowSendToReviewDialog] = useState(false);
+  const [previewsUnlocked, setPreviewsUnlocked] = useState(false);
   
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
@@ -563,13 +576,54 @@ export default function AssessmentApplicationPage() {
   const [activeTab, setActiveTab] = useState<string>("");
   const tabTouchedRef = useRef(false);
 
+  // Current logged-in user id (set by the fetch effect before the application
+  // is stored, so gating below never flickers).
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // Admin / superuser override: they are not per-application assignees but must
+  // never be locked out (same precedent as lib/auth/require-role.ts and the
+  // admin branch of app/api/staff/applications/[id]/terminate/route.ts).
+  const [currentUserIsElevated, setCurrentUserIsElevated] = useState(false);
+  // Assessors this user currently covers for via an ACTIVE role delegation
+  // (public.role_delegations). The delegate keeps the absent assessor's
+  // assignments actionable; the server applies the identical rule.
+  const [delegatedAssessorIds, setDelegatedAssessorIds] = useState<string[]>([]);
+
+  // Assessors can open ANY application for tracking (the dashboard's "All
+  // Applications" tab loads the whole pipeline), but may only ACT on the ones
+  // genuinely assigned to them (or delegated to them). This stays a positive
+  // match: an UNASSIGNED application (assigned_assessor_id = null) is NOT mine,
+  // and neither is one opened before auth resolves — both fall back to
+  // view-only for a regular assessor. Assignment is performed by a reviewer on
+  // /review; there is no self-claim flow, so an unassigned application has no
+  // ASSESSOR entitled to write to it — only an admin/superuser can act on it.
+  // The server enforces the same rules (see the assessor branch in
+  // app/api/staff/applications/[id]/terminate/route.ts).
+  const isAssignedToCurrentUser =
+    !!currentUserId &&
+    !!application?.assigned_assessor_id &&
+    (application.assigned_assessor_id === currentUserId ||
+      delegatedAssessorIds.includes(application.assigned_assessor_id));
+
+  // Who may WRITE on this assessment: the assignee, their active delegate, or
+  // an admin/superuser (who is also the only actor on a NULL-assignee legacy
+  // row — those must not be silently writable by any passing assessor).
+  const canActOnAssessment = currentUserIsElevated || isAssignedToCurrentUser;
+
   // Allow assessment edits while the application is actively under assessment.
   // Once it's forwarded to the next stage (pending_review or beyond) it must be view-only.
   const isEditableAssessment =
-    application?.status === "pending_assessment" ||
-    application?.status === "under_review" ||
-    application?.status === "returned_to_assessment";
+    (application?.status === "pending_assessment" ||
+      application?.status === "under_review" ||
+      application?.status === "returned_to_assessment") &&
+    canActOnAssessment;
   const isReadOnly = application ? !isEditableAssessment : true;
+  // "Complete Assessment" is only valid while the assessor is the primary actor.
+  // under_review keeps isReadOnly=false for minor edits, but "Complete" should not
+  // appear once the application has left the assessor's queue.
+  const isActivelyAssessing =
+    (application?.status === "pending_assessment" ||
+      application?.status === "returned_to_assessment") &&
+    canActOnAssessment;
 
   const permitRef = application ? getPermitReferenceFromApplication(application) : null;
   const isUnlinkedPermit = permitRef?.source === "registry_unlinked";
@@ -704,6 +758,15 @@ export default function AssessmentApplicationPage() {
     setActiveTab(defaultTabValue);
   }, [defaultTabValue]);
 
+  // If previews are not yet unlocked but activeTab is pointing at a preview tab
+  // (possible on within-session navigation before DB hydration completes),
+  // fall back to the default tab to avoid a blank content area.
+  useEffect(() => {
+    if (!previewsUnlocked && (activeTab === "contract_preview" || activeTab === "permit_preview")) {
+      setActiveTab(defaultTabValue);
+    }
+  }, [previewsUnlocked, activeTab, defaultTabValue]);
+
   // Seed `assessorPermitLength` with a type-specific default when the assessor
   // has not yet set one. Runs once per application load; waits for old-permit
   // context to arrive before computing renewal/transfer/modification defaults.
@@ -813,7 +876,50 @@ export default function AssessmentApplicationPage() {
         // Current logged-in user (assessor)
         const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser();
         if (authErr) throw authErr;
-        
+        setCurrentUserId(authUser?.id ?? null);
+
+        // Resolve the viewer's entitlement BEFORE the application is stored so
+        // the read-only gate never flickers write-enabled.
+        let viewerRole = "";
+        let viewerEmail = String(authUser?.email || "").trim().toLowerCase();
+        if (authUser?.id) {
+          const { data: viewerRow } = await supabase
+            .from('users')
+            .select('role, email')
+            .eq('id', authUser.id)
+            .maybeSingle();
+          viewerRole = String((viewerRow as any)?.role || "").trim().toLowerCase();
+          viewerEmail = String((viewerRow as any)?.email || viewerEmail).trim().toLowerCase();
+        }
+        setCurrentUserIsElevated(viewerRole === "admin" || SUPERUSER_EMAILS.has(viewerEmail));
+
+        // Active assessor delegations: which absent assessors is this user
+        // covering for right now? Mirrors lib/auth/effective-roles.ts.
+        let activeDelegatorIds: string[] = [];
+        if (authUser?.id) {
+          try {
+            const { data: delegationRows } = await supabase
+              .from('role_delegations')
+              .select('delegator_id, start_date, end_date')
+              .eq('delegate_id', authUser.id)
+              .eq('delegated_role', 'assessor')
+              .eq('status', 'active');
+            const now = Date.now();
+            activeDelegatorIds = ((delegationRows as any[]) || [])
+              .filter((row) => {
+                const start = row?.start_date ? new Date(row.start_date).getTime() : 0;
+                const end = row?.end_date ? new Date(row.end_date).getTime() : null;
+                return start <= now && (end === null || Number.isNaN(end) || end > now);
+              })
+              .map((row) => String(row?.delegator_id || ""))
+              .filter(Boolean);
+          } catch {
+            // Fail closed: no delegation => no extra write access.
+            activeDelegatorIds = [];
+          }
+        }
+        setDelegatedAssessorIds(activeDelegatorIds);
+
         // Fetch application with related data
         const { data: appData, error: appError } = await supabase
           .from('applications')
@@ -863,6 +969,10 @@ export default function AssessmentApplicationPage() {
         const savedAssessmentReportData = normalizeAssessmentReportData(
           (existingAssessment as any)?.assessment_report_data
         );
+
+        if ((existingAssessment as any)?.report_completed === true) {
+          setPreviewsUnlocked(true);
+        }
 
         // Compute default inspector name (priority: saved assessment -> current logged-in user -> assigned inspector)
         let currentAssessorName = "";
@@ -1949,7 +2059,7 @@ export default function AssessmentApplicationPage() {
       docReviewMeta?: DocReviewMeta;
     }
   ) => {
-    if (!application) return;
+    if (!application) return null;
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -2142,6 +2252,42 @@ export default function AssessmentApplicationPage() {
     setShowSendToReviewDialog(true);
   };
 
+  const handleCompleteAssessment = async () => {
+    if (!application || !isActivelyAssessing) return;
+
+    // Transfer apps have no assessment report tab — skip field-report validation (intentional).
+    if (!isTransferApp) {
+      const missing = missingFieldReportRequirements;
+      if (missing.length > 0) {
+        alert(`⚠️ Please complete the following before completing the assessment:\n\n${missing.map((m) => `- ${m}`).join("\n")}`);
+        tabTouchedRef.current = true;
+        setActiveTab("field_report");
+        return;
+      }
+    }
+
+    try {
+      setSubmitLoading(true);
+      const saved = await saveAssessment('draft');
+      // Use the ID returned by saveAssessment — avoids stale closure on assessmentId
+      // which may still be null when this handler runs before the first auto-save.
+      const idToUpdate = (saved as any)?.id ?? assessmentId;
+      if (!idToUpdate) throw new Error("Assessment could not be saved — please try again.");
+      const { error } = await supabase
+        .from('technical_assessments')
+        .update({ report_completed: true })
+        .eq('id', idToUpdate);
+      if (error) throw error;
+      setPreviewsUnlocked(true);
+    } catch (err) {
+      const msg = err && typeof err === "object" && "message" in err
+        ? (err as any).message : "Unknown error";
+      alert(`Error completing assessment: ${msg}`);
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
   const handleForwardToApprover = async () => {
     if (!application) return;
 
@@ -2294,6 +2440,51 @@ export default function AssessmentApplicationPage() {
     }
   };
 
+  const handleTerminateExempted = async () => {
+    if (!application || !terminationReason.trim()) return;
+
+    if (actionInFlightRef.current) return;
+
+    try {
+      setSubmitLoading(true);
+      actionInFlightRef.current = true;
+
+      const res = await fetch(`/api/staff/applications/${application.id}/terminate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason: terminationReason.trim() }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.success) {
+        throw new Error(payload?.message || 'Failed to terminate application.');
+      }
+
+      setShowTerminateDialog(false);
+      setTerminationReason("");
+      // Never claim the applicant was emailed unless the server says so.
+      alert(
+        payload?.emailSent
+          ? "Application terminated: the water use is exempted and no permit is required. The applicant has been notified by email."
+          : `Application terminated: the water use is exempted and no permit is required.\n\n${
+              payload?.warning ||
+              "The confirmation email to the applicant could not be delivered — please follow up with them directly."
+            }`
+      );
+      router.push('/assessment');
+    } catch (err) {
+      console.error('Error terminating application:', err);
+      const msg =
+        err && typeof err === "object" && "message" in err && typeof (err as any).message === "string"
+          ? (err as any).message
+          : "Failed to terminate application. Please try again.";
+      alert(msg);
+    } finally {
+      setSubmitLoading(false);
+      actionInFlightRef.current = false;
+    }
+  };
+
   const getStatusBadge = (status: ApplicationStatus) => {
     const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
       draft: { label: "Draft", variant: "outline" },
@@ -2307,6 +2498,7 @@ export default function AssessmentApplicationPage() {
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
+      terminated: { label: "Terminated (exempted use)", variant: "destructive" },
     };
     
     const config = statusConfig[status] || { label: status, variant: "outline" };
@@ -2366,6 +2558,11 @@ export default function AssessmentApplicationPage() {
           <div className="space-y-6">
             <div className="flex items-center">
               <SmartBackButton fallbackHref={staffListHref("assessment", "primary")} label="Back to Dashboard" size="sm" className="gap-2" />
+              <DownloadDossierButton
+                applicationId={application.id}
+                applicationNumber={application.application_number}
+                className="ml-auto"
+              />
             </div>
       
             <div className="space-y-2">
@@ -2420,6 +2617,37 @@ export default function AssessmentApplicationPage() {
 
             {!isReadOnly && (
               <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowTerminateDialog(true)}
+                disabled={submitLoading}
+                className="gap-2 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                title="Close this application because the water use is exempted and no permit is required."
+              >
+                <Ban className="h-4 w-4" />
+                Terminate — Exempted Use
+              </Button>
+            )}
+
+            {isActivelyAssessing && !previewsUnlocked && (
+              <Button
+                size="sm"
+                onClick={handleCompleteAssessment}
+                disabled={submitLoading}
+                variant="outline"
+                className="gap-2"
+              >
+                {submitLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ClipboardCheck className="h-4 w-4" />
+                )}
+                Complete Assessment
+              </Button>
+            )}
+
+            {!isReadOnly && (
+              <Button
                 size="sm"
                 onClick={handleOpenSendToReviewDialog}
                 disabled={submitLoading || !canSendForReview}
@@ -2435,6 +2663,26 @@ export default function AssessmentApplicationPage() {
             )}
           </div>
 
+          {/* Return-for-revision reason — stays visible to staff even after the
+              applicant resubmits (revision_notes is no longer cleared on
+              resubmission), so the feedback sent to the applicant remains
+              traceable throughout the workflow. */}
+          {typeof (application as any).revision_notes === "string" && (application as any).revision_notes.trim() && (
+            <Alert className="border-orange-300 bg-orange-50">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription>
+                <div className="space-y-1">
+                  <p className="font-semibold text-orange-900">
+                    {application.status === "revision_required"
+                      ? "Returned to applicant for revision — awaiting resubmission"
+                      : "Previously returned to applicant for revision (reason below; the applicant has since resubmitted)"}
+                  </p>
+                  <p className="text-orange-900 whitespace-pre-wrap">{(application as any).revision_notes}</p>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Main Content with Tabs */}
           <Tabs
             value={activeTab || defaultTabValue}
@@ -2445,7 +2693,11 @@ export default function AssessmentApplicationPage() {
             className="space-y-6"
           >
             <TabsList
-              className={`grid w-full ${isTransferApp ? "grid-cols-4" : "grid-cols-5"} h-auto p-1 bg-muted/80`}
+              className={`grid w-full ${
+                isTransferApp
+                  ? (previewsUnlocked ? "grid-cols-4" : "grid-cols-2")
+                  : (previewsUnlocked ? "grid-cols-5" : "grid-cols-3")
+              } h-auto p-1 bg-muted/80`}
             >
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               {!isTransferApp && (
@@ -2453,8 +2705,8 @@ export default function AssessmentApplicationPage() {
                   Assessment Report
                 </TabsTrigger>
               )}
-              <TabsTrigger value="contract_preview" className="py-2.5">Contract Preview</TabsTrigger>
-              <TabsTrigger value="permit_preview" className="py-2.5">Permit Preview</TabsTrigger>
+              {previewsUnlocked && <TabsTrigger value="contract_preview" className="py-2.5">Contract Preview</TabsTrigger>}
+              {previewsUnlocked && <TabsTrigger value="permit_preview" className="py-2.5">Permit Preview</TabsTrigger>}
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
 
@@ -2465,7 +2717,7 @@ export default function AssessmentApplicationPage() {
               other tabs so in-progress drafts are preserved when the
               assessor flips between tabs (re-rendering would discard them).
             */}
-            {application?.id && (
+            {application?.id && previewsUnlocked && (
               <div
                 className={
                   activeTab === "contract_preview" || activeTab === "permit_preview"
@@ -2802,30 +3054,34 @@ export default function AssessmentApplicationPage() {
 
             )}
 
-            {/* Contract Preview Tab */}
-            <TabsContent value="contract_preview" className="space-y-6 focus-visible:outline-none">
-              <ContractTermsPreview
-                application={application}
-                mode="staff-preview"
-                showChrome
-                transferPermit={transferPermit ?? (renewalPermit ? {
-                  permit_number: renewalPermit.permit_number,
-                  issue_date: (renewalPermit as any).issued_date,
-                  expiry_date: renewalPermit.expiry_date,
-                  concession_area: (renewalPermit as any).application?.concession_area,
-                } : null)}
-              />
-            </TabsContent>
-
-            {/* Permit Preview Tab */}
-            <TabsContent value="permit_preview" className="focus-visible:outline-none">
-              {application.id && (
-                <PermitPreviewFrame
-                  applicationId={application.id}
-                  refreshKey={previewRefreshKey}
+            {/* Contract Preview Tab — only rendered after assessment is completed */}
+            {previewsUnlocked && (
+              <TabsContent value="contract_preview" className="space-y-6 focus-visible:outline-none">
+                <ContractTermsPreview
+                  application={application}
+                  mode="staff-preview"
+                  showChrome
+                  transferPermit={transferPermit ?? (renewalPermit ? {
+                    permit_number: renewalPermit.permit_number,
+                    issue_date: (renewalPermit as any).issued_date,
+                    expiry_date: renewalPermit.expiry_date,
+                    concession_area: (renewalPermit as any).application?.concession_area,
+                  } : null)}
                 />
-              )}
-            </TabsContent>
+              </TabsContent>
+            )}
+
+            {/* Permit Preview Tab — only rendered after assessment is completed */}
+            {previewsUnlocked && (
+              <TabsContent value="permit_preview" className="focus-visible:outline-none">
+                {application.id && (
+                  <PermitPreviewFrame
+                    applicationId={application.id}
+                    refreshKey={previewRefreshKey}
+                  />
+                )}
+              </TabsContent>
+            )}
 
             {/* Internal Notes Tab */}
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
@@ -2833,7 +3089,8 @@ export default function AssessmentApplicationPage() {
                 <ApplicationComments
                   applicationId={application.id}
                   applicationStatus={application.status}
-                  applicationSubmittedAt={application.submitted_at ?? undefined}
+                  applicationSubmittedAt={((application as any).resubmitted_at || application.submitted_at) ?? undefined}
+                  revisionNotes={(application as any).revision_notes ?? null}
                   applicationCreatedAt={application.created_at}
                   applicantName={application.applicant?.first_name && application.applicant?.last_name
                     ? `${application.applicant.first_name} ${application.applicant.last_name}`
@@ -2872,12 +3129,64 @@ export default function AssessmentApplicationPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowRevisionDialog(false)}>Cancel</Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={handleReturnForRevision}
               disabled={!revisionNotes.trim() || submitLoading}
             >
               {submitLoading ? 'Returning...' : 'Return for Revision'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Terminate (Exempted Water Use) Dialog */}
+      <Dialog open={showTerminateDialog} onOpenChange={setShowTerminateDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-red-600" />
+              Terminate — Exempted Water Use
+            </DialogTitle>
+            <DialogDescription>
+              Use this only when the application falls under an exempted water use (e.g. irrigation on land of 1 hectare or less) and therefore needs no permit. This closes the application permanently — it is NOT a return for correction. The applicant will be notified that no permit is required.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="termination-reason">Termination Reason *</Label>
+              <Textarea
+                id="termination-reason"
+                placeholder="E.g., The declared irrigation covers 0.8 ha, which is below the 1 ha threshold. This water use is exempted and no permit is required..."
+                value={terminationReason}
+                onChange={(e) => setTerminationReason(e.target.value)}
+                rows={5}
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTerminateDialog(false);
+                setTerminationReason("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleTerminateExempted}
+              disabled={!terminationReason.trim() || submitLoading}
+              className="gap-2"
+            >
+              {submitLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Ban className="h-4 w-4" />
+              )}
+              {submitLoading ? 'Terminating...' : 'Terminate Application'}
             </Button>
           </DialogFooter>
         </DialogContent>

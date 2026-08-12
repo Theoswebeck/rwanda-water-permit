@@ -21,7 +21,7 @@ import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
-import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
+import { sortBySubmissionDateDescending, getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
@@ -115,7 +115,7 @@ function VerificationDashboardContent() {
         // Batch-fetch workflow dates
         const submittedAtMap: Record<string, string | null> = {};
         for (const app of processed) {
-          submittedAtMap[app.id] = app.submitted_at || app.created_at;
+          submittedAtMap[app.id] = getEffectiveSubmissionDate(app) || null;
         }
         const dates = await batchFetchWorkflowDates(
           processed.map((a) => a.id),
@@ -208,7 +208,7 @@ function VerificationDashboardContent() {
 
   const ApplicationTable = ({ apps, emptyMessage }: { apps: VerificationApplication[]; emptyMessage: string }) => {
     const filteredApps = filterApplications(apps);
-    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
+    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => getEffectiveSubmissionDate(app));
 
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">

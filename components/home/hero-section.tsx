@@ -185,6 +185,15 @@ export function HeroSection() {
                     </Button>
                   </motion.div>
                 </Link>
+                <motion.a
+                  href="tel:9977"
+                  className="mt-4 block text-2xl md:text-3xl font-bold text-white tracking-wide drop-shadow-md hover:text-white/90 transition-colors"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 1.1 }}
+                >
+                  {tx("Toll Free Line: 9977")}
+                </motion.a>
               </motion.div>
 
               <motion.div

@@ -70,6 +70,7 @@ export async function findPublicPermitByNumber(
       p.is_transfer,
       p.modification_count,
       row_to_json(a) as application,
+      st_asgeojson(a.coordinates)::json as application_coordinates_geojson,
       row_to_json(u) as applicant,
       coalesce(
         case when a.coordinates is not null then st_y(st_centroid(a.coordinates)) end,
@@ -125,6 +126,14 @@ export async function findPublicPermitByNumber(
     const application = permitRow.application
       ? {
           ...permitRow.application,
+          // row_to_json(a) serializes the PostGIS geometry as hex WKB, which
+          // downstream resolvers (resolveLatLng) cannot read — replace it with
+          // the GeoJSON form so permit, contract, and assessment report all
+          // resolve the same water-source coordinates.
+          coordinates:
+            (permitRow as JsonRecord).application_coordinates_geojson ??
+            (permitRow.application as JsonRecord).coordinates ??
+            null,
           applicant: permitRow.applicant || null,
         }
       : null;

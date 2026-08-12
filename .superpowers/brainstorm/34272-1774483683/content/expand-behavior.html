@@ -1,0 +1,203 @@
+<h2>How should the expand/collapse behave?</h2>
+<p class="subtitle">Two interaction patterns — each has a different feel for the user.</p>
+
+<div class="cards">
+
+  <!-- Option A: Accordion -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:#374151;">Permits by province</div>
+
+        <!-- Open province -->
+        <div style="border:1px solid #86efac;border-radius:8px;margin-bottom:6px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f0fdf4;cursor:pointer;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block;"></span>
+              <span style="font-weight:600;color:#15803d;">Eastern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:60px;height:5px;background:#d1fae5;border-radius:3px;"><div style="width:88%;height:100%;background:#16a34a;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;">342 · 38%</span>
+              </div>
+              <span style="font-size:14px;color:#16a34a;font-weight:bold;">−</span>
+            </div>
+          </div>
+          <div style="padding:8px 10px 10px 24px;background:white;border-top:1px solid #dcfce7;display:flex;flex-direction:column;gap:5px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span style="color:#374151;">Nyagatare</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:72px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:75%;height:100%;background:#4ade80;border-radius:2px;"></div></div>
+                <span style="color:#64748b;width:24px;text-align:right;">98</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span style="color:#374151;">Bugesera</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:72px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:52%;height:100%;background:#4ade80;border-radius:2px;"></div></div>
+                <span style="color:#64748b;width:24px;text-align:right;">67</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span style="color:#374151;">Kayonza</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:72px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:40%;height:100%;background:#4ade80;border-radius:2px;"></div></div>
+                <span style="color:#64748b;width:24px;text-align:right;">51</span>
+              </div>
+            </div>
+            <div style="font-size:10px;color:#059669;margin-top:2px;cursor:pointer;">+ 5 more districts</div>
+          </div>
+        </div>
+
+        <!-- Collapsed 1 (clicking this would close Eastern) -->
+        <div style="border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:pointer;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;"></span>
+              <span style="font-weight:500;color:#374151;">Northern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:60px;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:74%;height:100%;background:#22c55e;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;">287 · 32%</span>
+              </div>
+              <span style="font-size:13px;color:#94a3b8;">+</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsed 2 -->
+        <div style="border:1px solid #e2e8f0;border-radius:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:pointer;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block;"></span>
+              <span style="font-weight:500;color:#374151;">Southern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:60px;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:36%;height:100%;background:#4ade80;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;">140 · 16%</span>
+              </div>
+              <span style="font-size:13px;color:#94a3b8;">+</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="text-align:center;margin-top:6px;font-size:10px;color:#94a3b8;font-style:italic;">Clicking Northern would close Eastern first</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Accordion (one open at a time)</h3>
+      <p>Only one province is expanded at a time. Opening a new one collapses the current. The page stays compact — users compare districts one province at a time.</p>
+      <div class="pros-cons" style="margin-top:8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Page height stays controlled</li><li>Focused — one province in focus</li><li>Familiar pattern (FAQ accordions)</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Can't compare two provinces' districts side-by-side</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B: Multi-expand -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:#374151;">Permits by province</div>
+
+        <!-- Open province 1 -->
+        <div style="border:1px solid #86efac;border-radius:8px;margin-bottom:6px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f0fdf4;cursor:pointer;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block;"></span>
+              <span style="font-weight:600;color:#15803d;">Eastern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:60px;height:5px;background:#d1fae5;border-radius:3px;"><div style="width:88%;height:100%;background:#16a34a;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;">342 · 38%</span>
+              </div>
+              <span style="font-size:14px;color:#16a34a;font-weight:bold;">−</span>
+            </div>
+          </div>
+          <div style="padding:8px 10px 8px 24px;background:white;border-top:1px solid #dcfce7;display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span style="color:#374151;">Nyagatare</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:72px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:75%;height:100%;background:#4ade80;border-radius:2px;"></div></div>
+                <span style="color:#64748b;width:24px;text-align:right;">98</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span style="color:#374151;">Bugesera</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:72px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:52%;height:100%;background:#4ade80;border-radius:2px;"></div></div>
+                <span style="color:#64748b;width:24px;text-align:right;">67</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Open province 2 - simultaneously open -->
+        <div style="border:1px solid #86efac;border-radius:8px;margin-bottom:6px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f0fdf4;cursor:pointer;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;"></span>
+              <span style="font-weight:600;color:#15803d;">Northern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:60px;height:5px;background:#d1fae5;border-radius:3px;"><div style="width:74%;height:100%;background:#22c55e;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;">287 · 32%</span>
+              </div>
+              <span style="font-size:14px;color:#16a34a;font-weight:bold;">−</span>
+            </div>
+          </div>
+          <div style="padding:8px 10px 8px 24px;background:white;border-top:1px solid #dcfce7;display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span style="color:#374151;">Musanze</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:72px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:70%;height:100%;background:#4ade80;border-radius:2px;"></div></div>
+                <span style="color:#64748b;width:24px;text-align:right;">54</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span style="color:#374151;">Rulindo</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:72px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:45%;height:100%;background:#4ade80;border-radius:2px;"></div></div>
+                <span style="color:#64748b;width:24px;text-align:right;">35</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsed -->
+        <div style="border:1px solid #e2e8f0;border-radius:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:pointer;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block;"></span>
+              <span style="font-weight:500;color:#374151;">Southern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:60px;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:36%;height:100%;background:#4ade80;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;">140 · 16%</span>
+              </div>
+              <span style="font-size:13px;color:#94a3b8;">+</span>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:6px;font-size:10px;color:#94a3b8;font-style:italic;">Both Eastern and Northern are open simultaneously</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Multi-expand (any number open at once)</h3>
+      <p>Each province toggles independently. Open as many as you want. Good for users who want to compare districts across two provinces at the same time.</p>
+      <div class="pros-cons" style="margin-top:8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>More flexible — compare across provinces</li><li>User stays in control</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Page can get very long if multiple expanded</li><li>Slightly more complex to scan</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:12px;">My recommendation: <strong>A (accordion)</strong> — keeps the page compact and most users only need one province at a time. Click to select, then confirm in the terminal.</p>

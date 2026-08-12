@@ -37,6 +37,7 @@ import { getApplicationWorkflowKind, isAssessmentComplete } from "@/lib/applicat
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
+import { DownloadDossierButton } from "@/components/shared/download-dossier-button";
 import { RegistryPermitComparisonCard } from "@/components/inspection/registry-permit-comparison-card";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
 import type { RecommendationData } from "@/components/inspection/verification-summary";
@@ -193,7 +194,7 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     const purposeToActivity: Record<string, string> = {
       'domestic': 'water_supply', 'irrigation': 'irrigation', 'fish_farming_lakes': 'fish_farming_lakes',
       'fish_farming_ponds': 'fish_farming_ponds', 'industrial': 'industry', 'electricity_generation': 'electricity_generation',
-      'mining': 'mining', 'recreation': 'recreation_activities', 'port_construction': 'port_construction', 'gaz_extraction': 'gaz_extraction', 'livestock': 'livestock'
+      'mining': 'mining', 'recreation': 'recreation_activities', 'port_construction': 'port_construction', 'gaz_extraction': 'gaz_extraction', 'other_concession': 'other_concession', 'livestock': 'livestock'
     };
     let mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
     if (Array.isArray((application as any).intended_activities) && (application as any).intended_activities.length > 0) {
@@ -911,6 +912,11 @@ export default function ApproverApplicationPage() {
           <div className="space-y-6">
             <div className="flex items-center">
         <SmartBackButton fallbackHref={staffListHref("approver", "primary")} label="Back to Dashboard" size="sm" className="gap-2" />
+        <DownloadDossierButton
+          applicationId={application.id}
+          applicationNumber={application.application_number}
+          className="ml-auto"
+        />
       </div>
       
             <div className="space-y-2">
@@ -1225,7 +1231,8 @@ export default function ApproverApplicationPage() {
             <ApplicationComments
               applicationId={application.id}
               applicationStatus={application.status}
-              applicationSubmittedAt={application.submitted_at ?? undefined}
+              applicationSubmittedAt={((application as any).resubmitted_at || application.submitted_at) ?? undefined}
+              revisionNotes={(application as any).revision_notes ?? null}
               applicationCreatedAt={application.created_at}
               applicantName={application.applicant?.first_name && application.applicant?.last_name 
                 ? `${application.applicant.first_name} ${application.applicant.last_name}`

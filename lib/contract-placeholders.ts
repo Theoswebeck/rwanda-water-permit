@@ -63,6 +63,7 @@ export type ApplicationForContract = {
   water_taking_method?: string | null;
 
   proposed_duration_years?: number | null;
+  assessor_recommended_volume_m3?: number | null;
   concession_area?: number | null;
   flow_rate_m3_per_second?: number | null;
 
@@ -287,6 +288,7 @@ function resolveActivityLabel(application: ApplicationForContract): string {
     aquaculture: "Aquaculture",
     municipal_supply: "Municipal Water Supply",
     other: "Other",
+    other_concession: "Other Water Concession Activities",
   };
   return labels[primary] || humanizeActivityCode(primary);
 }
@@ -340,6 +342,7 @@ function resolveActivityLabelRw(application: ApplicationForContract): string {
     aquaculture: "by'ubworozi bw'amafi",
     municipal_supply: "byo gutanga amazi mu mijyi",
     other: "by'ibindi bisobanuwe",
+    other_concession: "by'ibindi bisobanuwe",
   };
   return labels[primary] || humanizeActivityCodeRw(primary);
 }
@@ -493,28 +496,19 @@ function resolveVolumeLabel(application: ApplicationForContract): string {
     if (pr !== undefined) return `${formatNumber(pr)} m³/day`;
   }
 
-  // The contract template says "with a flow rate of {{VOLUME_LABEL}}",
-  // so when a real flow rate exists it should take priority.
-  // Check the dedicated DB column first, then form data.
-  const dbFlowRate = application.flow_rate_m3_per_second;
-  if (typeof dbFlowRate === "number" && Number.isFinite(dbFlowRate) && dbFlowRate > 0) {
-    return `${formatNumber(dbFlowRate)} m³/s`;
-  }
-  const formFlowRate = notes?.waterAbstractionDetails?.[0]?.flowRate;
-  if (typeof formFlowRate === "number" && Number.isFinite(formFlowRate) && formFlowRate > 0) {
-    return `${formatNumber(formFlowRate)} m³/s`;
-  }
-  // Transfer form may store flow rate separately
-  const tfFlowRate = notes?.transferFormData?.flowRate;
-  if (typeof tfFlowRate === "number" && Number.isFinite(tfFlowRate) && tfFlowRate > 0) {
-    return `${formatNumber(tfFlowRate)} m³/s`;
-  }
-
-  // Priority 1: Assessor recommended volume (from assessor adjustments)
+  // Priority 1: Assessor recommended volume from the field assessment report.
+  // The assessor's recommended allocation is AUTHORITATIVE for the allocated
+  // discharge — the contract must print the same value the permit prints
+  // (lib/permit/permit-text-data.ts resolveVolumes). Application-supplied
+  // values (including raw flow-rate fields) are fallbacks only.
   const assessorAdjustments = notes?._assessorAdjustments;
   if (typeof assessorAdjustments?.recommendedVolumeM3 === "number" &&
       Number.isFinite(assessorAdjustments.recommendedVolumeM3)) {
     return `${formatNumber(assessorAdjustments.recommendedVolumeM3)} m³/year`;
+  }
+  if (typeof application.assessor_recommended_volume_m3 === "number" &&
+      Number.isFinite(application.assessor_recommended_volume_m3)) {
+    return `${formatNumber(application.assessor_recommended_volume_m3)} m³/year`;
   }
 
   // Priority 2: Fall back to database fields (original applicant values)
@@ -541,6 +535,24 @@ function resolveVolumeLabel(application: ApplicationForContract): string {
   const tfUnit = String(tfData?.allowanceUnit || '').trim() || 'm³';
   if (Number.isFinite(tfVal) && tfVal > 0) {
     return `${formatNumber(tfVal)} ${tfUnit}`;
+  }
+
+  // Priority 5 (legacy last resort): raw flow-rate fields from the
+  // application. These used to take priority over the assessor's recommended
+  // allocation, which made the contract disagree with the permit — they are
+  // kept only so very old applications with nothing but a flow rate don't
+  // regress to "N/A".
+  const dbFlowRate = application.flow_rate_m3_per_second;
+  if (typeof dbFlowRate === "number" && Number.isFinite(dbFlowRate) && dbFlowRate > 0) {
+    return `${formatNumber(dbFlowRate)} m³/s`;
+  }
+  const formFlowRate = notes?.waterAbstractionDetails?.[0]?.flowRate;
+  if (typeof formFlowRate === "number" && Number.isFinite(formFlowRate) && formFlowRate > 0) {
+    return `${formatNumber(formFlowRate)} m³/s`;
+  }
+  const tfFlowRate = notes?.transferFormData?.flowRate;
+  if (typeof tfFlowRate === "number" && Number.isFinite(tfFlowRate) && tfFlowRate > 0) {
+    return `${formatNumber(tfFlowRate)} m³/s`;
   }
 
   return "N/A";

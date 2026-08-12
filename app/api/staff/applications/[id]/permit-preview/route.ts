@@ -150,6 +150,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         a.max_yearly_volume_m3,
         a.internal_notes::text AS internal_notes,
         a.water_taking_method,
+        ST_AsGeoJSON(a.coordinates)::json AS coordinates,
         a.is_modification,
         a.approved_at,
         a.is_bulk,
@@ -217,6 +218,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         row.internal_notes != null ? (row.internal_notes as string) : undefined,
       water_taking_method:
         row.water_taking_method != null ? String(row.water_taking_method) : undefined,
+      // GeoJSON geometry — feeds resolveLatLng's Point fallback so the preview
+      // shows the same coordinates as the contract and assessment report.
+      coordinates: row.coordinates ?? undefined,
       applicant: {
         first_name: row.first_name != null ? String(row.first_name) : undefined,
         last_name: row.last_name != null ? String(row.last_name) : undefined,

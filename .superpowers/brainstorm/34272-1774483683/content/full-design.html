@@ -1,0 +1,236 @@
+<h2>Full design: district breakdown</h2>
+<p class="subtitle">Three layers — API, types, and UI. Review each section and confirm before we write the spec.</p>
+
+<div class="section">
+  <h3>1 · API route change</h3>
+  <p>Add one new aggregation to <code>app/api/public/water-use-dashboard/route.ts</code>. The existing <code>district</code> field is already on every system permit record (from <code>a.district</code> in the SQL join). We just need to count them, grouped by province.</p>
+
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;font-family:monospace;font-size:12px;margin-top:10px;line-height:1.6;">
+    <div style="color:#64748b;margin-bottom:4px;">// Added to snapshot response</div>
+    <div><span style="color:#7c3aed;">permitsByDistrict</span>: <span style="color:#0284c7;">Array</span>&lt;&#123;</div>
+    <div style="padding-left:16px;"><span style="color:#7c3aed;">province</span>: <span style="color:#0284c7;">string</span>;</div>
+    <div style="padding-left:16px;"><span style="color:#7c3aed;">districts</span>: <span style="color:#0284c7;">Array</span>&lt;&#123;</div>
+    <div style="padding-left:32px;"><span style="color:#7c3aed;">key</span>: <span style="color:#0284c7;">string</span>;</div>
+    <div style="padding-left:32px;"><span style="color:#7c3aed;">label</span>: <span style="color:#0284c7;">string</span>;</div>
+    <div style="padding-left:32px;"><span style="color:#7c3aed;">count</span>: <span style="color:#0284c7;">number</span>;</div>
+    <div style="padding-left:32px;"><span style="color:#7c3aed;">percentage</span>: <span style="color:#0284c7;">number</span>; <span style="color:#64748b;">// % of province total, not national</span></div>
+    <div style="padding-left:16px;">&#125;&gt;;</div>
+    <div>&#125;&gt;</div>
+  </div>
+
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;margin-top:10px;font-size:13px;">
+    <strong style="color:#15803d;">Key decision:</strong> <span style="color:#374151;">District percentages are relative to their province total — e.g. "Nyagatare = 29% of Eastern Province". This is more meaningful than the national share.</span>
+  </div>
+
+  <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px;margin-top:8px;font-size:13px;">
+    <strong style="color:#c2410c;">Note:</strong> <span style="color:#374151;">Registry permits have no district field — only system permits. The same skip-if-empty logic used for province applies here. Districts with empty values are excluded.</span>
+  </div>
+</div>
+
+<div class="section">
+  <h3>2 · UI mockup — the upgraded province card</h3>
+  <p>The existing card is replaced in-place. All collapsed on page load. Clicking a province row expands it (accordion — clicking another auto-collapses the current one).</p>
+
+  <div class="mockup" style="max-width:520px;">
+    <div class="mockup-header">Permits by province — all collapsed (default state)</div>
+    <div class="mockup-body" style="font-size:12px;">
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <!-- All collapsed -->
+        <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;cursor:pointer;transition:background 150ms;" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background='white'">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0;"></span>
+              <span style="font-weight:500;">Eastern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:80px;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:88%;height:100%;background:#16a34a;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;width:60px;text-align:right;">342 · 38%</span>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;cursor:pointer;" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background='white'">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;flex-shrink:0;"></span>
+              <span style="font-weight:500;">Northern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:80px;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:74%;height:100%;background:#22c55e;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;width:60px;text-align:right;">287 · 32%</span>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;cursor:pointer;" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background='white'">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block;flex-shrink:0;"></span>
+              <span style="font-weight:500;">Kigali City</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:80px;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:40%;height:100%;background:#4ade80;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;width:60px;text-align:right;">156 · 17%</span>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup" style="max-width:520px;margin-top:12px;">
+    <div class="mockup-header">After clicking "Eastern Province" — districts revealed</div>
+    <div class="mockup-body" style="font-size:12px;">
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <!-- Eastern — EXPANDED -->
+        <div style="border:1px solid #86efac;border-radius:8px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#f0fdf4;cursor:pointer;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0;"></span>
+              <span style="font-weight:600;color:#15803d;">Eastern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:80px;height:5px;background:#d1fae5;border-radius:3px;"><div style="width:88%;height:100%;background:#16a34a;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;width:60px;text-align:right;">342 · 38%</span>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+          </div>
+          <!-- District rows -->
+          <div style="padding:10px 12px 10px 28px;background:white;border-top:1px solid #dcfce7;display:flex;flex-direction:column;gap:6px;">
+            <div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;">Districts — % of province total</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="color:#374151;min-width:80px;">Nyagatare</span>
+              <div style="flex:1;display:flex;align-items:center;gap:6px;">
+                <div style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:72%;height:100%;background:#86efac;border-radius:2px;"></div></div>
+                <span style="color:#64748b;font-size:11px;width:44px;text-align:right;">98 · 29%</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="color:#374151;min-width:80px;">Bugesera</span>
+              <div style="flex:1;display:flex;align-items:center;gap:6px;">
+                <div style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:49%;height:100%;background:#86efac;border-radius:2px;"></div></div>
+                <span style="color:#64748b;font-size:11px;width:44px;text-align:right;">67 · 20%</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="color:#374151;min-width:80px;">Kayonza</span>
+              <div style="flex:1;display:flex;align-items:center;gap:6px;">
+                <div style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:37%;height:100%;background:#86efac;border-radius:2px;"></div></div>
+                <span style="color:#64748b;font-size:11px;width:44px;text-align:right;">51 · 15%</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="color:#374151;min-width:80px;">Rwamagana</span>
+              <div style="flex:1;display:flex;align-items:center;gap:6px;">
+                <div style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:28%;height:100%;background:#86efac;border-radius:2px;"></div></div>
+                <span style="color:#64748b;font-size:11px;width:44px;text-align:right;">39 · 11%</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="color:#94a3b8;min-width:80px;">Ngoma</span>
+              <div style="flex:1;display:flex;align-items:center;gap:6px;">
+                <div style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:22%;height:100%;background:#d1fae5;border-radius:2px;"></div></div>
+                <span style="color:#94a3b8;font-size:11px;width:44px;text-align:right;">30 · 9%</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="color:#94a3b8;min-width:80px;">Kirehe</span>
+              <div style="flex:1;display:flex;align-items:center;gap:6px;">
+                <div style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:19%;height:100%;background:#d1fae5;border-radius:2px;"></div></div>
+                <span style="color:#94a3b8;font-size:11px;width:44px;text-align:right;">26 · 8%</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="color:#94a3b8;min-width:80px;">Gatsibo</span>
+              <div style="flex:1;display:flex;align-items:center;gap:6px;">
+                <div style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:14%;height:100%;background:#d1fae5;border-radius:2px;"></div></div>
+                <span style="color:#94a3b8;font-size:11px;width:44px;text-align:right;">19 · 6%</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="color:#94a3b8;min-width:80px;">Rusumo</span>
+              <div style="flex:1;display:flex;align-items:center;gap:6px;">
+                <div style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:8%;height:100%;background:#d1fae5;border-radius:2px;"></div></div>
+                <span style="color:#94a3b8;font-size:11px;width:44px;text-align:right;">12 · 4%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Others collapsed -->
+        <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;cursor:pointer;" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background='white'">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;flex-shrink:0;"></span>
+              <span style="font-weight:500;">Northern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:80px;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:74%;height:100%;background:#22c55e;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;width:60px;text-align:right;">287 · 32%</span>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+          </div>
+        </div>
+        <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;cursor:pointer;" onmouseenter="this.style.background='#f8fafc'" onmouseleave="this.style.background='white'">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block;flex-shrink:0;"></span>
+              <span style="font-weight:500;">Kigali City</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:80px;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:40%;height:100%;background:#4ade80;border-radius:3px;"></div></div>
+                <span style="color:#64748b;font-size:11px;width:60px;text-align:right;">156 · 17%</span>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3 · Interaction details</h3>
+  <div style="display:grid;gap:8px;margin-top:8px;">
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:13px;">
+      <strong>Chevron icon</strong> — rotates 90° right→down on expand (CSS transition, 150ms ease-out). Uses <code>ChevronRight</code> from lucide-react, same icon set already used.
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:13px;">
+      <strong>District bar color</strong> — lighter emerald (<code>bg-emerald-200</code>) to visually subordinate them under the province-level bars (<code>bg-emerald-600/400/300</code>). Top 3 districts brighter, rest dimmer.
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:13px;">
+      <strong>Small label</strong> — "Districts — % of province total" in uppercase 10px muted text at top of expanded section, so users understand the percentage denominator.
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:13px;">
+      <strong>Empty state</strong> — if a province has no districts with data, show "No district data available" instead of an empty expansion. Province row still clickable.
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:13px;">
+      <strong>Mobile</strong> — district name gets <code>min-w-0 truncate</code>, count/percentage are right-aligned and shrink-0. Bar fills remaining space with <code>flex-1</code>.
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>4 · Files touched</h3>
+  <div style="font-family:monospace;font-size:12px;background:#0f172a;color:#e2e8f0;padding:14px;border-radius:10px;line-height:1.8;">
+    <div><span style="color:#86efac;">app/api/public/water-use-dashboard/route.ts</span> — add permitsByDistrict aggregation</div>
+    <div><span style="color:#86efac;">hooks/usePublicWaterUseDashboardQuery.ts</span> — add type to snapshot</div>
+    <div><span style="color:#86efac;">app/water-use-dashboard/page.tsx</span> — replace province card with accordion, add useState for expandedProvince</div>
+  </div>
+  <div style="margin-top:8px;font-size:13px;color:#64748b;">No new files, no new components, no new dependencies. Pure logic + existing UI primitives.</div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Does this all look right? Reply in the terminal to confirm or request changes.</p>

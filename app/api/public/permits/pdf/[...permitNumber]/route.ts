@@ -58,12 +58,20 @@ async function tryReadStoredPdf(permitPdfUrl: string, req: NextRequest): Promise
   try {
     return await readFile(resolvedPath);
   } catch {
-    // Fallback for environments where files are served remotely.
-    const url = new URL(relativePath, req.url).toString();
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const arr = await res.arrayBuffer();
-    return Buffer.from(arr);
+    // Fallback for environments where files are served remotely. Bounded:
+    // the on-prem server cannot reach its own public hostname, so an
+    // unbounded fetch here stalls for seconds before failing.
+    try {
+      const url = new URL(relativePath, req.url).toString();
+      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) return null;
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("text/html")) return null;
+      const arr = await res.arrayBuffer();
+      return Buffer.from(arr);
+    } catch {
+      return null;
+    }
   }
 }
 

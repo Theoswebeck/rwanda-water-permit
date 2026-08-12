@@ -52,8 +52,8 @@ interface ApplicationsListProps {
   applications: DashboardListApplication[];
   loading?: boolean;
   onDeleteApplications?: (applicationIds: string[]) => Promise<void>;
-  statusFilter?: "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired";
-  onStatusFilterChange?: (status: "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired") => void;
+  statusFilter?: "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired" | "terminated";
+  onStatusFilterChange?: (status: "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired" | "terminated") => void;
 }
 
 export function ApplicationsList({
@@ -71,7 +71,7 @@ export function ApplicationsList({
   const effectiveStatusFilter = controlledStatusFilter ?? statusFilter;
 
   const handleStatusFilterChange = (
-    value: "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired"
+    value: "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired" | "terminated"
   ) => {
     if (controlledStatusFilter === undefined) {
       setStatusFilter(value);
@@ -103,7 +103,8 @@ export function ApplicationsList({
       raw === "rejected" ||
       raw === "approved" ||
       raw === "expired" ||
-      raw === "pending_payment"
+      raw === "pending_payment" ||
+      raw === "terminated"
     ) return raw;
     if (
       raw === "returned_to_assessment" ||
@@ -272,6 +273,12 @@ export function ApplicationsList({
         return {
           label: "Expired",
           icon: <AlertCircle className="h-4 w-4" />,
+          className: "bg-slate-200 text-slate-700 border-0 hover:bg-slate-200 px-3 py-2 rounded-full font-medium"
+        };
+      case "terminated":
+        return {
+          label: "Terminated (exempted use)",
+          icon: <XCircle className="h-4 w-4" />,
           className: "bg-slate-200 text-slate-700 border-0 hover:bg-slate-200 px-3 py-2 rounded-full font-medium"
         };
       default:
@@ -474,6 +481,7 @@ export function ApplicationsList({
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="pending_payment">Pending Payment</SelectItem>
               <SelectItem value="expired">Expired</SelectItem>
+              <SelectItem value="terminated">Terminated (exempted use)</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const applicationId = String(permit.application_id || '')
     const appRes = await query<Record<string, unknown>>(
       `
-      select a.*, row_to_json(u.*) as applicant
+      select a.*, st_asgeojson(a.coordinates)::json as coordinates_geojson, row_to_json(u.*) as applicant
       from public.applications a
       left join public.users u on u.id = a.applicant_id
       where a.id = $1
@@ -44,10 +44,18 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       [applicationId]
     )
 
+    const application = appRes.rows[0] || null
+    if (application) {
+      // Raw geometry serializes as hex WKB — expose the GeoJSON form under
+      // `coordinates` so document resolvers (resolveLatLng) can read it.
+      application.coordinates = application.coordinates_geojson ?? application.coordinates ?? null
+      delete application.coordinates_geojson
+    }
+
     return NextResponse.json({
       success: true,
       permit,
-      application: appRes.rows[0] || null,
+      application,
     })
   } catch (err) {
     console.error('❌ dashboard permit pdf metadata error:', err)

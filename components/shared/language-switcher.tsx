@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import type { AppLanguage } from "@/lib/i18n/language";
+import { KINYARWANDA_ENABLED, type AppLanguage } from "@/lib/i18n/language";
 
 interface LanguageSwitcherProps {
   language: AppLanguage;
@@ -15,6 +15,9 @@ const options: Array<{ value: AppLanguage; flag: string; label: string }> = [
 ];
 
 export function LanguageSwitcher({ language, onChange, compact = false }: LanguageSwitcherProps) {
+  // Hidden while Kinyarwanda is disabled pending professional translation review.
+  if (!KINYARWANDA_ENABLED) return null;
+
   return (
     <div className="flex items-center gap-1 rounded-full border bg-background/70 p-1">
       {options.map((option) => (

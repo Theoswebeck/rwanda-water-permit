@@ -876,7 +876,10 @@ export function PaymentTab({
           <a href="mailto:info@rwb.rw" className="text-blue-600 hover:underline">
             info@rwb.rw
           </a>{' '}
-          {tx("or call")} <strong>+250 782 985 880</strong>
+          {tx("or call")}{' '}
+          <a href="tel:9977" className="text-blue-600 hover:underline">
+            <strong>{tx("Toll Free Line: 9977")}</strong>
+          </a>
         </AlertDescription>
       </Alert>
     </motion.div>

@@ -40,6 +40,7 @@ export function ApplicationDocuments({
 
   const { documents, loading, error, getDocuments } = useDocuments();
   const [documentsLoaded, setDocumentsLoaded] = useState(false);
+  const [missingDocIds, setMissingDocIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (applicationId && !documentsLoaded) {
@@ -47,10 +48,36 @@ export function ApplicationDocuments({
     }
   }, [applicationId, documentsLoaded]);
 
+  // Best-effort: ask the server which document records point to files that
+  // no longer exist (lost in the 2026-07-08 uploads incident) so we can
+  // badge them honestly instead of letting "View" look like a system error.
+  // `partial` means the server ran out of probe budget before checking every
+  // document, so one retry usually settles the rest (already-probed files are
+  // cheap the second time). Unverified documents are never badged — only a
+  // confirmed miss is.
+  const checkFileHealth = async (attempt = 0) => {
+    try {
+      const res = await fetch(
+        `/api/dashboard/applications/${applicationId}/documents/health`,
+        { cache: 'no-store', credentials: 'include' }
+      );
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success && Array.isArray(json.missingDocumentIds)) {
+        setMissingDocIds(new Set(json.missingDocumentIds as string[]));
+        if (json.partial && attempt === 0) {
+          setTimeout(() => void checkFileHealth(1), 2000);
+        }
+      }
+    } catch {
+      // Health info is advisory only — never block the documents list.
+    }
+  };
+
   const loadDocuments = async () => {
     try {
       await getDocuments(applicationId);
       setDocumentsLoaded(true);
+      void checkFileHealth();
     } catch (err) {
       console.error('Failed to load documents:', err);
     }
@@ -243,7 +270,7 @@ export function ApplicationDocuments({
                           {doc.name}
                         </p>
                         {permissions.showStatus && doc.verification_status && (
-                          <Badge 
+                          <Badge
                             variant={
                               doc.verification_status === 'verified' ? 'default' :
                               doc.verification_status === 'pending' ? 'secondary' :
@@ -252,6 +279,16 @@ export function ApplicationDocuments({
                             className="text-xs"
                           >
                             {doc.verification_status}
+                          </Badge>
+                        )}
+                        {doc.id && missingDocIds.has(doc.id) && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs gap-1 bg-amber-50 text-amber-800 border-amber-300"
+                            title={tx("This document is missing from the server and is being recovered — contact RWB if urgent.")}
+                          >
+                            <AlertCircle className="h-3 w-3" />
+                            {tx("File missing — being recovered")}
                           </Badge>
                         )}
                       </div>

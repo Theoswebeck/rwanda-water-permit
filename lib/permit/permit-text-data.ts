@@ -51,6 +51,8 @@ export interface PermitApplication {
   cell: string;
   village?: string;
   concession_area?: number;
+  /** GeoJSON geometry from applications.coordinates (when the caller selects it). */
+  coordinates?: unknown;
   proposed_duration_years?: number;
   assessor_recommended_volume_m3?: number;
   max_daily_volume_m3?: number;
@@ -195,6 +197,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   navigation: "Navigation", recreation_activities: "Recreational Activities",
   port_construction: "Port Construction",
   gaz_extraction: "Gas Extraction", livestock: "Livestock", other: "Other",
+  other_concession: "Other Water Concession Activities",
 };
 
 export function resolveActivities(app: PermitApplication): string {
@@ -234,6 +237,29 @@ export function resolveLatLng(app: PermitApplication): { lat: string; lng: strin
   if (adjusted) return adjusted;
   const fromNotes = tryPair(notes?.waterSourceLatitude, notes?.waterSourceLongitude);
   if (fromNotes) return fromNotes;
+  // Renewal forms store the coordinates under permitDetails — same fallback
+  // the contract uses (lib/contract-placeholders.ts resolveLatLng), so the
+  // permit and the contract print identical water-source coordinates.
+  const pd = notes?.permitDetails;
+  if (pd && typeof pd === "object") {
+    const fromDetails = tryPair(
+      (pd as Record<string, unknown>).waterSourceLatitude,
+      (pd as Record<string, unknown>).waterSourceLongitude,
+    );
+    if (fromDetails) return fromDetails;
+  }
+  // GeoJSON Point in the applications.coordinates column (application data).
+  const geom = app.coordinates as { type?: unknown; coordinates?: unknown } | null | undefined;
+  if (
+    geom &&
+    geom.type === "Point" &&
+    Array.isArray(geom.coordinates) &&
+    geom.coordinates.length >= 2
+  ) {
+    const [lng, lat] = geom.coordinates as [unknown, unknown];
+    const fromGeom = tryPair(lat, lng);
+    if (fromGeom) return fromGeom;
+  }
   return { lat: "N/A", lng: "N/A" };
 }
 
@@ -577,6 +603,7 @@ export function getActivityLabelKinyarwanda(activity: string): string {
     port_construction: "byo kubaka icyambu",
     water_supply: "gutanga amazi",
     other: "ibindi",
+    other_concession: "ibindi",
     domestic: "gukoresha mu rugo",
     industrial: "by'inganda",
     aquaculture: "ubworozi bw'amafi",

@@ -18,7 +18,8 @@ import {
   CheckCircle,
   User2,
   Download,
-  FileText
+  FileText,
+  Ban
 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
@@ -810,6 +811,8 @@ export default function ApplicationDetailPage() {
         return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">Returned for Review</Badge>;
       case "cancelled":
         return <Badge variant="outline" className="bg-gray-100 text-gray-700 hover:bg-gray-100 border-gray-200">Cancelled</Badge>;
+      case "terminated":
+        return <Badge variant="outline" className="bg-slate-200 text-slate-700 hover:bg-slate-200 border-slate-300">Terminated (exempted use)</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
@@ -1092,6 +1095,29 @@ export default function ApplicationDetailPage() {
                     )}
 
                   </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Termination Alert — exempted water use (terminal; distinct from rejection and revision) */}
+          {application.status === 'terminated' && (
+            <Alert className="border-slate-300 bg-slate-50">
+              <Ban className="h-4 w-4 text-slate-600" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-slate-800">Application Terminated — No Permit Required</p>
+                    <Badge variant="outline" className="border-slate-300 text-slate-700 bg-slate-100 text-xs">
+                      Exempted Water Use
+                    </Badge>
+                  </div>
+                  <p className="text-slate-700">
+                    Rwanda Water Resources Board determined that the water use described in this application is exempted, so a water use permit is not required. This application has been closed. This is not a rejection and no corrections or resubmission are needed — you may proceed with the exempted water use in accordance with the applicable regulations.
+                    {(application as any).termination_reason && (
+                      <span className="block mt-2 font-medium">Reason: {(application as any).termination_reason}</span>
+                    )}
+                  </p>
                 </div>
               </AlertDescription>
             </Alert>

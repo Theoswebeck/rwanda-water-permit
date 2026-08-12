@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { translateText } from "@/lib/i18n/translator";
+import { isPureConcessionActivity } from "@/lib/permit-variant";
 import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
@@ -494,8 +495,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const watchedPolygons = form.watch('waterSourcePolygons');
 
   // Activity/purpose automatically determines abstraction vs concession — no manual choice
-  const CONCESSION_PURPOSES = ["fish_farming_lakes", "recreation_activities", "port_construction", "gaz_extraction"];
-  const effectiveWaterUseCategory: "abstraction" | "concession" = CONCESSION_PURPOSES.includes(waterPurpose || "")
+  const effectiveWaterUseCategory: "abstraction" | "concession" = isPureConcessionActivity(waterPurpose)
     ? "concession"
     : "abstraction";
 
@@ -1601,7 +1601,8 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                                   <SelectItem value="municipal_supply">{tx("Municipal Supply")}</SelectItem>
                                   <SelectItem value="recreation">{tx("Recreation")}</SelectItem>
                                   <SelectItem value="water_supply">{tx("Water Supply")}</SelectItem>
-                                  <SelectItem value="other">Other</SelectItem>
+                                  <SelectItem value="other">{tx("Other water abstraction activities")}</SelectItem>
+                                  <SelectItem value="other_concession">{tx("Other water concession activities")}</SelectItem>
                                 </SelectContent>
                               </Select>
                             ) : (

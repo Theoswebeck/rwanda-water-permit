@@ -78,7 +78,8 @@ export const INTENDED_ACTIVITY_OPTIONS: { value: string; label: string }[] = [
   { value: "port_construction", label: "Port Construction" },
   { value: "recreation_activities", label: "Recreational activities" },
   { value: "water_supply", label: "Water supply" },
-  { value: "other", label: "Other" },
+  { value: "other", label: "Other water abstraction activities" },
+  { value: "other_concession", label: "Other water concession activities" },
 ];
 
 const INTENDED_ACTIVITY_VALUE_SET = new Set<string>(

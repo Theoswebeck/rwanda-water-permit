@@ -89,7 +89,7 @@ export default function ContactPage() {
     title: tx("General Inquiries"),
     description: tx("Questions about water permits, applications, and general information"),
     items: [
-      { icon: Phone, label: "+250 782 985 880", href: "tel:+250782985880" },
+      { icon: Phone, label: tx("Toll Free Line: 9977"), href: "tel:9977" },
       { icon: Mail, label: "info@rwb.rw", href: "mailto:info@rwb.rw" },
       { icon: Clock, label: tx("Mon-Fri: 8:00 AM - 5:00 PM") }
     ],
@@ -100,7 +100,7 @@ export default function ContactPage() {
     {
       title: tx("Main Office - Kigali"),
       address: "KN 3 Ave, Kigali, Rwanda",
-      phone: "+250 782 985 880",
+      phone: "9977",
       email: "info@rwb.rw"
     }
   ];

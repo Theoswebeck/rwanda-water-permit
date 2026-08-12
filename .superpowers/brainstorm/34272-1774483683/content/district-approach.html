@@ -1,0 +1,263 @@
+<h2>Where and how should district data live?</h2>
+<p class="subtitle">Rwanda has 30 districts — the key UX challenge is showing them without overwhelming the page. Three approaches:</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+          <span style="color:#64748b;">📍</span> Permits by province &amp; district
+        </div>
+        <!-- Province row - expanded -->
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block;"></span>
+              <span style="font-weight:600;">Eastern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:11px;color:#64748b;">342 permits · 38%</span>
+              <span style="color:#16a34a;font-size:11px;">▾</span>
+            </div>
+          </div>
+          <!-- District sub-rows -->
+          <div style="margin-top:8px;padding-left:16px;display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+              <span style="color:#374151;">Nyagatare</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:60px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:75%;height:100%;background:#86efac;border-radius:2px;"></div></div>
+                <span style="color:#64748b;width:28px;text-align:right;">98</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+              <span style="color:#374151;">Bugesera</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:60px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:52%;height:100%;background:#86efac;border-radius:2px;"></div></div>
+                <span style="color:#64748b;width:28px;text-align:right;">67</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+              <span style="color:#374151;">Kayonza</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="width:60px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:40%;height:100%;background:#86efac;border-radius:2px;"></div></div>
+                <span style="color:#64748b;width:28px;text-align:right;">51</span>
+              </div>
+            </div>
+            <div style="font-size:10px;color:#94a3b8;margin-top:2px;">+ 5 more districts</div>
+          </div>
+        </div>
+        <!-- Province row - collapsed -->
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block;"></span>
+              <span style="font-weight:500;font-size:12px;">Northern Province</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:11px;color:#64748b;">287 permits · 32%</span>
+              <span style="color:#94a3b8;font-size:11px;">▸</span>
+            </div>
+          </div>
+        </div>
+        <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#86efac;display:inline-block;"></span>
+              <span style="font-weight:500;font-size:12px;">Kigali City</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:11px;color:#64748b;">156 permits · 17%</span>
+              <span style="color:#94a3b8;font-size:11px;">▸</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Expandable province → district drill-down</h3>
+      <p>Upgrade the existing province card. Click a province to expand its districts inline. One card, two levels of data, no extra scrolling by default.</p>
+      <div class="pros-cons" style="margin-top:10px;">
+        <div class="pros"><h4>Pros</h4><ul><li>No new card — saves vertical space</li><li>Contextual: districts always tied to their province</li><li>Progressive disclosure — users see what they want</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Requires a client interaction pattern (expand/collapse)</li><li>Districts only visible one province at a time</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+          <span style="color:#64748b;">🏙️</span> Top districts by permits
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;flex-shrink:0;display:inline-block;"></span>
+              <div style="min-width:0;">
+                <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Nyagatare</div>
+                <div style="font-size:10px;color:#64748b;">Eastern · 98 permits</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;width:100px;flex-shrink:0;">
+              <div style="flex:1;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:75%;height:100%;background:#16a34a;border-radius:3px;"></div></div>
+              <span style="font-size:10px;color:#64748b;width:24px;text-align:right;">11%</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;display:inline-block;"></span>
+              <div>
+                <div style="font-weight:500;">Bugesera</div>
+                <div style="font-size:10px;color:#64748b;">Eastern · 67 permits</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;width:100px;flex-shrink:0;">
+              <div style="flex:1;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:51%;height:100%;background:#22c55e;border-radius:3px;"></div></div>
+              <span style="font-size:10px;color:#64748b;width:24px;text-align:right;">7%</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#4ade80;flex-shrink:0;display:inline-block;"></span>
+              <div>
+                <div style="font-weight:500;">Musanze</div>
+                <div style="font-size:10px;color:#64748b;">Northern · 54 permits</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;width:100px;flex-shrink:0;">
+              <div style="flex:1;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:41%;height:100%;background:#4ade80;border-radius:3px;"></div></div>
+              <span style="font-size:10px;color:#64748b;width:24px;text-align:right;">6%</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+              <span style="width:7px;height:7px;border-radius:50%;background:#86efac;flex-shrink:0;display:inline-block;"></span>
+              <div>
+                <div style="font-weight:500;">Rubavu</div>
+                <div style="font-size:10px;color:#64748b;">Western · 49 permits</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;width:100px;flex-shrink:0;">
+              <div style="flex:1;height:5px;background:#e5e7eb;border-radius:3px;"><div style="width:37%;height:100%;background:#86efac;border-radius:3px;"></div></div>
+              <span style="font-size:10px;color:#64748b;width:24px;text-align:right;">5%</span>
+            </div>
+          </div>
+          <div style="border-top:1px dashed #e5e7eb;margin-top:4px;padding-top:6px;text-align:center;">
+            <span style="font-size:11px;color:#059669;font-weight:500;cursor:pointer;">Show all 30 districts ▾</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Standalone "Top districts" card (show top 10 + expand)</h3>
+      <p>New card alongside the province card. Shows top districts ranked by permit count, each labelled with its province. "Show all 30" toggle for the full list.</p>
+      <div class="pros-cons" style="margin-top:10px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Instantly shows the highest-activity districts</li><li>Province context on each row</li><li>Same visual pattern as existing cards — no new component</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Adds a 5th card to an already long analytics section</li><li>No grouping — cross-province comparison harder to see</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+      <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px;">Geographic breakdown</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <!-- Province col -->
+          <div>
+            <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">By Province</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                <span style="font-size:11px;color:#374151;">Eastern</span>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:88%;height:100%;background:#16a34a;border-radius:2px;"></div></div>
+                  <span style="font-size:10px;color:#64748b;">342</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                <span style="font-size:11px;color:#374151;">Northern</span>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:74%;height:100%;background:#22c55e;border-radius:2px;"></div></div>
+                  <span style="font-size:10px;color:#64748b;">287</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                <span style="font-size:11px;color:#374151;">Kigali</span>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:40%;height:100%;background:#4ade80;border-radius:2px;"></div></div>
+                  <span style="font-size:10px;color:#64748b;">156</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                <span style="font-size:11px;color:#374151;">Southern</span>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:36%;height:100%;background:#86efac;border-radius:2px;"></div></div>
+                  <span style="font-size:10px;color:#64748b;">140</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                <span style="font-size:11px;color:#374151;">Western</span>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;"><div style="width:22%;height:100%;background:#bbf7d0;border-radius:2px;"></div></div>
+                  <span style="font-size:10px;color:#64748b;">85</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- District col -->
+          <div>
+            <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Top Districts</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                <div>
+                  <div style="font-size:11px;color:#374151;">Nyagatare</div>
+                  <div style="font-size:9px;color:#94a3b8;">Eastern</div>
+                </div>
+                <span style="font-size:10px;font-weight:600;color:#16a34a;">98</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                <div>
+                  <div style="font-size:11px;color:#374151;">Bugesera</div>
+                  <div style="font-size:9px;color:#94a3b8;">Eastern</div>
+                </div>
+                <span style="font-size:10px;font-weight:600;color:#22c55e;">67</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                <div>
+                  <div style="font-size:11px;color:#374151;">Musanze</div>
+                  <div style="font-size:9px;color:#94a3b8;">Northern</div>
+                </div>
+                <span style="font-size:10px;font-weight:600;color:#4ade80;">54</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                <div>
+                  <div style="font-size:11px;color:#374151;">Rubavu</div>
+                  <div style="font-size:9px;color:#94a3b8;">Western</div>
+                </div>
+                <span style="font-size:10px;font-weight:600;color:#86efac;">49</span>
+              </div>
+              <div style="text-align:center;margin-top:2px;">
+                <span style="font-size:10px;color:#059669;">+26 more</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Combined card: province left, top districts right (2-column split)</h3>
+      <p>Merge province and district into one card with a two-column layout. Left = all 5 provinces with bars. Right = top 5 districts ranked, each tagged with province.</p>
+      <div class="pros-cons" style="margin-top:10px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Replaces 1 card instead of adding 1 — keeps page length the same</li><li>Province + district side-by-side = fastest mental model</li><li>Dense but not cluttered</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Two-column inside a card can feel cramped on mobile</li><li>District bars removed — count-only on right side</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Click an option to select it, then let me know in the terminal.</p>

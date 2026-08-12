@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from "react";
 import { translateText } from "@/lib/i18n/translator";
+import { PURE_CONCESSION_ACTIVITIES } from "@/lib/permit-variant";
 import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -129,7 +130,8 @@ const INTENDED_ACTIVITY_OPTIONS = [
   { value: "hydropower_generation", label: "Hydropower Generation" },
   { value: "mining_operations", label: "Mining Operations" },
   { value: "construction_of_infrastructures", label: "Construction of Infrastructures" },
-  { value: "other", label: "Other" },
+  { value: "other", label: "Other Water Abstraction Activities" },
+  { value: "other_concession", label: "Other Water Concession Activities" },
 ];
 
 const ABSTRACTION_METHOD_OPTIONS = [
@@ -150,7 +152,8 @@ const ALLOWANCE_UNIT_OPTIONS = [
   { value: "l/s", label: "l/s" },
 ];
 
-const CONCESSION_ACTIVITIES = ["fish_farming_lakes", "recreation_activities", "aquaculture", "port_construction", "gaz_extraction"];
+// "aquaculture" is the legacy alias of fish_farming_lakes still present on old permits.
+const CONCESSION_ACTIVITIES: string[] = [...PURE_CONCESSION_ACTIVITIES, "aquaculture"];
 
 export const PermitRenewalForm = memo(function PermitRenewalForm({
   permit,
