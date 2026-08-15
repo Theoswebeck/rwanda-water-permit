@@ -22,6 +22,7 @@ import { staffListHref } from "@/lib/staff-nav";
 import { InspectionFormLayout } from "@/components/inspection/inspection-form-layout";
 import { InspectionOwnerBadge } from "@/components/inspection/inspection-owner-badge";
 import { InspectionWorkflowActions } from "@/components/inspection/inspection-workflow-actions";
+import { DownloadInspectionButton } from "@/components/inspection/download-inspection-button";
 import { isAssessorOwnedWorkflow } from "@/lib/inspection-workflow";
 import type { InspectionWorkflowStatus } from "@/types/inspection-workflow";
 import { assertInspectionPayloadKeys } from "@/lib/inspections/payload-columns";
@@ -666,6 +667,11 @@ export default function PermitInspectionUnifiedPage() {
               </Button>
             );
           })()}
+
+          <DownloadInspectionButton
+            inspectionId={inspectionId}
+            workflowStatus={currentWorkflowStatus}
+          />
 
           {canEdit ? (
             <>
