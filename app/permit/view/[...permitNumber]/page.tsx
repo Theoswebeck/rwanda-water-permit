@@ -209,7 +209,7 @@ export default async function PublicPermitViewPage({
 
   const concessionAreaValue = deriveConcessionAreaValue(permit, internalNotes, assessorAdjustments);
 
-  const concessionPolygons = deriveConcessionPolygons(permit);
+  const concessionPolygons = deriveConcessionPolygons(permit, assessorAdjustments);
 
   return (
     <div className="min-h-screen bg-slate-50">

@@ -16,7 +16,9 @@
     "test:catchment-resolution": "node --test scripts/test-catchment-resolution.mjs",
     "build:catchment-lookup": "node scripts/build-catchment-lookup.mjs",
     "audit:inspections-schema": "node scripts/audit-inspections-schema.mjs",
-    "test:water-use-report-template": "node --test scripts/test-water-use-report-template.mjs"
+    "test:water-use-report-template": "node --test scripts/test-water-use-report-template.mjs",
+    "test:permit-concession-source": "node --test scripts/test-permit-concession-source.mjs",
+    "test:concession-boundary-points": "node --test scripts/test-concession-boundary-points.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

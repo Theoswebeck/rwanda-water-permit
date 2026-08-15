@@ -114,7 +114,7 @@ export default async function ConcessionMapPrintPage({
   const location = derivePermitLocation(permit, internalNotes);
   const activity = derivePermitActivity(permit, internalNotes);
   const recordedArea = deriveConcessionAreaValue(permit, internalNotes, assessorAdjustments);
-  const polygons = deriveConcessionPolygons(permit);
+  const polygons = deriveConcessionPolygons(permit, assessorAdjustments);
 
   const backHref = `/permit/view/${encodeURIComponent(String(permit.permit_number || inputPermitNumber))}`;
 

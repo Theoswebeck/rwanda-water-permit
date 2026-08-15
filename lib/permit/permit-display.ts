@@ -12,7 +12,12 @@ import type { PublicPermitRecord } from "@/lib/permit/public-permit-query";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { getEffectiveInternalNotes } from "@/lib/document-overrides";
 import { CONCESSION_PURPOSE_HINTS, isConcessionApplication } from "@/lib/permit-variant";
-import { geometryToCoordinatePolygons, type CoordinatePoint } from "@/lib/geoUtils";
+import {
+  geometryToCoordinatePolygons,
+  polygonsToGeoJSON,
+  getPolygonArea,
+  type CoordinatePoint,
+} from "@/lib/geoUtils";
 
 /**
  * Formats a permit date for display. Date-only values (YYYY-MM-DD) are
@@ -207,6 +212,12 @@ export function deriveConcessionAreaValue(
   const assessorArea = parsePositiveNumber(assessorAdjustments?.recommendedVolumeM3);
   if (assessorArea) return `${assessorArea.toLocaleString()} ha`;
 
+  // The assessor adjusted the boundary but did not type an explicit area: derive
+  // it from that boundary, so this value describes the same polygon the map
+  // draws rather than the applicant's originally declared hectares.
+  const assessorPolygonArea = assessorPolygonAreaHectares(assessorAdjustments);
+  if (assessorPolygonArea) return `${assessorPolygonArea.toLocaleString()} ha`;
+
   const dbArea = parsePositiveNumber(application?.concession_area);
   if (dbArea) return `${dbArea.toLocaleString()} ha`;
 
@@ -256,15 +267,84 @@ export function isConcessionPermitRecord(permit: PublicPermitRecord): boolean {
   return isConcessionByActivities || CONCESSION_PURPOSE_HINTS.has(normalizedPurpose);
 }
 
-/** Concession boundary polygons (empty for non-concession permits or missing geometry). */
-export function deriveConcessionPolygons(permit: PublicPermitRecord): CoordinatePoint[][] {
+/**
+ * Normalizes a raw `_assessorAdjustments.waterSourcePolygonPoints` value into a
+ * usable boundary ring. Returns null unless at least 3 points parse as finite
+ * numbers, so a half-saved or malformed adjustment can never blank out the map.
+ */
+function normalizeAssessorPolygon(value: unknown): CoordinatePoint[] | null {
+  if (!Array.isArray(value) || value.length < 3) return null;
+  const points: CoordinatePoint[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") return null;
+    const { latitude, longitude } = raw as { latitude?: unknown; longitude?: unknown };
+    const lat = typeof latitude === "number" ? latitude : Number.parseFloat(String(latitude ?? ""));
+    const lng = typeof longitude === "number" ? longitude : Number.parseFloat(String(longitude ?? ""));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    points.push({ latitude: lat, longitude: lng });
+  }
+  return points.length >= 3 ? points : null;
+}
+
+/**
+ * Concession boundary polygons (empty for non-concession permits or missing
+ * geometry).
+ *
+ * The assessor's field-verified boundary is what the permit actually grants, so
+ * `_assessorAdjustments.waterSourcePolygonPoints` outranks everything else. The
+ * applicant's own submission stays untouched in `applications.coordinates` — it
+ * is the record of what was *requested*, and is only rendered when no assessor
+ * adjustment exists. Pass the adjustments in from
+ * `parseInternalNotes(...)._assessorAdjustments`; both public permit pages
+ * already have it in hand.
+ */
+export function deriveConcessionPolygons(
+  permit: PublicPermitRecord,
+  assessorAdjustments: Record<string, unknown> | null
+): CoordinatePoint[][] {
   const application = permit.application;
   if (!isConcessionPermitRecord(permit) || !application) return [];
-  const geom = application.coordinates;
-  if (!geom) return [];
+
+  const assessorPolygon = normalizeAssessorPolygon(assessorAdjustments?.waterSourcePolygonPoints);
+  if (assessorPolygon) return [assessorPolygon];
+
   try {
-    return geometryToCoordinatePolygons(geom);
+    const geom = application.coordinates;
+    if (geom) {
+      const polygons = geometryToCoordinatePolygons(geom);
+      if (polygons.length > 0 && polygons[0].length > 0) return polygons;
+    }
   } catch {
-    return [];
+    // fall through to the internal_notes copy below
   }
+
+  // Legacy/back-compat: some applications only ever recorded the boundary in
+  // the stored form data, never in the geometry column.
+  const notes = parseInternalNotes(application.internal_notes);
+  const notesPolygons = notes?.waterSourcePolygons;
+  if (Array.isArray(notesPolygons)) {
+    const normalized = notesPolygons
+      .map((ring) => normalizeAssessorPolygon(ring))
+      .filter((ring): ring is CoordinatePoint[] => ring !== null);
+    if (normalized.length > 0) return normalized;
+  }
+
+  return [];
+}
+
+/**
+ * Surface area (hectares) of the assessor's adjusted boundary, or null when
+ * there is no usable adjustment. Used by `deriveConcessionAreaValue` so the
+ * area shown next to the map is always the area *of that map*.
+ */
+export function assessorPolygonAreaHectares(
+  assessorAdjustments: Record<string, unknown> | null
+): number | null {
+  const polygon = normalizeAssessorPolygon(assessorAdjustments?.waterSourcePolygonPoints);
+  if (!polygon) return null;
+  const feature = polygonsToGeoJSON([polygon]);
+  if (!feature) return null;
+  const areaSqMeters = getPolygonArea(feature);
+  if (!Number.isFinite(areaSqMeters) || areaSqMeters <= 0) return null;
+  return Number((areaSqMeters / 10000).toFixed(4));
 }

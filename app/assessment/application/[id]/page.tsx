@@ -81,6 +81,11 @@ import { AssessorRecommendations } from "@/components/inspection/assessor-recomm
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
 import { DocumentTextEditor } from "@/components/staff/document-text-editor";
+import {
+  MIN_BOUNDARY_POINTS,
+  countUnparseablePoints,
+  parseBoundaryPoints,
+} from "@/lib/permit/concession-boundary-points";
 
 // Mirrors the server-side lists (lib/auth/require-role.ts,
 // app/api/staff/applications/[id]/terminate/route.ts) and the client precedent
@@ -1967,15 +1972,21 @@ export default function AssessmentApplicationPage() {
       return;
     }
 
-    const parsedPoints = points.map((point) => ({
-      latitude: Number.parseFloat(point.latitude),
-      longitude: Number.parseFloat(point.longitude),
-    }));
-    if (
-      parsedPoints.length === 0 ||
-      parsedPoints.some((point) => !Number.isFinite(point.latitude) || !Number.isFinite(point.longitude))
-    ) {
+    // Blank rows are scaffolding the form renders, not data the assessor
+    // entered — dropping them first means an untouched trailing row can never
+    // block the save (which it previously did, silently making the polygon
+    // unsaveable whenever the prefill contained empty slots). A half-filled row
+    // is still an error worth reporting.
+    if (countUnparseablePoints(points) > 0) {
       alert("Every polygon point must have a valid latitude and longitude.");
+      return;
+    }
+    const parsedPoints = parseBoundaryPoints(points).map((point) => ({
+      latitude: Number(point.latitude),
+      longitude: Number(point.longitude),
+    }));
+    if (parsedPoints.length < MIN_BOUNDARY_POINTS) {
+      alert(`A concession boundary needs at least ${MIN_BOUNDARY_POINTS} points.`);
       return;
     }
 

@@ -343,7 +343,7 @@ export function validatePolygon(polygon: Feature<Polygon>): { isValid: boolean; 
 /**
  * Calculate polygon area in square meters
  */
-export function getPolygonArea(polygon: Feature<Polygon>): number {
+export function getPolygonArea(polygon: Feature<Polygon | MultiPolygon>): number {
   try {
     return turf.area(polygon);
   } catch (error) {

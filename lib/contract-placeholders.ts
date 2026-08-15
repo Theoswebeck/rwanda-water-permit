@@ -631,9 +631,9 @@ function resolveConcessionAreaLabel(
   const assessorArea = parsePositiveNumber(notes?._assessorAdjustments?.recommendedVolumeM3);
   if (assessorArea) return `${formatNumber(assessorArea)} Ha`;
 
-  const dbValue = parsePositiveNumber(application.concession_area);
-  if (dbValue) return `${formatNumber(dbValue)} Ha`;
-
+  // The assessor's field-verified boundary outranks the applicant's declared
+  // area: when they adjusted the polygon without typing an explicit area, the
+  // contract must state the area of the boundary the permit actually grants.
   if (notes) {
     const adjustedPolygon = notes._assessorAdjustments?.waterSourcePolygonPoints;
     if (Array.isArray(adjustedPolygon) && adjustedPolygon.length > 0) {
@@ -646,6 +646,9 @@ function resolveConcessionAreaLabel(
       }
     }
   }
+
+  const dbValue = parsePositiveNumber(application.concession_area);
+  if (dbValue) return `${formatNumber(dbValue)} Ha`;
 
   const geometryValue = areaHaFromGeometry(application.coordinates);
   if (geometryValue) return `${formatNumber(geometryValue)} Ha`;

@@ -170,9 +170,12 @@ export async function POST(
     }
 
     if (body.waterSourcePolygonPoints !== undefined) {
-      if (!Array.isArray(body.waterSourcePolygonPoints) || body.waterSourcePolygonPoints.length === 0) {
+      // A boundary needs 3 points to enclose an area. Anything less cannot be
+      // rendered as the permit's concession map, so it is rejected here rather
+      // than stored and silently ignored downstream.
+      if (!Array.isArray(body.waterSourcePolygonPoints) || body.waterSourcePolygonPoints.length < 3) {
         return NextResponse.json(
-          { success: false, message: "waterSourcePolygonPoints must contain at least one point" },
+          { success: false, message: "waterSourcePolygonPoints must contain at least 3 points" },
           { status: 400 },
         );
       }

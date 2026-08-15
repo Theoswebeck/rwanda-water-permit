@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileText, Droplet, MapPin, Factory, AlertCircle, ThumbsUp, ThumbsDown, CheckCircle, XCircle, Loader2, Save } from "lucide-react";
 import type { AssessmentReportData } from "@/lib/assessment-report-utils";
 import { BulkNetworksTable } from "@/components/dashboard/bulk-networks-table";
+import { ConcessionBoundaryEditor } from "@/components/inspection/concession-boundary-editor";
+import { compactBoundaryPoints } from "@/lib/permit/concession-boundary-points";
 import type { BulkNetworkRow } from "@/types/database";
+import type { AbstractionPointMapProps } from "@/components/maps/AbstractionPointMap";
 import {
   getFormattedCellOptions,
   getFormattedDistrictOptions,
@@ -19,6 +23,19 @@ import {
   getFormattedSectorOptions,
   getFormattedVillageOptions,
 } from "@/lib/rwanda-administrative-data";
+
+// Leaflet touches `window` on import, so both maps are client-only.
+const AbstractionPointMap = dynamic<AbstractionPointMapProps>(
+  () => import("@/components/maps/AbstractionPointMap").then((m) => m.AbstractionPointMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[320px] w-full items-center justify-center rounded-lg border bg-slate-50">
+        <span className="text-sm text-slate-400">Loading map…</span>
+      </div>
+    ),
+  }
+);
 
 const VOLUME_RATE_UNITS = ["m3/day", "m3/year"] as const;
 
@@ -245,13 +262,12 @@ export function AssessmentReportForm({
     !String(localData.sourceLatitude || "").trim() ||
     !String(localData.sourceLongitude || "").trim();
 
-  const updatePolygonPoint = (
-    index: number,
-    field: "latitude" | "longitude",
-    value: string,
-  ) => {
-    const next = [...(localData.sourcePolygonPoints || [])];
-    next[index] = { ...next[index], [field]: value };
+  /**
+   * Section 4's beacons are always the concession boundary points, relabelled
+   * B1..Bn — they are re-derived here on every edit so the two sections can
+   * never drift apart.
+   */
+  const setPolygonPoints = (next: Array<{ latitude: string; longitude: string }>) => {
     const beacons = next.map((point, idx) => ({
       id: `B${idx + 1}`,
       latitude: point.latitude,
@@ -497,51 +513,14 @@ export function AssessmentReportForm({
 
             {reportType === 'concession' && localData.sourcePolygonPoints && localData.sourcePolygonPoints.length > 0 ? (
               <div className="md:col-span-2">
-                <Label>Concession polygon coordinates</Label>
-                <div className="space-y-3 mt-2">
-                  {localData.sourcePolygonPoints.map((point, index) => (
-                    <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-2">
-                        <Label className="text-sm font-medium">Point {index + 1}</Label>
-                      </div>
-                      <div className="col-span-5">
-                        <Label className="text-xs text-muted-foreground">Latitude</Label>
-                        <Input
-                          value={point.latitude}
-                          onChange={(e) => updatePolygonPoint(index, "latitude", e.target.value)}
-                          readOnly={readOnly}
-                          className={coordinateInputClass}
-                        />
-                      </div>
-                      <div className="col-span-5">
-                        <Label className="text-xs text-muted-foreground">Longitude</Label>
-                        <Input
-                          value={point.longitude}
-                          onChange={(e) => updatePolygonPoint(index, "longitude", e.target.value)}
-                          readOnly={readOnly}
-                          className={coordinateInputClass}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {!readOnly && (
-                  <div className="mt-3">
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={coordinatesSaving || !localData.sourcePolygonPoints?.length}
-                      onClick={() => onSourcePolygonSave?.(localData.sourcePolygonPoints || [])}
-                    >
-                      {coordinatesSaving ? (
-                        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4 mr-1.5" />
-                      )}
-                      Save coordinates
-                    </Button>
-                  </div>
-                )}
+                <ConcessionBoundaryEditor
+                  points={localData.sourcePolygonPoints}
+                  onPointsChange={setPolygonPoints}
+                  onSave={(points) => onSourcePolygonSave?.(compactBoundaryPoints(points))}
+                  saving={coordinatesSaving}
+                  readOnly={readOnly}
+                  inputClassName={coordinateInputClass}
+                />
               </div>
             ) : (
               <>
@@ -583,6 +562,16 @@ export function AssessmentReportForm({
                     </Button>
                   </div>
                 )}
+                {/* Abstraction point map — read-only; the boxes above stay the
+                    single place the coordinate is edited. */}
+                <div className="md:col-span-2">
+                  <AbstractionPointMap
+                    latitude={localData.sourceLatitude || null}
+                    longitude={localData.sourceLongitude || null}
+                    readOnly
+                    height="320px"
+                  />
+                </div>
               </>
             )}
 
