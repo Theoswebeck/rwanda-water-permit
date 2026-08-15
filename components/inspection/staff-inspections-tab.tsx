@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertCircle, Eye, Loader2, MoreHorizontal, Search, Trash2 } from "lucide-react";
+import { AlertCircle, Download, Eye, Loader2, MoreHorizontal, Search, Trash2 } from "lucide-react";
 import { CreateInspectionDialog } from "@/components/inspection/create-inspection-dialog";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import {
@@ -672,6 +672,21 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                                     <Eye className="h-4 w-4" />
                                     View permit
                                   </Link>
+                                </DropdownMenuItem>
+                              ) : null}
+                              {displayStatus === "approved" ? (
+                                <DropdownMenuItem asChild>
+                                  {/* Plain link: the route replies with
+                                      Content-Disposition: attachment, so the
+                                      browser saves the PDF without navigating
+                                      away from the list. */}
+                                  <a
+                                    href={`/api/staff/inspections/${encodeURIComponent(r.id)}/report`}
+                                    className="flex items-center gap-2"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                    Download inspection (PDF)
+                                  </a>
                                 </DropdownMenuItem>
                               ) : null}
                               {r.status === "in_progress" && r.inspector_id === currentUserId ? (

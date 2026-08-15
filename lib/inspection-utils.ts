@@ -703,9 +703,13 @@ function resolveFlowRateFromApplications(
 }
 
 /**
- * Prepare pre-populated inspection data from application and permit records
+ * Prepare pre-populated inspection data from application and permit records.
+ *
+ * Pure (no I/O): also used server-side by the inspection-report PDF route so
+ * the printed locked fields are derived exactly as the on-screen form derives
+ * them. Keep it free of browser-only APIs.
  */
-function prepareInspectionData(
+export function prepareInspectionData(
   application: any,
   permit: Permit | null,
   paymentHistory: PaymentRecord[],
@@ -1138,9 +1142,10 @@ function parseLocationString(raw: string | null | undefined): ParsedLocation {
 }
 
 /**
- * Prepare pre-populated inspection data from a permit_registry entry (no application/permit records).
+ * Prepare pre-populated inspection data from a permit_registry entry (no
+ * application/permit records). Pure — see {@link prepareInspectionData}.
  */
-function prepareRegistryInspectionData(registry: any): PrepopulatedInspectionData {
+export function prepareRegistryInspectionData(registry: any): PrepopulatedInspectionData {
   const permitHolderName = registry.permit_holder || 'N/A';
   const permitNumber = registry.permit_number || 'N/A';
   const activityType = registry.authorized_activity ? getActivityLabel(registry.authorized_activity) : 'N/A';

@@ -9,6 +9,8 @@
  *     lib/pdf-permit-server renderer, mirroring the public PDF route),
  *   - the signed contract / terms PDF (stored file, generated client-side at
  *     approval time),
+ *   - the inspection report PDF of every approved inspection (rendered from the
+ *     saved inspections row by lib/pdf-inspection-report-server),
  *   - documents of approved inspections (inspections.inspection_documents +
  *     inspection-owned rows in public.documents).
  *
@@ -44,6 +46,8 @@ import { hasAnyRole, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
 import { generatePermitPdfBuffer, type PermitApplication } from "@/lib/pdf-permit-server";
 import { isConcessionApplication } from "@/lib/permit-variant";
 import { generateAssessmentReportPdfBuffer } from "@/lib/pdf-assessment-report-server";
+import { generateInspectionReportPdfBuffer } from "@/lib/pdf-inspection-report-server";
+import { loadInspectionReportContext } from "@/lib/inspections/report-context-server";
 import { determineReportType, type AssessmentReportData } from "@/lib/assessment-report-utils";
 import { resolvePermitIssueDate } from "@/lib/permit/resolve-issue-date";
 
@@ -703,6 +707,39 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         inspection.inspection_number || String(inspection.id).slice(0, 8),
       );
       const folder = `05-inspection-reports/${safeFileName(inspectionLabel, "inspection")}`;
+
+      // The inspection report itself, rendered from the saved row (same
+      // renderer as the staff "Download inspection (PDF)" action).
+      try {
+        const context = await loadInspectionReportContext(String(inspection.id));
+        if (context) {
+          const inspectionPdf = await generateInspectionReportPdfBuffer({
+            template: context.template,
+            manualInspection: context.manualInspection,
+            form: context.form,
+            locked: context.locked,
+            inspectionNumber: context.inspectionNumber,
+            inspectorName: context.inspectorName,
+            inspectionDate: context.inspectionDate,
+            workflowStatus: context.workflowStatus,
+            approvedAt: context.approvedAt,
+          });
+          const entryName = uniqueName(
+            folder,
+            `inspection-report-${safeFileName(inspectionLabel, "inspection")}.pdf`,
+          );
+          totalBytes += inspectionPdf.length;
+          zip.file(entryName, inspectionPdf);
+          included.push({ label: entryName, detail: "Inspection report (system-generated PDF)" });
+        }
+      } catch (err) {
+        console.error("❌ dossier: inspection report render failed:", err);
+        missing.push({
+          label: `Inspection ${inspectionLabel} report PDF`,
+          detail: "could not be rendered",
+        });
+      }
+
       const docsJson = Array.isArray(inspection.inspection_documents)
         ? (inspection.inspection_documents as Array<Record<string, unknown>>)
         : [];
