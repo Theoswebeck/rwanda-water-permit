@@ -3,6 +3,7 @@ import {
   activityCodeSqlExpression,
   activityLabelSqlExpression,
 } from "@/lib/permit/activity-classification";
+import { buildUnifiedCte, REGISTRY_STATUS_COUNT_SQL } from "@/lib/permit/registry-unified";
 
 export type RegistrySchema = {
   hasRegistry: boolean;
@@ -285,6 +286,19 @@ export function buildRegistryWhere(
   };
 }
 
+/**
+ * Scope every count in this module to the SAME dataset the staff Permit
+ * Registry and the public Water Use Dashboard read: registry rows UNION
+ * system-issued permits that have no registry row (see
+ * `lib/permit/registry-unified`). Counting `public.permit_registry` alone made
+ * the management dashboard report fewer permits than `/permit-registry`.
+ */
+function unifiedScope(schema: RegistrySchema, filters: RegistryListFilters) {
+  // deleted_at is already filtered inside the CTE — don't add it again in WHERE.
+  const { sql: whereSql, values } = buildRegistryWhere({ ...schema, hasDeletedAt: false }, filters);
+  return { cte: buildUnifiedCte(schema), whereSql, values };
+}
+
 export async function fetchRegistrySummary(
   schema: RegistrySchema,
   filters: RegistryListFilters
@@ -293,7 +307,7 @@ export async function fetchRegistrySummary(
     return { total: 0, operational: 0, expired: 0, cancelled: 0, expiringSoon: 0, regimeTypes: 0 };
   }
 
-  const { sql: whereSql, values } = buildRegistryWhere(schema, filters);
+  const { cte, whereSql, values } = unifiedScope(schema, filters);
 
   const summaryRes = await query<{
     total: string;
@@ -303,15 +317,11 @@ export async function fetchRegistrySummary(
     expiring_soon: string;
     regime_types: string;
   }>(
-    `
+    `${cte}
     SELECT
-      count(*)::text as total,
-      count(*) filter (where (upper(coalesce(pr.status, '')) like '%OPERATIONAL%' or (upper(coalesce(pr.status, '')) like '%ACTIVE%' and upper(coalesce(pr.status, '')) not like '%INACTIVE%')) and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%')::text as operational,
-      count(*) filter (where upper(coalesce(pr.status, '')) like '%EXPIRED%')::text as expired,
-      count(*) filter (where upper(coalesce(pr.status, '')) like '%CANCEL%' and upper(coalesce(pr.status, '')) not like '%EXPIRED%')::text as cancelled,
-      count(*) filter (where pr.expiration_date is not null and pr.expiration_date >= current_date and pr.expiration_date <= (current_date + interval '3 months'))::text as expiring_soon,
+      ${REGISTRY_STATUS_COUNT_SQL},
       count(distinct nullif(trim(coalesce(pr.regime, '')), ''))::text as regime_types
-    FROM public.permit_registry pr
+    FROM combined_permits pr
     ${whereSql}
     `,
     values
@@ -353,7 +363,7 @@ export async function fetchRegistryDistributions(
     };
   }
 
-  const { sql: whereSql, values } = buildRegistryWhere(schema, filters);
+  const { cte, whereSql, values } = unifiedScope(schema, filters);
 
   // GROUP BY the SQL CASE categorization so all variants of "lake X" / "X lake" /
   // "kivu lake" / "lake kivu" collapse into a single Lake bucket, etc. Without
@@ -361,10 +371,10 @@ export async function fetchRegistryDistributions(
   // the total permit count.
   const [waterSourceRes, activityRes, summary] = await Promise.all([
     query<{ key: string; n: string }>(
-      `
+      `${cte}
       SELECT ${WATER_SOURCE_CATEGORY_SQL} as key,
              count(*)::text as n
-      FROM public.permit_registry pr
+      FROM combined_permits pr
       ${whereSql}
       GROUP BY 1
       ORDER BY count(*) DESC
@@ -372,10 +382,10 @@ export async function fetchRegistryDistributions(
       values
     ),
     query<{ key: string; n: string }>(
-      `
+      `${cte}
       SELECT ${ACTIVITY_CATEGORY_SQL} as key,
              count(*)::text as n
-      FROM public.permit_registry pr
+      FROM combined_permits pr
       ${whereSql}
       GROUP BY 1
       ORDER BY count(*) DESC
@@ -475,10 +485,10 @@ export async function fetchRegistryAbstraction(
   if (!schema.hasRegistry) {
     return { totalPermittedM3PerDay: 0, totalPermittedM3PerYear: 0, parsedCount: 0, totalRows: 0 };
   }
-  const { sql: whereSql, values } = buildRegistryWhere(schema, filters);
+  const { cte, whereSql, values } = unifiedScope(schema, filters);
 
   const rowsRes = await query<{ volume_or_area: string | null }>(
-    `SELECT pr.volume_or_area FROM public.permit_registry pr ${whereSql}`,
+    `${cte} SELECT pr.volume_or_area FROM combined_permits pr ${whereSql}`,
     values
   );
 
@@ -510,7 +520,7 @@ export async function countNewlyIssued(
 ): Promise<number> {
   if (!schema.hasRegistry) return 0;
 
-  const { sql: whereSql, values } = buildRegistryWhere(schema, filters);
+  const { cte, whereSql, values } = unifiedScope(schema, filters);
 
   let dateClause: string;
   const localValues = [...values];
@@ -519,22 +529,25 @@ export async function countNewlyIssued(
     return `$${localValues.length}`;
   };
 
+  // `combined_permits.issuance_date` is text (the CTE casts both sources to a
+  // common type), so every date comparison must cast back to ::date — a plain
+  // text comparison would sort lexicographically and date_trunc() would error.
   if (from || to) {
     const parts: string[] = [];
-    if (from) parts.push(`pr.issuance_date >= ${next(from.toISOString().slice(0, 10))}`);
-    if (to) parts.push(`pr.issuance_date <= ${next(to.toISOString().slice(0, 10))}`);
+    if (from) parts.push(`pr.issuance_date::date >= ${next(from.toISOString().slice(0, 10))}::date`);
+    if (to) parts.push(`pr.issuance_date::date <= ${next(to.toISOString().slice(0, 10))}::date`);
     dateClause = parts.join(" AND ");
   } else {
     if (period === "monthly") {
-      dateClause = `date_trunc('month', pr.issuance_date) = date_trunc('month', current_date)`;
+      dateClause = `date_trunc('month', pr.issuance_date::date) = date_trunc('month', current_date)`;
     } else if (period === "quarterly") {
-      dateClause = `date_trunc('quarter', pr.issuance_date) = date_trunc('quarter', current_date)`;
+      dateClause = `date_trunc('quarter', pr.issuance_date::date) = date_trunc('quarter', current_date)`;
     } else {
-      dateClause = `date_trunc('year', pr.issuance_date) = date_trunc('year', current_date)`;
+      dateClause = `date_trunc('year', pr.issuance_date::date) = date_trunc('year', current_date)`;
     }
   }
 
-  const sql = `SELECT count(*)::text as n FROM public.permit_registry pr ${whereSql ? `${whereSql} AND` : "WHERE"} ${dateClause}`;
+  const sql = `${cte} SELECT count(*)::text as n FROM combined_permits pr ${whereSql ? `${whereSql} AND` : "WHERE"} ${dateClause}`;
   const res = await query<{ n: string }>(sql, localValues);
   return Number(res.rows[0]?.n || "0");
 }
