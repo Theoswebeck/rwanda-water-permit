@@ -14,7 +14,11 @@
  */
 
 import {
+  applySurfaceOnlyArticleNumbering,
   contractTermsByVariant,
+  reconcileSurfaceOnlyArticleNumber,
+  usesSurfaceOnlyArticle,
+  SURFACE_ONLY_ARTICLE_INSERTIONS,
   type ContractTerms,
   type ContractTermsSection,
 } from "@/lib/contract-terms";
@@ -28,7 +32,10 @@ import { CONTRACT_PARAGRAPH_SEPARATOR } from "./contract-slots";
 import { findSlot } from "./registry";
 import { resolveSlotText } from "./resolver";
 import { buildContractSlotContext } from "./build-context";
-import type { PermitApplication } from "@/lib/permit/permit-text-data";
+import {
+  resolveIsGroundwater,
+  type PermitApplication,
+} from "@/lib/permit/permit-text-data";
 
 export type GetResolvedContractTermsInput = {
   application: ApplicationForContract & PermitApplication;
@@ -89,12 +96,35 @@ export function getResolvedContractTerms(
     ? resolveOptional(subheadingId, template.subheading)
     : undefined;
 
+  // Individual abstraction contracts carry an extra "Other people's rights and
+  // access to water" article on SURFACE water, which is deliberately absent on
+  // groundwater (borehole) contracts and shifts every later article number up
+  // by one. See lib/contract-terms.ts for why this is an insertion rather than
+  // a second template.
+  const surfaceOnlyArticle = usesSurfaceOnlyArticle(
+    variant,
+    resolveIsGroundwater(input.application),
+  );
+
   const sections: ContractTermsSection[] = template.sections.map(
     (section, idx) => {
       const titleId = `contract.${variant}.section.${idx}.title`;
       const bodyId = `contract.${variant}.section.${idx}.body`;
 
-      const title = resolveOptional(titleId, section.title);
+      // The renumbered title is the *default*: the slot catalogue applies the
+      // same shift when it builds the default text, so this fallback only runs
+      // when the catalogue has not been registered. Applied once either way —
+      // an assessor's own title override is used verbatim.
+      const title = reconcileSurfaceOnlyArticleNumber(
+        resolveOptional(
+          titleId,
+          applySurfaceOnlyArticleNumbering(section.title, variant, idx, surfaceOnlyArticle),
+        ),
+        section.title,
+        variant,
+        idx,
+        surfaceOnlyArticle,
+      );
       const body = resolveOptional(
         bodyId,
         section.paragraphs.join(CONTRACT_PARAGRAPH_SEPARATOR),
@@ -107,6 +137,27 @@ export function getResolvedContractTerms(
     },
   );
 
+  const withSurfaceOnly: ContractTermsSection[] = surfaceOnlyArticle
+    ? (() => {
+        const merged: ContractTermsSection[] = [];
+        for (let idx = 0; idx <= sections.length; idx += 1) {
+          for (const insertion of SURFACE_ONLY_ARTICLE_INSERTIONS) {
+            if (insertion.insertBeforeIndex !== idx) continue;
+            const base = `contract.${variant}.surface_only.${insertion.key}`;
+            merged.push({
+              title: resolveOptional(`${base}.title`, insertion.section.title),
+              paragraphs: resolveOptional(
+                `${base}.body`,
+                insertion.section.paragraphs.join(CONTRACT_PARAGRAPH_SEPARATOR),
+              ).split(CONTRACT_PARAGRAPH_SEPARATOR),
+            });
+          }
+          if (idx < sections.length) merged.push(sections[idx]);
+        }
+        return merged;
+      })()
+    : sections;
+
   const importantNotice = template.importantNotice
     ? {
         title: resolveOptional(noticeTitleId, template.importantNotice.title),
@@ -116,7 +167,7 @@ export function getResolvedContractTerms(
 
   const out: ContractTerms = {
     heading,
-    sections,
+    sections: withSurfaceOnly,
     ...(subheading !== undefined ? { subheading } : {}),
     ...(importantNotice ? { importantNotice } : {}),
   };

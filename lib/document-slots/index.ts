@@ -36,7 +36,10 @@ export {
   UnknownSlotError,
   type ResolvedSlotForEditor,
 } from "./resolver";
-export { CONTRACT_PARAGRAPH_SEPARATOR } from "./contract-slots";
+export {
+  CONTRACT_PARAGRAPH_SEPARATOR,
+  isSurfaceOnlyArticleSlot,
+} from "./contract-slots";
 export {
   getResolvedContractTerms,
   type GetResolvedContractTermsInput,

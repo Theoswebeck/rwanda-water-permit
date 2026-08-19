@@ -22,6 +22,8 @@ import "../lib/document-slots"; // registers permit + contract catalogues
 
 import {
   contractTermsByVariant,
+  SURFACE_ONLY_ARTICLE_INSERTIONS,
+  SURFACE_ONLY_ARTICLE_VARIANT,
   type ContractTerms,
 } from "../lib/contract-terms";
 import {
@@ -117,10 +119,17 @@ for (const variant of Object.keys(contractTermsByVariant) as PermitVariant[]) {
   }
   const slots = getSlotsForDocument("contract", variant);
   // heading + (subheading?) + 2*sections + (notice ? 2)
+  // The surface-water-only Article 9 adds its own index-free title+body slots
+  // to the individual abstraction variant (see lib/contract-terms.ts).
+  const surfaceOnlySlots =
+    variant === SURFACE_ONLY_ARTICLE_VARIANT
+      ? SURFACE_ONLY_ARTICLE_INSERTIONS.length * 2
+      : 0;
   const expectedCount =
     1 +
     (terms.subheading ? 1 : 0) +
     terms.sections.length * 2 +
+    surfaceOnlySlots +
     (terms.importantNotice ? 2 : 0);
   ok(
     slots.length === expectedCount,
@@ -207,9 +216,16 @@ for (const variant of Object.keys(contractTermsByVariant) as PermitVariant[]) {
   });
   ok(resolved !== null, `${variant}: resolved not null`);
   if (!resolved) continue;
+  // The fixture has no `methodOfWaterAbstraction`, so it is a surface-water
+  // application and the individual abstraction contract gains Article 9.
+  const expectedSections =
+    terms.sections.length +
+    (variant === SURFACE_ONLY_ARTICLE_VARIANT
+      ? SURFACE_ONLY_ARTICLE_INSERTIONS.length
+      : 0);
   ok(
-    resolved.sections.length === terms.sections.length,
-    `${variant}: section count preserved (${resolved.sections.length})`,
+    resolved.sections.length === expectedSections,
+    `${variant}: section count preserved (${resolved.sections.length}, expected ${expectedSections})`,
   );
   // Spot-check first section parity (full byte equivalence of every paragraph).
   const expectedFirst = (terms.sections[0]?.paragraphs ?? []).map((p) =>

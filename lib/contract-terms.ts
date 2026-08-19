@@ -273,7 +273,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
         ],
       },
       {
-        title: "IGICE CYA II: UBURENGANZIRA N’INSHINGANO BY’UKORESHA MAZI — Ingingo ya 8: Amafaranga yishyurwa",
+        title: "IGICE CYA II: UBURENGANZIRA N’INSHINGANO BY’UKORESHA MAZI — Ingingo ya 5: Amafaranga yishyurwa",
         paragraphs: [
           "Ukoresha amazi yishyura amafaranga hakurikijwe ibiteganywa n’itegeko No 49/2018 ryo ku wa 13/08/2018 rigenga imikoreshereze n’imicungire y’umutungo kamere w’amazi.",
         ],
@@ -1692,3 +1692,243 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
 };
 
 
+
+// ── Surface-water-only article (individual abstraction) ───────────────────
+//
+// The `abstraction_individual` template above was transcribed from the
+// GROUNDWATER (borehole) individual contract. That document deliberately
+// drops "Article 9: Other people's rights and access to water" — a borehole
+// user neither diverts a public water body nor blocks anyone's access to it —
+// and therefore numbers every later article one lower than the surface-water
+// contract does.
+//
+// The same template was then used for EVERY individual abstraction permit, so
+// surface-water users silently lost the article too (RWB feedback,
+// 2026-08-19). The fix re-inserts it — and shifts the later article numbers
+// up by one, matching `abstraction_organization` exactly — but only when the
+// application is NOT groundwater.
+//
+// It is done as an *insertion on top of* the template (rather than by editing
+// the template and stripping the article for groundwater) so that
+// `contract.abstraction_individual.section.<idx>.*` slot ids keep pointing at
+// the same section they always did. Assessor text overrides already saved
+// against those ids stay correctly attached; the injected article gets its own
+// dedicated, index-free slot ids (see `lib/document-slots/contract-slots.ts`).
+
+/** The one variant that carries the groundwater-flavoured template. */
+export const SURFACE_ONLY_ARTICLE_VARIANT: PermitVariant = "abstraction_individual";
+
+export type SurfaceOnlyArticleInsertion = {
+  /** Stable slot-id fragment — never derived from an array index. */
+  key: string;
+  language: ContractTermsLanguage;
+  /** Template index this section is rendered immediately BEFORE. */
+  insertBeforeIndex: number;
+  /**
+   * Inclusive template index range whose article numbers shift up by one
+   * because of this insertion (the rest of that language's block).
+   */
+  renumberFromIndex: number;
+  renumberToIndex: number;
+  /** Matches "— Article 12:" / "— Ingingo ya 12:" in a section title. */
+  articlePattern: RegExp;
+  section: ContractTermsSection;
+};
+
+export const SURFACE_ONLY_ARTICLE_INSERTIONS: readonly SurfaceOnlyArticleInsertion[] = [
+  {
+    key: "other_rights_en",
+    language: "en",
+    insertBeforeIndex: 9,
+    renumberFromIndex: 9,
+    renumberToIndex: 19,
+    articlePattern: /(—\s*Article\s+)(\d+)(\s*:)/,
+    section: {
+      title:
+        "PART II: RIGHTS AND OBLIGATIONS OF THE WATER USER — Article 9: Other people’s rights and access to water",
+      paragraphs: [
+        "1. The Water User may not take any action that restricts the right of the public to reasonably use the Water Resources, including, without limitation, the right to fetch water for domestic use.",
+        "2. The issuance of a Water Use Permit does not authorize any injury to private or public property nor any invasion of personal rights, or any infringement of any applicable law. The Water User shall be responsible for securing authorization, easements, rights-of-way, leases or permission of land owners to obtain access to the locations specified in the Water Use Permit and all land and properties necessary for diversion purposes prior to commencing proposed works.",
+      ],
+    },
+  },
+  {
+    key: "other_rights_rw",
+    language: "rw",
+    insertBeforeIndex: 30,
+    renumberFromIndex: 30,
+    renumberToIndex: 40,
+    articlePattern: /(—\s*Ingingo\s+ya\s+)(\d+)(\s*:)/,
+    section: {
+      title:
+        "IGICE CYA II: UBURENGANZIRA N’INSHINGANO BY’UKORESHA MAZI — Ingingo ya 9: Uburenganzira bw’abandi bantu bwo kugera ku mazi",
+      paragraphs: [
+        "1.Ukoresha amazi ntashobora gukora ibikorwa bibuza uburenganzira abandi bantu bwo gukoresha umutungo kamere w’amazi, harimo kuvoma amazi akoreshwa murugo.",
+        "2. Itangwa ry'Uruhushya ntiritanga uburenganzira bwo kwangiza imitungo y’abantu ku giti cyabo cyangwa iya Leta cyangwa kunyuranya n’amategeko ariho. Ukoresha amazi agomba kuba afite inzira cyangwa ubureganzira bw’abanyirubutaka bumwemererera kugera aho akorera cyangwa aho akura amazi, mbere y’uko atangira imirimo ye.",
+      ],
+    },
+  },
+];
+
+/**
+ * The insertion indices above are positions inside the template array, so they
+ * are only meaningful while the template keeps its current shape. This check
+ * verifies the anchors at module load.
+ *
+ * It deliberately does NOT throw: `lib/contract-terms.ts` is imported by client
+ * components (the applicant terms page, the PDF generator), and a thrown module
+ * initialiser would take those pages down. Instead a drifting template disables
+ * the insertion — degrading to the pre-2026-08-19 behaviour, which is wrong but
+ * not broken — and shouts on the server console.
+ *
+ * `scripts/check-contract-surface-article.ts` asserts the anchors hard, so the
+ * drift is caught in dev/CI long before it can reach a user.
+ */
+const SURFACE_ONLY_ANCHORS_OK: boolean = (function checkSurfaceOnlyAnchors(): boolean {
+  const terms = contractTermsByVariant[SURFACE_ONLY_ARTICLE_VARIANT];
+  const complain = (message: string): boolean => {
+    console.error(
+      `contract-terms: ${message} The surface-water Article 9 insertion is DISABLED until SURFACE_ONLY_ARTICLE_INSERTIONS is updated to match the template.`,
+    );
+    return false;
+  };
+  if (!terms) {
+    return complain(`${SURFACE_ONLY_ARTICLE_VARIANT} template is missing.`);
+  }
+  // Section count is part of the contract: a section appended after the last
+  // renumbered index would silently keep its old article number.
+  const expectedLength = 41;
+  if (terms.sections.length !== expectedLength) {
+    return complain(
+      `${SURFACE_ONLY_ARTICLE_VARIANT} has ${terms.sections.length} sections, expected ${expectedLength}.`,
+    );
+  }
+  const expectations: Array<[number, string]> = [
+    [8, "Article 8: Deviation from the water use"],
+    [9, "Article 9: Records keeping"],
+    [19, "Signatures"],
+    [29, "Ingingo ya 8: Guhindura imikoreshereze"],
+    [30, "Ingingo ya 9: Kubika amakuru"],
+    [40, "Imikono"],
+  ];
+  for (const [index, fragment] of expectations) {
+    const title = terms.sections[index]?.title ?? "";
+    if (!title.includes(fragment)) {
+      return complain(
+        `${SURFACE_ONLY_ARTICLE_VARIANT} section[${index}] was expected to contain ${JSON.stringify(fragment)} but is ${JSON.stringify(title)}.`,
+      );
+    }
+  }
+  // Same round-trip safety net contract-slots.ts applies to template
+  // paragraphs: a paragraph containing the separator would be split in two.
+  for (const insertion of SURFACE_ONLY_ARTICLE_INSERTIONS) {
+    if (insertion.section.paragraphs.some((p) => p.includes("\n\n"))) {
+      return complain(
+        `surface-only insertion ${JSON.stringify(insertion.key)} has a paragraph containing the paragraph separator.`,
+      );
+    }
+  }
+  return true;
+})();
+
+/** Exposed so `scripts/check-contract-surface-article.ts` can assert hard on
+ *  what the runtime only warns about. */
+export function surfaceOnlyArticleAnchorsOk(): boolean {
+  return SURFACE_ONLY_ANCHORS_OK;
+}
+
+/**
+ * True when the surface-water Article 9 must be added to this contract.
+ * Groundwater (borehole) applications keep the template as-is.
+ */
+export function usesSurfaceOnlyArticle(
+  variant: PermitVariant,
+  isGroundwater: boolean,
+): boolean {
+  return (
+    SURFACE_ONLY_ANCHORS_OK &&
+    variant === SURFACE_ONLY_ARTICLE_VARIANT &&
+    !isGroundwater
+  );
+}
+
+/**
+ * Shifts a template section title's article number up by one when the
+ * surface-water insertion sits above it. Returns the title untouched for
+ * every other variant, index, source, or non-numbered title ("Preamble",
+ * "Article one", "Signatures", …).
+ *
+ * Call this exactly ONCE per rendered title — it is not idempotent. The slot
+ * catalogue applies it when producing a section title's default text, and the
+ * contract resolver applies it only on the no-slot fallback path, so a title
+ * never passes through it twice. An assessor-authored title override is left
+ * verbatim, as with every other slot.
+ */
+export function applySurfaceOnlyArticleNumbering(
+  title: string,
+  variant: PermitVariant,
+  templateIndex: number,
+  /** Result of {@link usesSurfaceOnlyArticle} for this application. */
+  applies: boolean,
+): string {
+  if (!applies || variant !== SURFACE_ONLY_ARTICLE_VARIANT) return title;
+  for (const insertion of SURFACE_ONLY_ARTICLE_INSERTIONS) {
+    if (
+      templateIndex < insertion.renumberFromIndex ||
+      templateIndex > insertion.renumberToIndex
+    ) {
+      continue;
+    }
+    const match = insertion.articlePattern.exec(title);
+    if (!match) continue;
+    return title.replace(
+      insertion.articlePattern,
+      (_full, prefix: string, num: string, suffix: string) =>
+        `${prefix}${Number(num) + 1}${suffix}`,
+    );
+  }
+  return title;
+}
+
+/**
+ * Reconciles an already-RESOLVED section title with the surface-water
+ * renumbering.
+ *
+ * `applySurfaceOnlyArticleNumbering` shifts the *default* text, but an
+ * assessor title override is stored verbatim and is used as-is. An override
+ * written before this fix carries the pre-shift number, so it would collide
+ * with the injected Article 9 ("…Article 9: Records keeping" printed right
+ * under "…Article 9: Other people's rights").
+ *
+ * So: shift the resolved title only when it still bears the template's
+ * original article number. An override whose number was already shifted (the
+ * normal default path) or deliberately set to something else is left alone,
+ * which also makes this safe to apply on top of the default path.
+ */
+export function reconcileSurfaceOnlyArticleNumber(
+  resolvedTitle: string,
+  templateTitle: string,
+  variant: PermitVariant,
+  templateIndex: number,
+  applies: boolean,
+): string {
+  if (!applies || variant !== SURFACE_ONLY_ARTICLE_VARIANT) return resolvedTitle;
+  for (const insertion of SURFACE_ONLY_ARTICLE_INSERTIONS) {
+    if (
+      templateIndex < insertion.renumberFromIndex ||
+      templateIndex > insertion.renumberToIndex
+    ) {
+      continue;
+    }
+    const templateNumber = insertion.articlePattern.exec(templateTitle)?.[2];
+    const resolvedNumber = insertion.articlePattern.exec(resolvedTitle)?.[2];
+    if (!templateNumber || resolvedNumber !== templateNumber) continue;
+    return applySurfaceOnlyArticleNumbering(
+      resolvedTitle,
+      variant,
+      templateIndex,
+      applies,
+    );
+  }
+  return resolvedTitle;
+}

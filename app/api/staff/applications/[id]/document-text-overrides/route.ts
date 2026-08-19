@@ -31,6 +31,7 @@ import {
   getSlotsForDocument,
   HARD_MAX_SLOT_LENGTH,
   isDateBearingSlot,
+  isSurfaceOnlyArticleSlot,
   readEnvelopeForWrite,
   resolveSlotsForEditor,
   type DocumentTextPatch,
@@ -44,7 +45,11 @@ import {
   buildPermitSlotContext,
 } from "@/lib/document-slots/build-context";
 import { repairBoldMarkers } from "@/lib/document-slots/bold-markers";
-import type { PermitApplication } from "@/lib/permit/permit-text-data";
+import { usesSurfaceOnlyArticle } from "@/lib/contract-terms";
+import {
+  resolveIsGroundwater,
+  type PermitApplication,
+} from "@/lib/permit/permit-text-data";
 import { selectPermitVariant } from "@/lib/permit-variant";
 import { resolvePermitRenderDatesFromNotes } from "@/lib/permit/resolve-render-dates-from-notes";
 
@@ -249,7 +254,14 @@ function buildEditorPayload(application: PermitApplication): EditorPayload {
       "contract",
       variant,
       contractCtx,
-      getSlotsForDocument("contract", variant),
+      // The surface-water-only Article 9 is not part of a groundwater
+      // (borehole) contract, so hide its slots rather than letting an assessor
+      // edit text that would never be rendered.
+      getSlotsForDocument("contract", variant).filter(
+        (slot) =>
+          !isSurfaceOnlyArticleSlot(slot.id) ||
+          usesSurfaceOnlyArticle(variant, resolveIsGroundwater(application)),
+      ),
     ),
   };
 }

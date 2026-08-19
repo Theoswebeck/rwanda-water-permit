@@ -24,9 +24,13 @@
  */
 
 import {
+  applySurfaceOnlyArticleNumbering,
   contractTermsByVariant,
   getContractSectionLanguage,
   parseSectionHeading,
+  usesSurfaceOnlyArticle,
+  SURFACE_ONLY_ARTICLE_INSERTIONS,
+  SURFACE_ONLY_ARTICLE_VARIANT,
   type ContractTerms,
 } from "@/lib/contract-terms";
 import {
@@ -109,6 +113,63 @@ function languageOf(title: string): SlotLanguage {
   return getContractSectionLanguage(title);
 }
 
+/** True when THIS application's contract carries the surface-water-only
+ *  Article 9 (see `lib/contract-terms.ts`). Reads the same
+ *  `internal_notes.methodOfWaterAbstraction` flag the rest of the contract
+ *  placeholders use, via the per-resolution placeholder cache. */
+function surfaceOnlyArticleApplies(
+  variant: PermitVariant,
+  ctx: SlotResolverContext,
+): boolean {
+  if (variant !== SURFACE_ONLY_ARTICLE_VARIANT) return false;
+  return usesSurfaceOnlyArticle(variant, getPlaceholderCtx(ctx).isGroundwater);
+}
+
+/** Slots for the surface-water-only Article 9. Keyed by name rather than by
+ *  array index so adding the article never shifts the `section.<idx>` ids —
+ *  assessor overrides saved before it existed stay attached to the section
+ *  they were written for. Registered for the variant unconditionally (the
+ *  catalogue is static, built without an application); the editor API hides
+ *  them on groundwater applications, where the article is not part of the
+ *  document. */
+function surfaceOnlySlotsFor(
+  variant: PermitVariant,
+  insertion: (typeof SURFACE_ONLY_ARTICLE_INSERTIONS)[number],
+): DocumentTextSlot[] {
+  const { key, section } = insertion;
+  const group = groupForSection(section.title);
+  const lang = languageOf(section.title);
+  return [
+    {
+      id: `contract.${variant}.surface_only.${key}.title`,
+      documentKind: "contract",
+      variant,
+      language: lang,
+      group,
+      label: "Other people’s rights (surface water only) — title",
+      inline: true,
+      softMaxLength: 300,
+      defaultResolver: (ctx) => fill(section.title, ctx),
+    },
+    {
+      id: `contract.${variant}.surface_only.${key}.body`,
+      documentKind: "contract",
+      variant,
+      language: lang,
+      group,
+      label: "Other people’s rights (surface water only) — body",
+      inline: false,
+      softMaxLength: 4000,
+      defaultResolver: (ctx) => fill(joinParagraphs(section.paragraphs), ctx),
+    },
+  ];
+}
+
+/** True for the slots {@link surfaceOnlySlotsFor} produces. */
+export function isSurfaceOnlyArticleSlot(slotId: string): boolean {
+  return slotId.startsWith(`contract.${SURFACE_ONLY_ARTICLE_VARIANT}.surface_only.`);
+}
+
 /** Build all slots for one variant. Pure; the registry call lives below. */
 function buildVariantSlots(
   variant: PermitVariant,
@@ -161,6 +222,16 @@ function buildVariantSlots(
     const lang = languageOf(section.title);
     const group = groupForSection(section.title);
 
+    // Keep the editor list in document order: the surface-water-only article
+    // renders immediately before this section, so its slots are listed here.
+    if (variant === SURFACE_ONLY_ARTICLE_VARIANT) {
+      for (const insertion of SURFACE_ONLY_ARTICLE_INSERTIONS) {
+        if (insertion.insertBeforeIndex === idx) {
+          out.push(...surfaceOnlySlotsFor(variant, insertion));
+        }
+      }
+    }
+
     out.push({
       id: `contract.${variant}.section.${idx}.title`,
       documentKind: "contract",
@@ -170,7 +241,20 @@ function buildVariantSlots(
       label: `Section ${idx + 1} — title`,
       inline: true,
       softMaxLength: 300,
-      defaultResolver: (ctx) => fill(section.title, ctx),
+      // Surface-water individual abstraction contracts gain an extra Article 9,
+      // which shifts every later article number up by one. The shift is applied
+      // here (once, on the default text) so the editor, the preview and the PDF
+      // all show the same number; an assessor's own title override wins as usual.
+      defaultResolver: (ctx) =>
+        fill(
+          applySurfaceOnlyArticleNumbering(
+            section.title,
+            variant,
+            idx,
+            surfaceOnlyArticleApplies(variant, ctx),
+          ),
+          ctx,
+        ),
     });
 
     out.push({
