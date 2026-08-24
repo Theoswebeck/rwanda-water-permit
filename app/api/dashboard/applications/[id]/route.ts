@@ -239,31 +239,67 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const coercedEnums: string[] = []
     const pendingMigrations: string[] = []
 
+    // Status writes from the applicant dashboard are restricted twice over:
+    //  - the requested value may only be an applicant-stage status (an applicant
+    //    must never be able to set e.g. 'approved' on their own application);
+    //  - the row's CURRENT status must still be applicant-editable, enforced in
+    //    the UPDATE's where-clause so a concurrent promotion cannot slip through.
+    // Clients can hold a stale view of the status: RWB-2026-000184 was promoted
+    // to 'submitted' by a payment-status poll and 11 seconds later a save-as-draft
+    // from the still-mounted form PATCHed it back to 'draft', hiding the paid
+    // application from staff for 20 days (same class as RWB-2026-000064).
+    const APPLICANT_SETTABLE_STATUSES = new Set(['draft', 'pending_payment', 'submitted'])
+    const APPLICANT_EDITABLE_CURRENT_STATUSES = ['draft', 'pending_payment', 'revision_required']
+    let statusDroppedReason: string | null = null
+    if ('status' in updatePayload && !APPLICANT_SETTABLE_STATUSES.has(String(updatePayload.status))) {
+      statusDroppedReason = `requested status "${String(updatePayload.status)}" is not applicant-settable`
+      delete updatePayload.status
+    }
+
     while (true) {
       const keys = Object.keys(updatePayload)
       if (!keys.length) {
         return NextResponse.json({ success: false, message: 'No update fields provided' }, { status: 400 })
       }
 
+      const includesStatus = 'status' in updatePayload
       const { sets, values } = buildApplicationUpdateParts(updatePayload)
       values.push(id, userId)
+      let statusGuardSql = ''
+      if (includesStatus) {
+        values.push(APPLICANT_EDITABLE_CURRENT_STATUSES)
+        statusGuardSql = ` and status = any($${keys.length + 3})`
+      }
 
       try {
         const updated = await query(
           `
           update public.applications
           set ${sets.join(', ')}
-          where id = $${keys.length + 1} and applicant_id = $${keys.length + 2}
+          where id = $${keys.length + 1} and applicant_id = $${keys.length + 2}${statusGuardSql}
           returning *
           `,
           values
         )
 
         if (!updated.rowCount) {
+          if (includesStatus) {
+            // The row exists but is no longer in an applicant-editable status
+            // (or does not belong to this user). Retry without touching status
+            // so plain field saves still succeed instead of clobbering the
+            // application's pipeline state.
+            statusDroppedReason = `application is not in an applicant-editable status (attempted "${String(updatePayload.status)}")`
+            delete updatePayload.status
+            continue
+          }
           return NextResponse.json(
             { success: false, message: 'Application not found or cannot be updated' },
             { status: 404 }
           )
+        }
+
+        if (statusDroppedReason) {
+          console.warn(`⚠️ dashboard applications PATCH ignored status write on ${id}: ${statusDroppedReason}`)
         }
 
         if (droppedColumns.length > 0) {
@@ -305,6 +341,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
           ...(coercedEnums.length > 0
             ? { enumCoercions: coercedEnums, pendingMigrations: pendingMigrations }
             : {}),
+          ...(statusDroppedReason ? { statusIgnored: statusDroppedReason } : {}),
         })
       } catch (updateErr) {
         // Schema older than the code, case 1: the enum value exists in the app's
