@@ -9,6 +9,7 @@ import { UserManagement } from "@/components/admin/user-management";
 import { SystemOverview } from "@/components/admin/system-overview";
 import { ApplicationOversight } from "@/components/admin/application-oversight";
 import { AdminReports } from "@/components/admin/admin-reports";
+import { ApiAccessManagement } from "@/components/admin/api-access-management";
 import { ActivityLogs } from "@/components/admin/activity-logs";
 import { RoleDelegationManagement } from "@/components/admin/role-delegation-management";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
@@ -16,15 +17,16 @@ import { WaterUseReportsList } from "@/components/water-use-reports/water-use-re
 import { ProtectedRoute } from "@/components/auth/protected-route";
 
 import { getAdminDashboardStats } from "@/lib/supabase";
-import { 
-  Users, 
-  FileText, 
+import {
+  Users,
+  FileText,
   TrendingUp,
   AlertTriangle,
   CheckCircle,
   Clock,
   Loader2,
-  UserCheck
+  UserCheck,
+  KeyRound
 } from "lucide-react";
 
 interface AdminDashboardStats {
@@ -192,7 +194,7 @@ export default function AdminDashboard() {
 
           {/* Main Content Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-8">
+            <TabsList className="grid w-full grid-cols-9">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="users">User Management</TabsTrigger>
               <TabsTrigger value="delegations" className="flex items-center gap-1">
@@ -202,6 +204,10 @@ export default function AdminDashboard() {
               <TabsTrigger value="applications">Applications</TabsTrigger>
               <TabsTrigger value="water-reports">Water Use Reports</TabsTrigger>
               <TabsTrigger value="map">Consolidated Map</TabsTrigger>
+              <TabsTrigger value="api-access" className="flex items-center gap-1">
+                <KeyRound className="h-3.5 w-3.5" />
+                API Access
+              </TabsTrigger>
               <TabsTrigger value="logs">Activity Logs</TabsTrigger>
               <TabsTrigger value="reports">Reports</TabsTrigger>
             </TabsList>
@@ -228,6 +234,10 @@ export default function AdminDashboard() {
             
             <TabsContent value="map" className="space-y-4">
               <WaterConcessionMap />
+            </TabsContent>
+
+            <TabsContent value="api-access" className="space-y-4">
+              <ApiAccessManagement />
             </TabsContent>
             
             <TabsContent value="logs" className="space-y-4">
