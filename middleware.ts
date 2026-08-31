@@ -41,6 +41,9 @@ const AUTH_PAGES = ['/login', '/register']
 const PUBLIC_API_PREFIXES = [
   // Data behind the public Water Use Dashboard. Aggregate counts only.
   '/api/public/water-use-dashboard',
+  // Government-agency API access request form (design: docs/api-access-DESIGN.md).
+  // POST-only by route shape; zod-validated, honeypot + IP throttle in-route.
+  '/api/public/api-access-requests',
   // Public permit verification: the /permit/view/<number> page reached by
   // scanning a permit's QR code lets anyone download that permit's PDF.
   '/api/public/permits/pdf/',
@@ -58,6 +61,13 @@ const PUBLIC_API_PREFIXES = [
   '/api/health',
   '/api/warmup',
 ]
+
+// Server-to-server API for government agencies, authenticated by API key
+// (rwb_<env>_… in the X-API-Key header) instead of a browser session. The
+// edge middleware has no DB access, so the key check itself happens in-route:
+// EVERY route under /api/v1/ must call requireApiKey() before any other
+// logic — default-deny at the route level (docs/api-access-DESIGN.md §8).
+const KEY_API_PREFIXES = ['/api/v1/']
 
 /** Routes only staff may call. Applicants get 403 even when signed in. */
 const STAFF_API_PREFIXES = ['/api/staff/', '/api/management/', '/api/approver/']
@@ -132,6 +142,9 @@ function resolveEffectiveRolesFromClaims(
  */
 async function guardApiRequest(request: NextRequest, pathname: string) {
   if (isPublicApiPath(pathname)) return null
+
+  // /api/v1/* authenticates by API key in-route, not by browser session here.
+  if (KEY_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return null
 
   const token = request.cookies.get(getAuthCookieName())?.value
   if (!token) return jsonError('Authentication required', 401)
