@@ -43,6 +43,12 @@ export type RegistryListFilters = {
    * Extraction, …), the management dashboard only needs use categories.
    */
   activityCode?: string;
+  /**
+   * Restrict to these unified-row ids. Used for filters derived outside SQL
+   * (catchment / district, resolved via lib/permit/catchment-resolution).
+   * An empty array matches nothing.
+   */
+  permitIds?: string[];
 };
 
 export type RegistryWhere = { sql: string; values: unknown[] };
@@ -278,6 +284,10 @@ export function buildRegistryWhere(
   // not just the rows currently rendered.
   if (filters.activityCode && filters.activityCode !== "all") {
     where.push(`${REGISTRY_ACTIVITY_CODE_SQL} = ${p(filters.activityCode)}`);
+  }
+
+  if (filters.permitIds) {
+    where.push(`pr.id::text = ANY(${p(filters.permitIds)})`);
   }
 
   return {

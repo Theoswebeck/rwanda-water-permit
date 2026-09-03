@@ -7,6 +7,7 @@ import {
   REGISTRY_ACTIVITY_LABEL_SQL,
 } from "@/lib/permit/registry-counts";
 import { buildUnifiedCte, REGISTRY_STATUS_COUNT_SQL } from "@/lib/permit/registry-unified";
+import { resolveCatchment } from "@/lib/permit/catchment-resolution";
 
 const EMPTY_RESULT = {
   items: [],
@@ -28,6 +29,8 @@ export async function GET(req: NextRequest) {
     const regime = searchParams.get("regime") || "all";
     const activity = searchParams.get("activity") || "all";
     const status = searchParams.get("status") || "all";
+    const catchment = searchParams.get("catchment") || "all";
+    const district = searchParams.get("district") || "all";
     const sortBy = searchParams.get("sort_by") || (schema.hasRowIndex ? "row_index" : "serial_number");
     const sortDir = searchParams.get("sort_dir") === "desc" ? "desc" : "asc";
     // parseInt("abc") is NaN, which Postgres rejects as an invalid bigint — fall
@@ -48,9 +51,34 @@ export async function GET(req: NextRequest) {
 
     const cte = buildUnifiedCte(schema);
 
+    // Catchment / district are not stored columns — they're derived per row by
+    // the same resolver the Water Use Dashboard uses (coordinates → polygon,
+    // location text → district), so both screens agree. Resolve matching ids
+    // here, then filter in SQL so pagination, sorting and summary stay exact.
+    // ponytail: full scan of ~1.4k rows per filtered request; precompute a
+    // stored column if the registry ever grows by orders of magnitude.
+    let permitIds: string[] | undefined;
+    if (catchment !== "all" || district !== "all") {
+      const rowsRes = await query<{
+        id: string;
+        latitude: number | null;
+        longitude: number | null;
+        location: string | null;
+      }>(`${cte} SELECT pr.id, pr.latitude, pr.longitude, pr.location FROM combined_permits pr`);
+      const wantDistrict = district.trim().toLowerCase();
+      permitIds = rowsRes.rows
+        .filter((row) => {
+          const resolved = resolveCatchment(row);
+          if (catchment !== "all" && resolved.code !== catchment) return false;
+          if (district !== "all" && (resolved.district ?? "").toLowerCase() !== wantDistrict) return false;
+          return true;
+        })
+        .map((row) => row.id);
+    }
+
     // deleted_at is already filtered inside the CTE — don't add it again in WHERE.
     const schemaForWhere = { ...schema, hasDeletedAt: false };
-    const filters = { q, regime, status, activityCode: activity };
+    const filters = { q, regime, status, activityCode: activity, permitIds };
     const { sql: whereSql, values } = buildRegistryWhere(schemaForWhere, filters);
 
     // Compute summary counts from the unified dataset.

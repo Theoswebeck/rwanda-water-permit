@@ -63,6 +63,7 @@ import {
   classifyActivity,
   getActivityCategoryLabel,
 } from "@/lib/permit/activity-classification";
+import { RWANDA_CATCHMENTS } from "@/lib/rwanda-catchments";
 import { cn } from "@/lib/utils";
 import { RowActions } from "@/components/permit-registry/row-actions";
 import { EditRegistryDrawer } from "@/components/permit-registry/edit-registry-drawer";
@@ -98,6 +99,18 @@ const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer)
 const CircleMarker = dynamic(() => import("react-leaflet").then((m) => m.CircleMarker), { ssr: false });
 const LeafletPolygon = dynamic(() => import("react-leaflet").then((m) => m.Polygon), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then((m) => m.Popup), { ssr: false });
+
+// Rwanda's 30 districts (fixed by the 2006 administrative reform). Kept as a
+// local const — the only other sources are ~400KB data modules that would
+// otherwise land in the client bundle for 30 names.
+const RWANDA_DISTRICTS = [
+  "Bugesera", "Burera", "Gakenke", "Gasabo", "Gatsibo", "Gicumbi",
+  "Gisagara", "Huye", "Kamonyi", "Karongi", "Kayonza", "Kicukiro",
+  "Kirehe", "Muhanga", "Musanze", "Ngoma", "Ngororero", "Nyabihu",
+  "Nyagatare", "Nyamagabe", "Nyamasheke", "Nyanza", "Nyarugenge",
+  "Nyaruguru", "Rubavu", "Ruhango", "Rulindo", "Rusizi", "Rutsiro",
+  "Rwamagana",
+];
 
 type SortField =
   | "row_index"
@@ -140,6 +153,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const [searchTerm, setSearchTerm] = useState("");
   const [activityFilter, setActivityFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [catchmentFilter, setCatchmentFilter] = useState<string>("all");
+  const [districtFilter, setDistrictFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("row_index");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -169,6 +184,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     q: searchTerm,
     activity: activityFilter,
     status: statusFilter,
+    catchment: catchmentFilter,
+    district: districtFilter,
     sort_by: sortField,
     sort_dir: sortDir,
     limit: PAGE_SIZE,
@@ -240,7 +257,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     setCurrentPage(1);
     setJumpPage("");
     setJumpError(false);
-  }, [searchTerm, activityFilter, statusFilter, sortField, sortDir]);
+  }, [searchTerm, activityFilter, statusFilter, catchmentFilter, districtFilter, sortField, sortDir]);
 
   useEffect(() => {
     if (total > 0 && currentPage > totalPages) {
@@ -497,6 +514,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const activeFilterCount = [
     activityFilter !== "all",
     statusFilter !== "all",
+    catchmentFilter !== "all",
+    districtFilter !== "all",
     searchTerm.trim() !== "",
   ].filter(Boolean).length;
 
@@ -504,6 +523,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     setSearchTerm("");
     setActivityFilter("all");
     setStatusFilter("all");
+    setCatchmentFilter("all");
+    setDistrictFilter("all");
   };
 
   const hasRegistrySource = (entry: PermitRegistryEntry) => {
@@ -640,6 +661,32 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                 {availableStatuses.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s.charAt(0) + s.slice(1).toLowerCase()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={catchmentFilter} onValueChange={setCatchmentFilter}>
+              <SelectTrigger className="w-[190px] border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg h-10">
+                <SelectValue placeholder="Catchment" />
+              </SelectTrigger>
+              <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
+                <SelectItem value="all">All Catchments</SelectItem>
+                {RWANDA_CATCHMENTS.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.level1Label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={districtFilter} onValueChange={setDistrictFilter}>
+              <SelectTrigger className="w-[160px] border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg h-10">
+                <SelectValue placeholder="District" />
+              </SelectTrigger>
+              <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700 max-h-[320px]">
+                <SelectItem value="all">All Districts</SelectItem>
+                {RWANDA_DISTRICTS.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
                   </SelectItem>
                 ))}
               </SelectContent>

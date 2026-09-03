@@ -12,6 +12,9 @@ export interface PermitRegistryQueryParams {
   /** Canonical activity code (see lib/permit/activity-classification). */
   activity?: string;
   status?: string;
+  /** Level-I catchment code, e.g. "CKIV" (see lib/rwanda-catchments). */
+  catchment?: string;
+  district?: string;
   sort_by?: string;
   sort_dir?: "asc" | "desc";
   limit?: number;
@@ -45,6 +48,8 @@ export function usePermitRegistryQuery(params: PermitRegistryQueryParams, enable
       if (params.regime && params.regime !== "all") searchParams.set("regime", params.regime);
       if (params.activity && params.activity !== "all") searchParams.set("activity", params.activity);
       if (params.status && params.status !== "all") searchParams.set("status", params.status);
+      if (params.catchment && params.catchment !== "all") searchParams.set("catchment", params.catchment);
+      if (params.district && params.district !== "all") searchParams.set("district", params.district);
 
       const res = await fetch(`/api/staff/permit-registry?${searchParams.toString()}`, {
         credentials: "include",
