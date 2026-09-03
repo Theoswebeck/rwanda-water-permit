@@ -65,12 +65,22 @@ export async function GET(req: NextRequest) {
         longitude: number | null;
         location: string | null;
       }>(`${cte} SELECT pr.id, pr.latitude, pr.longitude, pr.location FROM combined_permits pr`);
+      // "__UNSPECIFIED__" selects rows the resolver can't place (no usable
+      // coordinates / unparseable location).
       const wantDistrict = district.trim().toLowerCase();
       permitIds = rowsRes.rows
         .filter((row) => {
           const resolved = resolveCatchment(row);
-          if (catchment !== "all" && resolved.code !== catchment) return false;
-          if (district !== "all" && (resolved.district ?? "").toLowerCase() !== wantDistrict) return false;
+          if (catchment === "__UNSPECIFIED__") {
+            if (resolved.code !== null) return false;
+          } else if (catchment !== "all" && resolved.code !== catchment) {
+            return false;
+          }
+          if (district === "__UNSPECIFIED__") {
+            if (resolved.district !== null) return false;
+          } else if (district !== "all" && (resolved.district ?? "").toLowerCase() !== wantDistrict) {
+            return false;
+          }
           return true;
         })
         .map((row) => row.id);

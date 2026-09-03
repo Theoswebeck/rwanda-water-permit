@@ -671,6 +671,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               </SelectTrigger>
               <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
                 <SelectItem value="all">All Catchments</SelectItem>
+                <SelectItem value="__UNSPECIFIED__">Unspecified</SelectItem>
                 {RWANDA_CATCHMENTS.map((c) => (
                   <SelectItem key={c.code} value={c.code}>
                     {c.level1Label}
@@ -684,6 +685,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               </SelectTrigger>
               <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700 max-h-[320px]">
                 <SelectItem value="all">All Districts</SelectItem>
+                <SelectItem value="__UNSPECIFIED__">Unspecified</SelectItem>
                 {RWANDA_DISTRICTS.map((d) => (
                   <SelectItem key={d} value={d}>
                     {d}
