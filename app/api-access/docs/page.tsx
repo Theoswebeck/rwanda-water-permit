@@ -1,6 +1,7 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, BookOpen } from "lucide-react";
 
 /**
  * Public API documentation page (design: docs/api-access-DESIGN.md §8).
@@ -28,9 +29,9 @@ function Endpoint({
   return (
     <div className="mt-8 border-t pt-6 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-center gap-2">
-        <code className="rounded bg-slate-900 px-2 py-1 font-mono text-xs text-green-400">{method}</code>
-        <code className="font-mono text-sm font-semibold break-all">{path}</code>
-        <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs text-sky-700">
+        <code className="rounded bg-primary px-2 py-1 font-mono text-xs text-secondary">{method}</code>
+        <code className="font-mono text-sm font-semibold break-all text-primary">{path}</code>
+        <span className="rounded-full bg-secondary/15 px-2.5 py-0.5 text-xs font-medium text-primary">
           scope: {scope}
         </span>
       </div>
@@ -50,13 +51,27 @@ function Endpoint({
 export default function ApiDocsPage() {
   return (
     <div className="min-h-screen bg-white">
-      <div className="border-b bg-slate-900 py-12 text-white">
-        <div className="container mx-auto max-w-4xl px-4">
-          <h1 className="text-2xl font-bold md:text-3xl">Water Permit Data API</h1>
-          <p className="mt-2 max-w-2xl text-slate-300">
+      <div className="relative overflow-hidden py-16 text-white">
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/assets/willy-wo-iDYq_HHXWO0-unsplash.jpg"
+            alt="Water surface"
+            fill
+            style={{ objectFit: "cover" }}
+            priority
+          />
+          <div className="absolute inset-0 bg-black/55" />
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 z-10 h-2 bg-secondary" />
+        <div className="container relative z-10 mx-auto max-w-4xl px-4">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-medium tracking-wide backdrop-blur-sm">
+            <BookOpen className="h-3.5 w-3.5" /> API DOCUMENTATION
+          </div>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight md:text-4xl">Water Permit Data API</h1>
+          <p className="mt-3 max-w-2xl text-white/90">
             Documentation for government agencies integrating with the Rwanda Water Resources
             Board permit registry. Read-only, API-key authenticated, issued after an approved{" "}
-            <Link href="/api-access" className="text-sky-300 underline">access request</Link>.
+            <Link href="/api-access" className="text-white underline underline-offset-4 hover:text-white/80">access request</Link>.
           </p>
         </div>
       </div>
@@ -224,7 +239,7 @@ export default function ApiDocsPage() {
 
         <div className="mt-10">
           <Link href="/api-access">
-            <Button variant="outline">
+            <Button className="h-12 rounded-full px-8 font-medium">
               <ArrowLeft className="mr-2 h-4 w-4" /> Request API access
             </Button>
           </Link>
