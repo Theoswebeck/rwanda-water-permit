@@ -16,9 +16,12 @@ Send your key in the `X-API-Key` header (or as a bearer token):
 X-API-Key: rwb_live_3f9c2a7e51b84d06a1c2e3f4a5b6c7d8e9f0a1b2c3d4e5f6
 ```
 
-- Keys look like `rwb_<live|uat>_<48 hex>`. Keep the full key secret — treat it like a
+- Keys look like `rwb_<live|uat>_<48 hex>` — the same env-tagged secret-key convention
+  as Stripe's `sk_test_`/`sk_live_`. Keep the full key secret — treat it like a
   password. If it leaks, ask RWB to reissue it (the old key is revoked immediately).
-- The key is shown **once** when issued. RWB cannot retrieve it again, only reissue.
+- When your request is approved, your technical contact receives a **one-time claim
+  link** by email. Opening it generates the key and shows it **once, to you only** —
+  nobody at RWB ever sees it, and it cannot be retrieved again, only reissued.
 
 ## Response envelope
 

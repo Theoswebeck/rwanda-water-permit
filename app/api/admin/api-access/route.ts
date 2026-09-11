@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       query(
         `select g.id, g.request_id, g.key_prefix, g.scopes, g.rate_limit_per_min,
                 g.valid_from, g.valid_until, g.status, g.granted_by, g.created_at,
-                g.last_used_at, g.total_requests,
+                g.last_used_at, g.total_requests, g.claimed_at, g.claim_expires_at,
                 r.institution_name, r.reference_no
          from api_access_grants g
          join api_access_requests r on r.id = g.request_id

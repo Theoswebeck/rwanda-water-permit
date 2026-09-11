@@ -33,22 +33,22 @@ import {
 } from "@/components/ui/table";
 import {
   KeyRound,
-  Copy,
-  Check,
   Loader2,
   ShieldCheck,
   ShieldX,
   RefreshCcw,
   Ban,
   Clock,
+  MailCheck,
 } from "lucide-react";
 
 /**
  * Admin "API Access" tab (design: docs/api-access-DESIGN.md §7.2).
  *
- * Left: agency requests queue — approve (scope/period/rate-limit picker +
- * show-once key) or reject. Right: granted keys — usage, expiry countdown,
- * extend / revoke / reissue.
+ * Left: agency requests queue — approve (scope/period/rate-limit picker) or
+ * reject. Right: granted keys — usage, expiry countdown, extend / revoke /
+ * reissue. Keys are never visible here: approval emails the technical contact
+ * a one-time claim link and the requester reveals the key themselves.
  */
 
 type ApiRequest = {
@@ -75,7 +75,9 @@ type ApiRequest = {
 type ApiGrant = {
   id: string;
   request_id: string;
-  key_prefix: string;
+  key_prefix: string | null;
+  claimed_at: string | null;
+  claim_expires_at: string | null;
   scopes: string[];
   rate_limit_per_min: number;
   valid_from: string;
@@ -136,8 +138,7 @@ export function ApiAccessManagement() {
   const [reissuePeriod, setReissuePeriod] = useState("12");
   const [extendTarget, setExtendTarget] = useState<ApiGrant | null>(null);
   const [extendUntil, setExtendUntil] = useState("");
-  const [shownKey, setShownKey] = useState<{ key: string; prefix: string; institution: string } | null>(null);
-  const [keyCopied, setKeyCopied] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -200,7 +201,11 @@ export function ApiAccessManagement() {
         notes: notes || undefined,
       });
       setDetail(null);
-      setShownKey({ key: json.key, prefix: json.grant.key_prefix, institution: r.institution_name });
+      setNotice(
+        json.claim_sent_to
+          ? `Approved. A one-time key claim link was emailed to ${json.claim_sent_to} — the requester reveals the key themselves; it is never shown here.`
+          : `Approved, but the claim email could NOT be sent. Use "Reissue" on the grant to send a fresh claim link.`
+      );
       await load();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Approval failed");
@@ -226,8 +231,12 @@ export function ApiAccessManagement() {
   const grantAction = async (grant: ApiGrant, body: Record<string, unknown>) => {
     try {
       const json = await post(`/api/admin/api-access/grants/${grant.id}`, body);
-      if (json.key) {
-        setShownKey({ key: json.key, prefix: json.grant.key_prefix, institution: grant.institution_name });
+      if (body.action === "reissue") {
+        setNotice(
+          json.claim_sent_to
+            ? `Key reissued. A one-time claim link was emailed to ${json.claim_sent_to}.`
+            : `Key reissued, but the claim email could NOT be sent. Reissue again once email is working.`
+        );
       }
       setExtendTarget(null);
       setReissueTarget(null);
@@ -279,6 +288,17 @@ export function ApiAccessManagement() {
       {actionError && (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="py-3 text-sm text-red-700">{actionError}</CardContent>
+        </Card>
+      )}
+      {notice && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="flex items-start gap-2 py-3 text-sm text-green-800">
+            <MailCheck className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{notice}</span>
+            <button className="ml-auto text-xs underline" onClick={() => setNotice(null)}>
+              dismiss
+            </button>
+          </CardContent>
         </Card>
       )}
 
@@ -390,7 +410,21 @@ export function ApiAccessManagement() {
                     const remaining = daysUntil(g.valid_until);
                     return (
                       <TableRow key={g.id}>
-                        <TableCell className="font-mono text-xs">{g.key_prefix}…</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {g.claimed_at ? (
+                            // Identification only — last 4 chars of the stored
+                            // prefix; the key itself is never available here.
+                            <span title={`Claimed ${fmtDate(g.claimed_at)}`}>…{g.key_prefix?.slice(-4)}</span>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="border-amber-200 bg-amber-100 font-sans text-amber-800"
+                              title={`Claim link emailed; expires ${fmtDate(g.claim_expires_at)}`}
+                            >
+                              awaiting claim
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <div className="font-medium">{g.institution_name}</div>
                           <div className="text-xs text-slate-500">{g.reference_no}</div>
@@ -528,44 +562,6 @@ export function ApiAccessManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Show-once key modal */}
-      <Dialog open={!!shownKey} onOpenChange={(open) => !open && setShownKey(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>API key issued — copy it now</DialogTitle>
-            <DialogDescription>
-              Issued for {shownKey?.institution}. This is the only time the full key is shown —
-              only its SHA-256 hash is stored. Deliver it to the agency over a secure channel;
-              never by email.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-lg border bg-slate-950 p-4">
-            <code className="block break-all font-mono text-sm text-green-400">
-              {shownKey?.key}
-            </code>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => {
-                if (shownKey) {
-                  void navigator.clipboard.writeText(shownKey.key);
-                  setKeyCopied(true);
-                }
-              }}
-            >
-              {keyCopied ? <Check className="mr-1 h-4 w-4" /> : <Copy className="mr-1 h-4 w-4" />}
-              {keyCopied ? "Copied" : "Copy key"}
-            </Button>
-            <span className="text-xs text-slate-500">Prefix stored for display: {shownKey?.prefix}…</span>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShownKey(null)}>
-              Done — I have stored the key
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Extend dialog */}
       <Dialog open={!!extendTarget} onOpenChange={(open) => !open && setExtendTarget(null)}>
         <DialogContent>
@@ -598,7 +594,8 @@ export function ApiAccessManagement() {
             <DialogTitle>Reissue API key</DialogTitle>
             <DialogDescription>
               {reissueTarget?.institution_name} — the current key is revoked immediately and a
-              new key is minted with the same scopes and rate limit.
+              fresh one-time claim link (same scopes and rate limit) is emailed to the
+              technical contact. Also use this to resend an expired or lost claim link.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -818,7 +815,7 @@ function RequestDetailDialog({
               ) : (
                 <ShieldCheck className="mr-1 h-4 w-4" />
               )}
-              Approve &amp; issue key
+              Approve &amp; send key link
             </Button>
           )}
         </DialogFooter>

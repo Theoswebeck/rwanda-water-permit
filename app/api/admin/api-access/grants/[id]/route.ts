@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { query } from "@/lib/db/postgres";
 import { requireRole } from "@/lib/auth/require-role";
-import { generateApiKey } from "@/lib/api/api-key-auth";
+import { generateClaimToken } from "@/lib/api/api-key-auth";
 import { sendSmtpEmail } from "@/lib/notifications/smtp-email";
 import { buildPortalLink } from "@/lib/notifications/portal-url";
 
@@ -29,8 +29,9 @@ const ActionSchema = z.discriminatedUnion("action", [
   }),
   // Revoke: immediate.
   z.object({ action: z.literal("revoke"), notes: z.string().max(2000).optional() }),
-  // Reissue: revoke the old key and mint a fresh one with the same scope and
-  // rate limit (lost key / suspected leak). Returns the new plaintext once.
+  // Reissue: revoke the old key and authorise a fresh one with the same scope
+  // and rate limit (lost key / leak / expired claim link). A new one-time
+  // claim link is emailed to the technical contact; no key is returned here.
   z.object({
     action: z.literal("reissue"),
     period_months: z.coerce.number().int().min(1).max(60),
@@ -98,7 +99,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     }
 
     // ── Reissue ─────────────────────────────────────────────────────────────
-    const { key, hash, prefix } = generateApiKey();
+    // Revoke the old grant and create a fresh unclaimed one: the technical
+    // contact gets a new one-time claim link and generates the key themselves.
+    // This doubles as "resend the claim link" for unclaimed/expired links.
+    const { token, hash: tokenHash } = generateClaimToken();
+    const claimExpires = new Date(Date.now() + 14 * 86_400_000);
     const validUntil = new Date();
     validUntil.setMonth(validUntil.getMonth() + parsed.data.period_months);
 
@@ -107,9 +112,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       await query(`update api_access_grants set status = 'revoked' where id = $1`, [id]);
       await query(
         `insert into api_access_grants
-           (request_id, api_key_hash, key_prefix, scopes, rate_limit_per_min, valid_until, granted_by)
+           (request_id, claim_token_hash, claim_expires_at, scopes, rate_limit_per_min, valid_until, granted_by)
          values ($1, $2, $3, $4, $5, $6, $7)`,
-        [grant.request_id, hash, prefix, grant.scopes, grant.rate_limit_per_min, validUntil, auth.email]
+        [grant.request_id, tokenHash, claimExpires, grant.scopes, grant.rate_limit_per_min, validUntil, auth.email]
       );
       await query("commit");
     } catch (txErr) {
@@ -117,24 +122,33 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       throw txErr;
     }
 
-    void sendSmtpEmail({
-      to: grant.technical_email,
-      subject: `API key reissued — ${grant.reference_no}`,
-      title: "API Key Reissued",
-      text: [
-        `A new API key was issued for ${grant.institution_name} (${grant.reference_no}).`,
-        `The previous key has been revoked.`,
-        `Valid until: ${validUntil.toISOString().slice(0, 10)}`,
-        ``,
-        `The new key itself is delivered separately by the Rwanda Water Resources Board — it is never sent by email.`,
-        `API documentation: ${buildPortalLink("/api-access/docs")}`,
-      ].join("\n"),
-    }).catch((e) => console.error("[admin/api-access] reissue email failed:", e));
+    let claimEmailSent = true;
+    try {
+      await sendSmtpEmail({
+        to: grant.technical_email,
+        subject: `API key reissued — ${grant.reference_no}`,
+        title: "API Key Reissued",
+        text: [
+          `A new API key was authorised for ${grant.institution_name} (${grant.reference_no}).`,
+          `The previous key has been revoked.`,
+          `Valid until: ${validUntil.toISOString().slice(0, 10)}`,
+          ``,
+          `Retrieve the new key with this one-time secure link (valid 14 days, single use):`,
+          buildPortalLink(`/api-access/claim?token=${token}`),
+          ``,
+          `The key is generated and shown only when you open the link — nobody at RWB can see it.`,
+          `API documentation: ${buildPortalLink("/api-access/docs")}`,
+        ].join("\n"),
+      });
+    } catch (e) {
+      claimEmailSent = false;
+      console.error("[admin/api-access] reissue email failed:", e);
+    }
 
     return NextResponse.json({
       ok: true,
-      key, // shown once in the UI; never stored, never emailed
-      grant: { key_prefix: prefix, valid_until: validUntil },
+      claim_sent_to: claimEmailSent ? grant.technical_email : null,
+      grant: { valid_until: validUntil },
     });
   } catch (e) {
     console.error("[admin/api-access] grant action failed:", e);

@@ -44,6 +44,8 @@ const PUBLIC_API_PREFIXES = [
   // Government-agency API access request form (design: docs/api-access-DESIGN.md).
   // POST-only by route shape; zod-validated, honeypot + IP throttle in-route.
   '/api/public/api-access-requests',
+  // One-time API-key claim from the emailed link (token-authenticated in-route).
+  '/api/public/api-access-claim',
   // Public permit verification: the /permit/view/<number> page reached by
   // scanning a permit's QR code lets anyone download that permit's PDF.
   '/api/public/permits/pdf/',

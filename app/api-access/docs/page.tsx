@@ -68,9 +68,10 @@ export default function ApiDocsPage() {
             Send your institution&apos;s key in the <code className="rounded bg-slate-100 px-1">X-API-Key</code>{" "}
             header (or as a bearer token). Keys look like{" "}
             <code className="rounded bg-slate-100 px-1">rwb_live_…</code>, are valid for a fixed
-            period, and work only for the endpoint groups granted. Treat the key like a
-            password: it is shown once when issued and can be reissued (revoking the old key)
-            on request.
+            period, and work only for the endpoint groups granted. When access is approved,
+            your technical contact receives a one-time claim link by email; opening it
+            generates the key and shows it once, to you only — nobody at RWB ever sees it.
+            Treat the key like a password; it can be reissued (revoking the old key) on request.
           </p>
         </section>
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { query } from "@/lib/db/postgres";
 import { requireRole } from "@/lib/auth/require-role";
-import { generateApiKey } from "@/lib/api/api-key-auth";
+import { generateClaimToken } from "@/lib/api/api-key-auth";
 import { sendSmtpEmail } from "@/lib/notifications/smtp-email";
 import { buildPortalLink } from "@/lib/notifications/portal-url";
 
@@ -37,9 +37,9 @@ const DecisionSchema = z.discriminatedUnion("action", [
  *
  * Approve: the granted scopes MUST be a subset of what the agency requested
  * (validated server-side; the UI also only renders the requested scopes).
- * The plaintext key is returned exactly once — only its hash is stored — and
- * a best-effort notification goes to the technical contact (the key itself is
- * NEVER emailed; the admin delivers it over a secure channel).
+ * No key is minted here: the grant is created unclaimed and a one-time claim
+ * link is emailed to the technical contact, who generates and sees the key
+ * themselves at /api-access/claim. The admin never sees a key.
  */
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = await requireRole(req, ["admin"]);
@@ -98,7 +98,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       );
     }
 
-    const { key, hash, prefix } = generateApiKey();
+    const { token, hash: tokenHash } = generateClaimToken();
+    const claimExpires = new Date(Date.now() + CLAIM_LINK_DAYS * 86_400_000);
     const validUntil = new Date();
     validUntil.setMonth(validUntil.getMonth() + parsed.data.period_months);
 
@@ -106,9 +107,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     try {
       await query(
         `insert into api_access_grants
-           (request_id, api_key_hash, key_prefix, scopes, rate_limit_per_min, valid_until, granted_by)
+           (request_id, claim_token_hash, claim_expires_at, scopes, rate_limit_per_min, valid_until, granted_by)
          values ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, hash, prefix, parsed.data.scopes, parsed.data.rate_limit_per_min, validUntil, auth.email]
+        [id, tokenHash, claimExpires, parsed.data.scopes, parsed.data.rate_limit_per_min, validUntil, auth.email]
       );
       await query(
         `update api_access_requests
@@ -122,15 +123,21 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       throw txErr;
     }
 
-    void notifyApproved(request, parsed.data.scopes, validUntil).catch((e) =>
-      console.error("[admin/api-access] approval email failed:", e)
-    );
+    // Await the claim email: if it can't be sent the admin must know (the
+    // grant still exists — "Reissue" sends a fresh claim link).
+    let claimEmailSent = true;
+    try {
+      await notifyApproved(request, parsed.data.scopes, validUntil, token);
+    } catch (e) {
+      claimEmailSent = false;
+      console.error("[admin/api-access] approval email failed:", e);
+    }
 
     return NextResponse.json({
       ok: true,
       status: "approved",
-      key, // shown once in the UI; never stored, never emailed
-      grant: { key_prefix: prefix, scopes: parsed.data.scopes, valid_until: validUntil },
+      claim_sent_to: claimEmailSent ? request.technical_email : null,
+      grant: { scopes: parsed.data.scopes, valid_until: validUntil },
     });
   } catch (e) {
     console.error("[admin/api-access] decision failed:", e);
@@ -138,10 +145,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   }
 }
 
+const CLAIM_LINK_DAYS = 14;
+
 async function notifyApproved(
   request: RequestRow,
   scopes: string[],
-  validUntil: Date
+  validUntil: Date,
+  claimToken: string
 ) {
   await sendSmtpEmail({
     to: request.technical_email,
@@ -153,7 +163,10 @@ async function notifyApproved(
       `Granted endpoint groups: ${scopes.join(", ")}`,
       `Valid until: ${validUntil.toISOString().slice(0, 10)}`,
       ``,
-      `Your API key is being delivered to you separately by the Rwanda Water Resources Board — it is never sent by email.`,
+      `Retrieve your API key with this one-time secure link (valid ${CLAIM_LINK_DAYS} days, single use):`,
+      buildPortalLink(`/api-access/claim?token=${claimToken}`),
+      ``,
+      `The key is generated and shown only when you open the link — nobody at RWB can see it. Store it securely; if the link expires or the key is lost, contact RWB for a reissue.`,
       `API documentation: ${buildPortalLink("/api-access/docs")}`,
     ].join("\n"),
   });

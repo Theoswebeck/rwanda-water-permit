@@ -7,8 +7,10 @@ import { query } from "@/lib/db/postgres";
  *
  * Design: docs/api-access-DESIGN.md §4, §8.
  *
- * Keys look like `rwb_<env>_<48 hex>`. Only the SHA-256 hash and an 8-char
- * prefix are stored; the plaintext is shown once at approval time. Middleware
+ * Keys look like `rwb_<env>_<48 hex>` (same convention as Stripe's
+ * sk_test_/sk_live_). Only the SHA-256 hash and a short prefix are stored; the
+ * plaintext is generated when the requester opens their one-time claim link
+ * and is shown once, to them only — never to the admin. Middleware
  * skips the browser-session gate for /api/v1/*, so EVERY route under it must
  * call requireApiKey() before any other logic — default-deny at the route
  * level.
@@ -75,6 +77,15 @@ export function apiKeyEnvTag(): string {
 export function generateApiKey(): { key: string; hash: string; prefix: string } {
   const key = `rwb_${apiKeyEnvTag()}_${randomBytes(24).toString("hex")}`;
   return { key, hash: hashApiKey(key), prefix: key.slice(0, 17) };
+}
+
+/**
+ * One-time key-claim token emailed to the technical contact. Only its hash is
+ * stored; presenting the token at /api-access/claim generates the API key.
+ */
+export function generateClaimToken(): { token: string; hash: string } {
+  const token = randomBytes(32).toString("hex");
+  return { token, hash: hashApiKey(token) };
 }
 
 // ─── Rate limiting (in-memory sliding window; single on-prem instance) ───────
