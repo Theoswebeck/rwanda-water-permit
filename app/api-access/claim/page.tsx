@@ -66,7 +66,7 @@ function ClaimInner() {
           />
           <div className="absolute inset-0 bg-black/55" />
         </div>
-        <div className="absolute bottom-0 left-0 right-0 z-10 h-2 bg-secondary" />
+        <div className="absolute bottom-0 left-0 right-0 z-10 h-2 bg-[#47d198]" />
         <div className="container relative z-10 mx-auto max-w-2xl px-4">
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
@@ -95,7 +95,7 @@ function ClaimInner() {
         >
           {claimed ? (
             <Card className="relative overflow-hidden rounded-[2rem] border-none shadow-lg">
-              <div className="absolute top-0 left-0 right-0 h-2 bg-secondary" />
+              <div className="absolute top-0 left-0 right-0 h-2 bg-[#47d198]" />
               <CardHeader className="pt-8">
                 <CardTitle className="text-lg text-primary">
                   API key for {claimed.institution_name}
@@ -103,7 +103,7 @@ function ClaimInner() {
               </CardHeader>
               <CardContent className="space-y-5 pb-8">
                 <div className="rounded-xl bg-primary p-4">
-                  <code className="block break-all font-mono text-sm text-secondary">
+                  <code className="block break-all font-mono text-sm text-[#47d198]">
                     {claimed.key}
                   </code>
                 </div>
@@ -140,7 +140,7 @@ function ClaimInner() {
             </Card>
           ) : (
             <Card className="relative overflow-hidden rounded-[2rem] border-none shadow-lg">
-              <div className="absolute top-0 left-0 right-0 h-2 bg-secondary" />
+              <div className="absolute top-0 left-0 right-0 h-2 bg-[#47d198]" />
               <CardContent className="space-y-5 py-12 text-center">
                 <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                   <KeyRound className="h-8 w-8 text-primary" />

@@ -29,9 +29,9 @@ function Endpoint({
   return (
     <div className="mt-8 border-t pt-6 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-center gap-2">
-        <code className="rounded bg-primary px-2 py-1 font-mono text-xs text-secondary">{method}</code>
+        <code className="rounded bg-primary px-2 py-1 font-mono text-xs text-[#47d198]">{method}</code>
         <code className="font-mono text-sm font-semibold break-all text-primary">{path}</code>
-        <span className="rounded-full bg-secondary/15 px-2.5 py-0.5 text-xs font-medium text-primary">
+        <span className="rounded-full bg-[#47d198]/15 px-2.5 py-0.5 text-xs font-medium text-primary">
           scope: {scope}
         </span>
       </div>
@@ -62,7 +62,7 @@ export default function ApiDocsPage() {
           />
           <div className="absolute inset-0 bg-black/55" />
         </div>
-        <div className="absolute bottom-0 left-0 right-0 z-10 h-2 bg-secondary" />
+        <div className="absolute bottom-0 left-0 right-0 z-10 h-2 bg-[#47d198]" />
         <div className="container relative z-10 mx-auto max-w-4xl px-4">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-medium tracking-wide backdrop-blur-sm">
             <BookOpen className="h-3.5 w-3.5" /> API DOCUMENTATION

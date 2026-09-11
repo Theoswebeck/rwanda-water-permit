@@ -53,9 +53,9 @@ export function ApiAccessSection() {
           </div>
 
           {/* Decorative elements */}
-          <div className="absolute top-0 left-0 right-0 z-20 h-2 bg-secondary" />
-          <div className="absolute -top-20 -right-20 z-10 h-40 w-40 rounded-full bg-secondary/20 blur-2xl" />
-          <div className="absolute -bottom-20 -left-20 z-10 h-40 w-40 rounded-full bg-secondary/20 blur-2xl" />
+          <div className="absolute top-0 left-0 right-0 z-20 h-2 bg-[#47d198]" />
+          <div className="absolute -top-20 -right-20 z-10 h-40 w-40 rounded-full bg-[#47d198]/20 blur-2xl" />
+          <div className="absolute -bottom-20 -left-20 z-10 h-40 w-40 rounded-full bg-[#47d198]/20 blur-2xl" />
 
           <div className="relative z-20 flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
             <div className="max-w-2xl">
@@ -97,7 +97,7 @@ export function ApiAccessSection() {
               >
                 {capabilities.map((c) => (
                   <span key={c.label} className="flex items-center gap-2 text-sm font-medium text-white/90">
-                    <span className="text-secondary">{c.icon}</span>
+                    <span className="text-[#47d198]">{c.icon}</span>
                     {c.label}
                   </span>
                 ))}

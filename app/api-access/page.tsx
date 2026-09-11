@@ -126,10 +126,10 @@ export default function ApiAccessPage() {
           className="container mx-auto max-w-2xl px-4"
         >
           <Card className="relative overflow-hidden rounded-[2rem] border-none shadow-lg">
-            <div className="absolute top-0 left-0 right-0 h-2 bg-secondary" />
+            <div className="absolute top-0 left-0 right-0 h-2 bg-[#47d198]" />
             <CardHeader className="pt-10 text-center">
-              <span className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-secondary/15">
-                <CheckCircle2 className="h-9 w-9 text-secondary" />
+              <span className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-[#47d198]/15">
+                <CheckCircle2 className="h-9 w-9 text-[#47d198]" />
               </span>
               <CardTitle className="text-2xl text-primary">Request submitted</CardTitle>
             </CardHeader>
@@ -173,7 +173,7 @@ export default function ApiAccessPage() {
           />
           <div className="absolute inset-0 bg-black/55" />
         </div>
-        <div className="absolute bottom-0 left-0 right-0 z-10 h-2 bg-secondary" />
+        <div className="absolute bottom-0 left-0 right-0 z-10 h-2 bg-[#47d198]" />
         <div className="container relative z-10 mx-auto max-w-4xl px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -261,7 +261,7 @@ export default function ApiAccessPage() {
           transition={{ duration: 0.6 }}
         >
         <Card className="relative mt-12 overflow-hidden rounded-[2rem] border-none shadow-lg">
-          <div className="absolute top-0 left-0 right-0 h-2 bg-secondary" />
+          <div className="absolute top-0 left-0 right-0 h-2 bg-[#47d198]" />
           <CardHeader className="pt-8">
             <CardTitle className="text-xl text-primary">Request API access</CardTitle>
           </CardHeader>
