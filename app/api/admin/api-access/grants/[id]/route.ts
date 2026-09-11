@@ -122,9 +122,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       throw txErr;
     }
 
-    let claimEmailSent = true;
+    // Check the RESULT: sendSmtpEmail silently skips when SMTP is
+    // unconfigured in dev mode. On failure, return the claim URL so the
+    // admin can deliver it over their own secure channel.
+    let claimEmailSent = false;
     try {
-      await sendSmtpEmail({
+      claimEmailSent = (await sendSmtpEmail({
         to: grant.technical_email,
         subject: `API key reissued — ${grant.reference_no}`,
         title: "API Key Reissued",
@@ -139,15 +142,15 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
           `The key is generated and shown only when you open the link — nobody at RWB can see it.`,
           `API documentation: ${buildPortalLink("/api-access/docs")}`,
         ].join("\n"),
-      });
+      })).delivered;
     } catch (e) {
-      claimEmailSent = false;
       console.error("[admin/api-access] reissue email failed:", e);
     }
 
     return NextResponse.json({
       ok: true,
       claim_sent_to: claimEmailSent ? grant.technical_email : null,
+      claim_url: claimEmailSent ? null : buildPortalLink(`/api-access/claim?token=${token}`),
       grant: { valid_until: validUntil },
     });
   } catch (e) {

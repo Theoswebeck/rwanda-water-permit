@@ -123,20 +123,24 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       throw txErr;
     }
 
-    // Await the claim email: if it can't be sent the admin must know (the
-    // grant still exists — "Reissue" sends a fresh claim link).
-    let claimEmailSent = true;
+    // Await the claim email and check its RESULT: sendSmtpEmail silently
+    // skips (no throw) when SMTP is unconfigured in dev mode. If the email
+    // didn't go out, hand the admin the claim URL to deliver over their own
+    // secure channel — the link is one-time and tamper-evident, and the key
+    // itself is still only ever revealed to whoever opens it.
+    let claimEmailSent = false;
     try {
-      await notifyApproved(request, parsed.data.scopes, validUntil, token);
+      claimEmailSent = (await notifyApproved(request, parsed.data.scopes, validUntil, token)).delivered;
     } catch (e) {
-      claimEmailSent = false;
       console.error("[admin/api-access] approval email failed:", e);
     }
+    const claimUrl = buildPortalLink(`/api-access/claim?token=${token}`);
 
     return NextResponse.json({
       ok: true,
       status: "approved",
       claim_sent_to: claimEmailSent ? request.technical_email : null,
+      claim_url: claimEmailSent ? null : claimUrl,
       grant: { scopes: parsed.data.scopes, valid_until: validUntil },
     });
   } catch (e) {
@@ -153,7 +157,7 @@ async function notifyApproved(
   validUntil: Date,
   claimToken: string
 ) {
-  await sendSmtpEmail({
+  return await sendSmtpEmail({
     to: request.technical_email,
     subject: `API access approved — ${request.reference_no}`,
     title: "API Access Approved",

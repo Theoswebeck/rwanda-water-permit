@@ -138,7 +138,7 @@ export function ApiAccessManagement() {
   const [reissuePeriod, setReissuePeriod] = useState("12");
   const [extendTarget, setExtendTarget] = useState<ApiGrant | null>(null);
   const [extendUntil, setExtendUntil] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; url?: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -203,8 +203,11 @@ export function ApiAccessManagement() {
       setDetail(null);
       setNotice(
         json.claim_sent_to
-          ? `Approved. A one-time key claim link was emailed to ${json.claim_sent_to} — the requester reveals the key themselves; it is never shown here.`
-          : `Approved, but the claim email could NOT be sent. Use "Reissue" on the grant to send a fresh claim link.`
+          ? { text: `Approved. A one-time key claim link was emailed to ${json.claim_sent_to} — the requester reveals the key themselves; it is never shown here.` }
+          : {
+              text: `Approved, but the claim email could NOT be sent (SMTP not configured?). Deliver this one-time claim link to the technical contact over a secure channel — the key is revealed only to whoever opens it:`,
+              url: json.claim_url,
+            }
       );
       await load();
     } catch (e) {
@@ -234,8 +237,11 @@ export function ApiAccessManagement() {
       if (body.action === "reissue") {
         setNotice(
           json.claim_sent_to
-            ? `Key reissued. A one-time claim link was emailed to ${json.claim_sent_to}.`
-            : `Key reissued, but the claim email could NOT be sent. Reissue again once email is working.`
+            ? { text: `Key reissued. A one-time claim link was emailed to ${json.claim_sent_to}.` }
+            : {
+                text: `Key reissued, but the claim email could NOT be sent. Deliver this one-time claim link to the technical contact over a secure channel:`,
+                url: json.claim_url,
+              }
         );
       }
       setExtendTarget(null);
@@ -291,13 +297,28 @@ export function ApiAccessManagement() {
         </Card>
       )}
       {notice && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="flex items-start gap-2 py-3 text-sm text-green-800">
-            <MailCheck className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{notice}</span>
-            <button className="ml-auto text-xs underline" onClick={() => setNotice(null)}>
-              dismiss
-            </button>
+        <Card className={notice.url ? "border-amber-200 bg-amber-50" : "border-green-200 bg-green-50"}>
+          <CardContent className={`py-3 text-sm ${notice.url ? "text-amber-800" : "text-green-800"}`}>
+            <div className="flex items-start gap-2">
+              <MailCheck className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{notice.text}</span>
+              <button className="ml-auto text-xs underline" onClick={() => setNotice(null)}>
+                dismiss
+              </button>
+            </div>
+            {notice.url && (
+              <div className="mt-2 flex items-center gap-2 pl-6">
+                <code className="break-all rounded bg-white px-2 py-1 font-mono text-xs">{notice.url}</code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 shrink-0"
+                  onClick={() => void navigator.clipboard.writeText(notice.url!)}
+                >
+                  Copy link
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
