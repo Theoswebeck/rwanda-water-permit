@@ -208,27 +208,37 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
         if (rows.length >= Number(page.total || 0) || (page.items || []).length === 0) break;
       }
       const XLSX = await import("xlsx");
+      const text = (v: string | null | undefined) => (v ?? "").replace(/\s+/g, " ").trim();
+      const num = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? "" : Number(v));
+      const date = (iso: string | null, raw: string | null) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+        return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : text(raw);
+      };
+      // Registry rows carry the blank template "Email:   Tel:" when no contact was ever filled.
+      const contact = (v: string | null) => (/^Email:\s*Tel:\s*$/.test(text(v)) ? "" : text(v));
+      const titleCase = (v: string | null) => { const t = text(v); return t ? t[0].toUpperCase() + t.slice(1).toLowerCase() : ""; };
       const sheet = XLSX.utils.json_to_sheet(rows.map((e) => ({
-        "#": e.row_index ?? e.serial_number ?? "",
-        "Permit Holder": e.permit_holder ?? "",
-        "Permit No.": e.permit_number ?? "",
-        "Regime": e.regime ?? "",
+        "#": num(e.row_index ?? e.serial_number),
+        "Permit Holder": text(e.permit_holder),
+        "Permit No.": text(e.permit_number),
+        "Regime": titleCase(e.regime),
         "Activity": formatActivityLabel(e.activity_code || e.authorized_activity),
-        "Water Source": e.water_source ?? "",
-        "Volume / Area": e.volume_or_area ?? "",
-        "Method of Water Taking": e.method_of_water_taking ?? "",
-        "Location": e.location ?? "",
-        "Latitude": e.latitude ?? "",
-        "Longitude": e.longitude ?? "",
-        "Issuance Date": e.issuance_date ?? e.issuance_date_raw ?? "",
-        "Duration": e.duration ?? "",
-        "Expiration Date": e.expiration_date ?? e.expiration_date_raw ?? "",
-        "Status": e.status ?? "",
-        "Contact": e.contact ?? "",
-      })));
+        "Water Source": text(e.water_source),
+        "Volume / Area": text(e.volume_or_area),
+        "Method of Water Taking": text(e.method_of_water_taking),
+        "Location": text(e.location),
+        "Latitude": num(e.latitude),
+        "Longitude": num(e.longitude),
+        "Issuance Date": date(e.issuance_date, e.issuance_date_raw),
+        "Duration": text(e.duration),
+        "Expiration Date": date(e.expiration_date, e.expiration_date_raw),
+        "Status": text(e.status).toUpperCase(),
+        "Contact": contact(e.contact),
+      })), { cellDates: true });
+      sheet["!cols"] = [5, 36, 34, 14, 30, 30, 16, 24, 50, 11, 11, 13, 10, 14, 13, 40].map((wch) => ({ wch }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, sheet, "Permit Registry");
-      XLSX.writeFile(wb, `permit-registry-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      XLSX.writeFile(wb, `permit-registry-${new Date().toISOString().slice(0, 10)}.xlsx`, { cellDates: true });
     } catch (err) {
       setRowActionResult({ kind: "error", message: err instanceof Error ? err.message : "Export failed" });
     } finally {
