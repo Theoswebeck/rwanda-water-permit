@@ -35,29 +35,33 @@ export interface PermitRegistryQueryResult {
   pagination: { limit: number; offset: number; returned: number };
 }
 
+export async function fetchPermitRegistry(params: PermitRegistryQueryParams): Promise<PermitRegistryQueryResult> {
+  const searchParams = new URLSearchParams();
+  searchParams.set("limit", String(params.limit ?? 50));
+  searchParams.set("offset", String(params.offset ?? 0));
+  searchParams.set("sort_by", params.sort_by ?? "row_index");
+  searchParams.set("sort_dir", params.sort_dir ?? "asc");
+  if (params.q && params.q.trim()) searchParams.set("q", params.q.trim());
+  if (params.regime && params.regime !== "all") searchParams.set("regime", params.regime);
+  if (params.activity && params.activity !== "all") searchParams.set("activity", params.activity);
+  if (params.status && params.status !== "all") searchParams.set("status", params.status);
+  if (params.catchment && params.catchment !== "all") searchParams.set("catchment", params.catchment);
+  if (params.district && params.district !== "all") searchParams.set("district", params.district);
+
+  const res = await fetch(`/api/staff/permit-registry?${searchParams.toString()}`, {
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch permit registry (${res.status})`);
+  }
+  return (await res.json()) as PermitRegistryQueryResult;
+}
+
 export function usePermitRegistryQuery(params: PermitRegistryQueryParams, enabled: boolean = true) {
   return useQuery({
     queryKey: permitRegistryKeys.list(params),
     queryFn: async (): Promise<PermitRegistryQueryResult> => {
-      const searchParams = new URLSearchParams();
-      searchParams.set("limit", String(params.limit ?? 50));
-      searchParams.set("offset", String(params.offset ?? 0));
-      searchParams.set("sort_by", params.sort_by ?? "row_index");
-      searchParams.set("sort_dir", params.sort_dir ?? "asc");
-      if (params.q && params.q.trim()) searchParams.set("q", params.q.trim());
-      if (params.regime && params.regime !== "all") searchParams.set("regime", params.regime);
-      if (params.activity && params.activity !== "all") searchParams.set("activity", params.activity);
-      if (params.status && params.status !== "all") searchParams.set("status", params.status);
-      if (params.catchment && params.catchment !== "all") searchParams.set("catchment", params.catchment);
-      if (params.district && params.district !== "all") searchParams.set("district", params.district);
-
-      const res = await fetch(`/api/staff/permit-registry?${searchParams.toString()}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        throw new Error(`Failed to fetch permit registry (${res.status})`);
-      }
-      const json = (await res.json()) as PermitRegistryQueryResult;
+      const json = await fetchPermitRegistry(params);
       return {
         items: json.items || [],
         total: Number(json.total || 0),

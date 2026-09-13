@@ -39,6 +39,7 @@ import {
   ArrowDown,
   MapPin,
   Upload,
+  Download,
   X,
   Droplets,
   ChevronDown,
@@ -51,7 +52,7 @@ import {
   Database,
   Trash2,
 } from "lucide-react";
-import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
+import { usePermitRegistryQuery, fetchPermitRegistry } from "@/hooks/usePermitRegistryQuery";
 import { useUpdatePermitRegistry } from "@/hooks/useUpdatePermitRegistry";
 import { useDeletePermitRegistry } from "@/hooks/useDeletePermitRegistry";
 import type { PermitRegistryEntry } from "@/types/database";
@@ -161,6 +162,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const [currentPage, setCurrentPage] = useState(1);
 
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
     inserted: number;
     dateParseFailures?: number;
@@ -193,6 +195,46 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   });
   const entries = data?.items || [];
   const total = data?.total || 0;
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const filters = { q: searchTerm, activity: activityFilter, status: statusFilter, catchment: catchmentFilter, district: districtFilter, sort_by: sortField, sort_dir: sortDir };
+      const rows: PermitRegistryEntry[] = [];
+      // ponytail: pages through the existing list API at its 500-row cap; add a server-side export route if the registry outgrows a few thousand rows
+      for (let off = 0; ; off += 500) {
+        const page = await fetchPermitRegistry({ ...filters, limit: 500, offset: off });
+        rows.push(...(page.items || []));
+        if (rows.length >= Number(page.total || 0) || (page.items || []).length === 0) break;
+      }
+      const XLSX = await import("xlsx");
+      const sheet = XLSX.utils.json_to_sheet(rows.map((e) => ({
+        "#": e.row_index ?? e.serial_number ?? "",
+        "Permit Holder": e.permit_holder ?? "",
+        "Permit No.": e.permit_number ?? "",
+        "Regime": e.regime ?? "",
+        "Activity": formatActivityLabel(e.activity_code || e.authorized_activity),
+        "Water Source": e.water_source ?? "",
+        "Volume / Area": e.volume_or_area ?? "",
+        "Method of Water Taking": e.method_of_water_taking ?? "",
+        "Location": e.location ?? "",
+        "Latitude": e.latitude ?? "",
+        "Longitude": e.longitude ?? "",
+        "Issuance Date": e.issuance_date ?? e.issuance_date_raw ?? "",
+        "Duration": e.duration ?? "",
+        "Expiration Date": e.expiration_date ?? e.expiration_date_raw ?? "",
+        "Status": e.status ?? "",
+        "Contact": e.contact ?? "",
+      })));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, sheet, "Permit Registry");
+      XLSX.writeFile(wb, `permit-registry-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+      setRowActionResult({ kind: "error", message: err instanceof Error ? err.message : "Export failed" });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // The activity options are the fixed canonical taxonomy, not values scraped
   // from the current page — the filter has to reach rows on every other page too.
@@ -723,6 +765,17 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
             )}
             <span className="ml-2 text-xs">(50 rows per page)</span>
           </p>
+          <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={exporting || total === 0}
+            className="border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 rounded-lg"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+            {exporting ? "Exporting..." : `Export XLSX (${total})`}
+          </Button>
           <label className="cursor-pointer">
             <input
               type="file"
@@ -748,6 +801,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               </span>
             </Button>
           </label>
+          </div>
         </div>
       </div>
 
