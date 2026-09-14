@@ -78,7 +78,7 @@ import {
   getFormattedVillageOptions,
 } from "@/lib/rwanda-administrative-data";
 import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
-import { getDocumentBaseValues } from "@/lib/document-overrides";
+import { getDocumentBaseValues, sanitizeDocumentOverridePatch } from "@/lib/document-overrides";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
 import { DocumentTextEditor } from "@/components/staff/document-text-editor";
@@ -2214,6 +2214,7 @@ export default function AssessmentApplicationPage() {
         // source (name + coordinates) into the document-override envelope the
         // document renderers already flatten into their resolvers.
         const reportOverrides: Record<string, string | number> = {};
+        let overridesChanged = false;
         const reportSourceName =
           typeof assessmentReportDataForSave?.sourceName === 'string'
             ? assessmentReportDataForSave.sourceName.trim()
@@ -2228,6 +2229,10 @@ export default function AssessmentApplicationPage() {
         // provenance. Compared against getDocumentBaseValues, which is exactly
         // what the renderers fall back to when no override exists.
         const baseValues = getDocumentBaseValues(application as any);
+        // Keys the assessor has put back to the submitted value: the override
+        // must be dropped, not left behind, or a correction that is later
+        // reverted would stay on the permit forever.
+        const revertedOverrides: string[] = [];
         const syncIfChanged = (
           key: keyof typeof baseValues,
           rawValue: unknown,
@@ -2235,7 +2240,10 @@ export default function AssessmentApplicationPage() {
           const value = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
           if (value === undefined || value === null || value === '') return;
           if (value === 'Not specified' || value === 'N/A') return;
-          if (String(baseValues[key] ?? '') === String(value)) return;
+          if (String(baseValues[key] ?? '') === String(value)) {
+            revertedOverrides.push(key);
+            return;
+          }
           reportOverrides[key] = value as string | number;
         };
 
@@ -2263,21 +2271,29 @@ export default function AssessmentApplicationPage() {
         // resolveConcessionAreaLabel from the declared concession_area to a
         // computed polygon area would change the hectares printed on live
         // contracts. The assessor has a dedicated control that writes it.
-        if (Object.keys(reportOverrides).length > 0) {
+        // Same validation the manual override editor runs, so a mistyped
+        // coordinate is dropped here rather than printed on a permit.
+        const { values: sanitizedOverrides } = sanitizeDocumentOverridePatch(reportOverrides);
+        const prevEnvValues = (existingFormData.document_overrides?.values ?? {}) as Record<string, any>;
+        const clearedOverrides = revertedOverrides.filter((key) => key in prevEnvValues);
+
+        if (Object.keys(sanitizedOverrides).length > 0 || clearedOverrides.length > 0) {
           const prevEnv = (existingFormData.document_overrides ?? {}) as Record<string, any>;
+          const nextValues = { ...prevEnvValues, ...sanitizedOverrides };
+          for (const key of clearedOverrides) delete nextValues[key];
           existingFormData.document_overrides = {
             ...prevEnv,
             version: (typeof prevEnv.version === 'number' ? prevEnv.version : 0) + 1,
             updatedAt: new Date().toISOString(),
             updatedBy: user.id,
-            values: { ...(prevEnv.values ?? {}), ...reportOverrides },
+            values: nextValues,
           };
+          overridesChanged = true;
         }
 
         const durationChanged = nextAdjustments.permitLengthYears !== previousAdjustments.permitLengthYears;
         const volumeChanged = nextAdjustments.recommendedVolumeM3 !== previousAdjustments.recommendedVolumeM3;
-        const needsAppSync =
-          durationChanged || volumeChanged || Object.keys(reportOverrides).length > 0;
+        const needsAppSync = durationChanged || volumeChanged || overridesChanged;
 
         if (needsAppSync) {
           const appUpdateData: any = {
