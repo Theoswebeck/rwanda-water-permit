@@ -1111,6 +1111,7 @@ export default function ReviewApplicationPage() {
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
       terminated: { label: "Terminated (exempted use)", variant: "destructive" },
+      closed_incomplete: { label: "Closed due to incompletion", variant: "outline" },
       // Returned statuses
       returned_to_assessment: { label: "🔄 Returned to Assessor", variant: "secondary" },
       returned_to_review: { label: "🔄 Returned to Reviewer", variant: "secondary" },

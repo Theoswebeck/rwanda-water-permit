@@ -275,6 +275,14 @@ export function ApplicationsList({
           icon: <AlertCircle className="h-4 w-4" />,
           className: "bg-slate-200 text-slate-700 border-0 hover:bg-slate-200 px-3 py-2 rounded-full font-medium"
         };
+      // Must stay mapped: the default below shows "Under Review" to the
+      // applicant, which would be plainly wrong for a closed application.
+      case "closed_incomplete":
+        return {
+          label: "Closed due to incompletion",
+          icon: <XCircle className="h-4 w-4" />,
+          className: "bg-slate-200 text-slate-700 border-0 hover:bg-slate-200 px-3 py-2 rounded-full font-medium"
+        };
       case "terminated":
         return {
           label: "Terminated (exempted use)",

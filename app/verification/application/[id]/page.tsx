@@ -668,6 +668,8 @@ export default function VerificationApplicationPage() {
       pending_final_approval: { label: "Pending Approval", variant: "default" },
       approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
       rejected: { label: "Rejected", variant: "destructive" },
+      terminated: { label: "Terminated", variant: "outline" },
+      closed_incomplete: { label: "Closed due to incompletion", variant: "outline" },
       // Returned statuses
       returned_to_assessment: { label: "🔄 Returned to Assessor", variant: "secondary" },
       returned_to_review: { label: "🔄 Returned to Reviewer", variant: "secondary" },

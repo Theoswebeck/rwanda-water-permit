@@ -3,6 +3,9 @@ export const NON_BLOCKING_PIPELINE_STATUSES = new Set([
   'rejected',
   'cancelled',
   'expired',
+  // A file closed for incompleteness must not block the applicant from
+  // starting again — the closure notice tells them to do exactly that.
+  'closed_incomplete',
   'revision_required',
   'returned_to_assessment',
   'returned_to_review',

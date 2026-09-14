@@ -2593,6 +2593,7 @@ export default function AssessmentApplicationPage() {
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
       terminated: { label: "Terminated (exempted use)", variant: "destructive" },
+      closed_incomplete: { label: "Closed due to incompletion", variant: "outline" },
     };
     
     const config = statusConfig[status] || { label: status, variant: "outline" };

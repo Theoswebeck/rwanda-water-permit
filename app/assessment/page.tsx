@@ -236,6 +236,7 @@ function AssessmentDashboardContent() {
       approved_pending_permit: { label: "Pending Terms", className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800" },
       rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800" },
       terminated: { label: "Terminated (exempted use)", className: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-700" },
+      closed_incomplete: { label: "Closed due to incompletion", className: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-900/60 dark:text-slate-300 dark:border-slate-700" },
       returned_to_assessment: { label: "🔄 Returned for Corrections", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
       returned_to_review: { label: "🔄 Returned to Reviewer", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
       returned_to_verification: { label: "🔄 Returned to Verifier", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },

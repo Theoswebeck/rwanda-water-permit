@@ -36,6 +36,7 @@ export type ApplicationStatus =
   | 'revision_required'
   | 'cancelled'
   | 'terminated'               // Terminal: application falls under an EXEMPTED water use (no permit required)
+  | 'closed_incomplete'        // Terminal: closed automatically after six months incomplete (Water Use Permit Law)
   // Returned statuses - for applications sent back for corrections
   | 'returned_to_assessment'    // Returned to assessor by reviewer/verifier
   | 'returned_to_review'        // Returned to reviewer by verifier/approver  

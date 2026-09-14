@@ -23,6 +23,9 @@ const APPLICATION_STATUS = new Set([
   // NOT run yet the write path retries with LEGACY_ENUM_FALLBACKS (see below),
   // so the code is safe in both deploy orders.
   'terminated',
+  // Added by database/add-closed-incomplete-status.sql. Same deploy-order
+  // tolerance as 'terminated' above.
+  'closed_incomplete',
 ])
 
 const APPLICATION_TYPE = new Set([
@@ -247,11 +250,13 @@ export const LEGACY_ENUM_FALLBACKS: Record<string, LegacyEnumFallback> = {
   application_status: {
     column: 'status',
     carrierColumns: ['status'],
-    migration: 'database/add-terminated-status.sql',
+    migration: 'database/add-terminated-status.sql (terminated) / database/add-closed-incomplete-status.sql (closed_incomplete)',
     // 'cancelled' is the closest pre-existing TERMINAL status: like 'terminated'
     // it closes the file without implying rejection or revision, and it never
     // re-opens the application to the applicant (which 'draft' would).
-    values: { terminated: 'cancelled' },
+    // 'expired' is what the six-month sweep wrote before this status existed,
+    // so it is the exact legacy equivalent for 'closed_incomplete'.
+    values: { terminated: 'cancelled', closed_incomplete: 'expired' },
   },
 }
 

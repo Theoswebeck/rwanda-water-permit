@@ -782,6 +782,8 @@ export default function ApproverApplicationPage() {
       approved: { label: "Approved", variant: "default" },
       approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
       rejected: { label: "Rejected", variant: "destructive" },
+      terminated: { label: "Terminated", variant: "outline" },
+      closed_incomplete: { label: "Closed due to incompletion", variant: "outline" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
     };

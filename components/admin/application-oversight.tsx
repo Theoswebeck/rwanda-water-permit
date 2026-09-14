@@ -255,6 +255,12 @@ export function ApplicationOversight() {
           icon: <XCircle className="h-4 w-4" />,
           className: "bg-gray-100 text-gray-700 border-0 hover:bg-gray-100 px-3 py-2 rounded-full font-medium"
         };
+      case "closed_incomplete":
+        return {
+          label: "Closed due to incompletion",
+          icon: <XCircle className="h-4 w-4" />,
+          className: "bg-slate-200 text-slate-700 border-0 hover:bg-slate-200 px-3 py-2 rounded-full font-medium"
+        };
       case "terminated":
         return {
           label: "Terminated (Exempted Use)",
