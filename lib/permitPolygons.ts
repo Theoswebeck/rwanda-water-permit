@@ -37,7 +37,14 @@ export async function fetchApprovedPermitPolygons(): Promise<PermitPolygon[]> {
         p.permit_number::text as permit_number,
         coalesce(a.project_title, '') as project_title,
         st_asgeojson(coalesce(p.coordinates, a.coordinates))::jsonb as coordinates_geojson,
-        p.status::text as status,
+        -- A lapsed permit is never written back to 'expired', so derive it from
+        -- the date the way lib/permit/registry-unified.ts does — otherwise the
+        -- map paints an expired concession green and counts it as active.
+        case
+          when p.status::text in ('suspended', 'revoked') then p.status::text
+          when p.expiry_date is not null and p.expiry_date::date < current_date then 'expired'
+          else p.status::text
+        end as status,
         p.issued_date::text as issued_date,
         p.expiry_date::text as expiry_date,
         p.purpose::text as water_purpose,
@@ -55,7 +62,11 @@ export async function fetchApprovedPermitPolygons(): Promise<PermitPolygon[]> {
         pr.permit_number::text as permit_number,
         coalesce(pr.permit_holder, pr.location, 'Permit registry entry') as project_title,
         st_asgeojson(pr.map_geometry)::jsonb as coordinates_geojson,
-        pr.map_status::text as status,
+        case
+          when pr.map_status::text in ('suspended', 'revoked') then pr.map_status::text
+          when pr.expiration_date is not null and pr.expiration_date::date < current_date then 'expired'
+          else pr.map_status::text
+        end as status,
         coalesce(pr.issuance_date::text, current_date::text) as issued_date,
         coalesce(pr.expiration_date::text, pr.issuance_date::text, current_date::text) as expiry_date,
         coalesce(pr.map_purpose::text, 'other') as water_purpose,

@@ -233,12 +233,23 @@ export default function PermitDetailPage() {
 
         const issueDate = app?.terms_accepted_at || rawPermit.issued_date;
 
+        // permits.status is never written back when a permit lapses, so an
+        // expired permit still reads "active" in the row. Derive it from the
+        // expiry date the same way the permit list on /dashboard does.
+        const expiryAt = rawPermit.expiry_date ? new Date(rawPermit.expiry_date) : null;
+        const displayStatus =
+          rawPermit.status === "revoked" || rawPermit.status === "suspended"
+            ? rawPermit.status
+            : expiryAt && !Number.isNaN(expiryAt.getTime()) && expiryAt < new Date()
+              ? "expired"
+              : rawPermit.status;
+
         setPermit({
           id: rawPermit.id,
           title: app?.project_title || `${toDisplayLabel(rawPermit.purpose)} Water Permit`,
           issueDate: issueDate,
           expiryDate: rawPermit.expiry_date,
-          status: rawPermit.status,
+          status: displayStatus,
           waterActivity,
           location: waterSourceLocation,
           permitNumber: rawPermit.permit_number,
@@ -326,6 +337,10 @@ export default function PermitDetailPage() {
             <AlertCircle className="h-3 w-3" /> Expires Soon
           </Badge>
         );
+      case "suspended":
+        return <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-300">Suspended</Badge>;
+      case "revoked":
+        return <Badge variant="outline" className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">Revoked</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
