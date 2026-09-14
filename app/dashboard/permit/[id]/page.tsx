@@ -12,6 +12,7 @@ import { ArrowLeft, Calendar, Download, FileCheck, Clock, AlertCircle, MapPin } 
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
+import { parsePermitDate } from "@/lib/permit/resolve-modification-validity";
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   individual: "Individual",
@@ -235,12 +236,20 @@ export default function PermitDetailPage() {
 
         // permits.status is never written back when a permit lapses, so an
         // expired permit still reads "active" in the row. Derive it from the
-        // expiry date the same way the permit list on /dashboard does.
-        const expiryAt = rawPermit.expiry_date ? new Date(rawPermit.expiry_date) : null;
+        // expiry date instead.
+        //
+        // Compare whole calendar days, not instants: a date-only expiry parses
+        // as UTC midnight, so comparing it against `new Date()` would flip the
+        // permit to Expired at 02:00 Kigali time on its own expiry date —
+        // while the registry (`expiry_date::date < current_date`) still calls
+        // it active for the rest of that day.
+        const expiryAt = parsePermitDate(rawPermit.expiry_date);
+        const now = new Date();
+        const todayStart = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
         const displayStatus =
           rawPermit.status === "revoked" || rawPermit.status === "suspended"
             ? rawPermit.status
-            : expiryAt && !Number.isNaN(expiryAt.getTime()) && expiryAt < new Date()
+            : expiryAt && expiryAt.getTime() < todayStart
               ? "expired"
               : rawPermit.status;
 

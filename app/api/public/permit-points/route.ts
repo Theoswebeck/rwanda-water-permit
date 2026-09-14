@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { query } from "@/lib/db/postgres";
+import { expiredAwareStatusSql } from "@/lib/permit/registry-unified";
 
 const QuerySchema = z.object({
   status: z.string().optional().default("active"),
@@ -66,7 +67,10 @@ export async function GET(req: NextRequest) {
       select
         p.id,
         p.permit_number,
-        p.status::text as status,
+        -- A lapsed permit is never written back to 'expired', so derive it
+        -- from the date; otherwise this map contradicts the concession map
+        -- and the registry about the same permit.
+        ${expiredAwareStatusSql('p.status', 'p.expiry_date')} as status,
         p.water_source::text as water_source,
         p.purpose::text as purpose,
         p.water_allowance,

@@ -173,3 +173,21 @@ export const REGISTRY_STATUS_COUNT_SQL = `
     AND pr.expiration_date::date <= (current_date + INTERVAL '3 months')
   )::text as expiring_soon
 `;
+
+/**
+ * Status expression for the lowercase `permit_status` enum columns
+ * (`permits.status`, `permit_registry.map_status`).
+ *
+ * Nothing ever writes `expired` back to those columns when a permit lapses, so
+ * every surface must derive it from the date or it will keep reporting a dead
+ * permit as active. Suspended/revoked win over expiry, matching the registry
+ * CTE above. Comparison is `::date < current_date` so a permit stays valid
+ * through the whole of its expiry day.
+ */
+export function expiredAwareStatusSql(statusCol: string, expiryCol: string): string {
+  return `case
+          when ${statusCol}::text in ('suspended', 'revoked') then ${statusCol}::text
+          when ${expiryCol} is not null and ${expiryCol}::date < current_date then 'expired'
+          else ${statusCol}::text
+        end`;
+}
