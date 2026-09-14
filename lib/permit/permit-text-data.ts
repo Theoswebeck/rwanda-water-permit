@@ -271,9 +271,14 @@ export function resolveAbstractionMethodRaw(app: PermitApplication): string {
     v.trim().toLowerCase() !== "n/a"
       ? v.trim()
       : "";
+  const notes = resolveNotes(app);
+  // An assessor edit (document override, flattened into notes) outranks the
+  // applicant's submitted column — the assessment report is what the permit
+  // and contract must agree with.
+  const fromOverride = meaningful(notes?.waterTakingMethod);
+  if (fromOverride) return fromOverride;
   const fromCol = meaningful(app.water_taking_method);
   if (fromCol) return fromCol;
-  const notes = resolveNotes(app);
   const fromNotes = meaningful(notes?.waterAbstractionDetails?.[0]?.abstractionMethod);
   if (fromNotes) return fromNotes;
   const fromTransfer = meaningful(notes?.transferFormData?.abstractionMethod);

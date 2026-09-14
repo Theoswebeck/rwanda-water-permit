@@ -18,6 +18,7 @@ export const DOCUMENT_OVERRIDE_KEYS = [
   "waterSourceLatitude",
   "waterSourceLongitude",
   "intendedActivities",
+  "waterTakingMethod",
 ] as const;
 
 export type DocumentOverrideKey = (typeof DOCUMENT_OVERRIDE_KEYS)[number];
@@ -123,6 +124,12 @@ export const DOCUMENT_OVERRIDE_FIELD_GROUPS: DocumentOverrideFieldGroup[] = [
         kind: "multiselect",
         options: INTENDED_ACTIVITY_OPTIONS,
         placeholder: "Select one or more activities",
+      },
+      {
+        key: "waterTakingMethod",
+        label: "Abstraction / Water Taking Method",
+        kind: "text",
+        placeholder: "e.g. pumping, gravity",
       },
     ],
   },
@@ -253,6 +260,7 @@ export type ApplicationForOverrides = {
   coordinates?: unknown;
   water_body_name?: string | null;
   water_source?: string | null;
+  water_taking_method?: string | null;
   intended_activities?: unknown;
   internal_notes?: unknown;
   applicant?: {
@@ -430,6 +438,16 @@ export function getDocumentBaseValues(app: ApplicationForOverrides): DocumentBas
   const { lat, lng } = extractLatLngFromApp(app);
   if (lat) out.waterSourceLatitude = lat;
   if (lng) out.waterSourceLongitude = lng;
+
+  const baseMethod = pickFirstString(
+    baseNotes.waterTakingMethod,
+    app.water_taking_method,
+    baseNotes.waterAbstractionDetails?.[0]?.abstractionMethod,
+    tfd && typeof tfd.abstractionMethod === "string" ? tfd.abstractionMethod : "",
+  );
+  if (baseMethod && !/^not[_ ]specified$/i.test(baseMethod) && baseMethod.toLowerCase() !== "n/a") {
+    out.waterTakingMethod = baseMethod;
+  }
 
   // Use purpose — multiselect.
   const baseActivities = extractIntendedActivitiesBase(app);

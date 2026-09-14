@@ -419,6 +419,8 @@ function resolveSystemTypeLabels(application: ApplicationForContract): {
       : "";
 
   const rawMethod =
+    // Assessor edit first — see resolveAbstractionMethodRaw in permit-text-data.
+    meaningful(notes?.waterTakingMethod) ||
     meaningful(application.water_taking_method) ||
     meaningful(notes?.waterAbstractionDetails?.[0]?.abstractionMethod) ||
     meaningful(notes?.abstractionMethod) ||

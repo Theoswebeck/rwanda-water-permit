@@ -78,6 +78,7 @@ import {
   getFormattedVillageOptions,
 } from "@/lib/rwanda-administrative-data";
 import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
+import { getDocumentBaseValues } from "@/lib/document-overrides";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
 import { DocumentTextEditor } from "@/components/staff/document-text-editor";
@@ -2208,9 +2209,75 @@ export default function AssessmentApplicationPage() {
 
         existingFormData._assessorAdjustments = nextAdjustments;
 
+        // RWB feedback (Sep 2026): values edited in the assessment report must be
+        // reflected in the permit and contract. Bridge the report's edited water
+        // source (name + coordinates) into the document-override envelope the
+        // document renderers already flatten into their resolvers.
+        const reportOverrides: Record<string, string | number> = {};
+        const reportSourceName =
+          typeof assessmentReportDataForSave?.sourceName === 'string'
+            ? assessmentReportDataForSave.sourceName.trim()
+            : '';
+        if (reportSourceName && reportSourceName !== 'Not specified' && reportSourceName !== 'N/A') {
+          reportOverrides.nameSourceWater = reportSourceName;
+        }
+        // Coordinates, abstraction method and the administrative location of
+        // the source are synced too, but ONLY where the assessor actually
+        // changed them: the report is prefilled from the applicant's own
+        // submission, so echoing an unchanged value back would forge assessor
+        // provenance. Compared against getDocumentBaseValues, which is exactly
+        // what the renderers fall back to when no override exists.
+        const baseValues = getDocumentBaseValues(application as any);
+        const syncIfChanged = (
+          key: keyof typeof baseValues,
+          rawValue: unknown,
+        ) => {
+          const value = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+          if (value === undefined || value === null || value === '') return;
+          if (value === 'Not specified' || value === 'N/A') return;
+          if (String(baseValues[key] ?? '') === String(value)) return;
+          reportOverrides[key] = value as string | number;
+        };
+
+        syncIfChanged('waterSourceLatitude', assessmentReportDataForSave?.sourceLatitude);
+        syncIfChanged('waterSourceLongitude', assessmentReportDataForSave?.sourceLongitude);
+        syncIfChanged('waterTakingMethod', assessmentReportDataForSave?.abstractionMethod);
+
+        // sourceLocation is a comma-joined "Village, Cell, Sector, District,
+        // Province" built by formatLocationString, which DROPS empty parts —
+        // so it is only unambiguous when all five survived.
+        const locationParts = String(assessmentReportDataForSave?.sourceLocation ?? '')
+          .split(',')
+          .map((part) => part.trim())
+          .filter(Boolean);
+        if (locationParts.length === 5) {
+          const [village, cell, sector, district, province] = locationParts;
+          syncIfChanged('waterSourceVillage', village);
+          syncIfChanged('waterSourceCell', cell);
+          syncIfChanged('waterSourceSector', sector);
+          syncIfChanged('waterSourceDistrict', district);
+          syncIfChanged('waterSourceProvince', province);
+        }
+
+        // The concession polygon is still NOT synced here: flipping
+        // resolveConcessionAreaLabel from the declared concession_area to a
+        // computed polygon area would change the hectares printed on live
+        // contracts. The assessor has a dedicated control that writes it.
+        if (Object.keys(reportOverrides).length > 0) {
+          const prevEnv = (existingFormData.document_overrides ?? {}) as Record<string, any>;
+          existingFormData.document_overrides = {
+            ...prevEnv,
+            version: (typeof prevEnv.version === 'number' ? prevEnv.version : 0) + 1,
+            updatedAt: new Date().toISOString(),
+            updatedBy: user.id,
+            values: { ...(prevEnv.values ?? {}), ...reportOverrides },
+          };
+        }
+
         const durationChanged = nextAdjustments.permitLengthYears !== previousAdjustments.permitLengthYears;
         const volumeChanged = nextAdjustments.recommendedVolumeM3 !== previousAdjustments.recommendedVolumeM3;
-        const needsAppSync = durationChanged || volumeChanged;
+        const needsAppSync =
+          durationChanged || volumeChanged || Object.keys(reportOverrides).length > 0;
 
         if (needsAppSync) {
           const appUpdateData: any = {
