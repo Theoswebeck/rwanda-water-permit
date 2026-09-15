@@ -248,8 +248,21 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     // to 'submitted' by a payment-status poll and 11 seconds later a save-as-draft
     // from the still-mounted form PATCHed it back to 'draft', hiding the paid
     // application from staff for 20 days (same class as RWB-2026-000064).
-    const APPLICANT_SETTABLE_STATUSES = new Set(['draft', 'pending_payment', 'submitted'])
+    // 'pending_assessment' is settable ONLY as a resubmission of an application
+    // the assessor returned (the edit form routes it straight back to the
+    // assigned assessor). Omitting it here silently dropped every such
+    // resubmission — RWB-2026-000109 resubmitted four times and stayed in
+    // 'revision_required' — so it is allowed, but narrowed below to a current
+    // status of 'revision_required' (from a draft it would skip payment).
+    const APPLICANT_SETTABLE_STATUSES = new Set([
+      'draft',
+      'pending_payment',
+      'submitted',
+      'pending_assessment',
+    ])
     const APPLICANT_EDITABLE_CURRENT_STATUSES = ['draft', 'pending_payment', 'revision_required']
+    const editableCurrentStatusesFor = (next: unknown) =>
+      String(next) === 'pending_assessment' ? ['revision_required'] : APPLICANT_EDITABLE_CURRENT_STATUSES
     let statusDroppedReason: string | null = null
     if ('status' in updatePayload && !APPLICANT_SETTABLE_STATUSES.has(String(updatePayload.status))) {
       statusDroppedReason = `requested status "${String(updatePayload.status)}" is not applicant-settable`
@@ -267,7 +280,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       values.push(id, userId)
       let statusGuardSql = ''
       if (includesStatus) {
-        values.push(APPLICANT_EDITABLE_CURRENT_STATUSES)
+        values.push(editableCurrentStatusesFor(updatePayload.status))
         statusGuardSql = ` and status = any($${keys.length + 3})`
       }
 
