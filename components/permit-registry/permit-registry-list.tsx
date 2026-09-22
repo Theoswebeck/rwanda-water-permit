@@ -1539,21 +1539,30 @@ function UploadedDocSection({
                 {doc.doc_name}
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  asChild
-                  className="h-7 px-2 border-sky-300/80 text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
-                >
-                  <a
-                    href={`/api/staff/permit-registry/${entry.id}/document/${doc.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                {doc.file_available === false ? (
+                  <span
+                    className="h-7 px-2 inline-flex items-center rounded-md border border-amber-300 bg-amber-50 text-xs font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                    title="The file is no longer on the server. Please upload it again."
                   >
-                    <ExternalLink className="h-3 w-3 mr-1" />
-                    Open
-                  </a>
-                </Button>
+                    File missing — re-upload
+                  </span>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    asChild
+                    className="h-7 px-2 border-sky-300/80 text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                  >
+                    <a
+                      href={`/api/staff/permit-registry/${entry.id}/document/${doc.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      Open
+                    </a>
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="ghost"

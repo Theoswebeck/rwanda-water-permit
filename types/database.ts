@@ -466,6 +466,11 @@ export interface RegistryDocument {
   doc_path: string
   doc_mime_type: string
   uploaded_at: string
+  /**
+   * False when the row exists but the file is gone from disk (the pre-Aug-2026
+   * registry uploads were lost). Absent on responses that don't check.
+   */
+  file_available?: boolean
 }
 
 export interface PermitRegistryEntry {

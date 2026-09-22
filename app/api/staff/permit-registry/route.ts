@@ -8,6 +8,7 @@ import {
 } from "@/lib/permit/registry-counts";
 import { buildUnifiedCte, REGISTRY_STATUS_COUNT_SQL } from "@/lib/permit/registry-unified";
 import { resolveCatchment } from "@/lib/permit/catchment-resolution";
+import { localFileExists } from "@/lib/documents/file-availability";
 
 const EMPTY_RESULT = {
   items: [],
@@ -165,9 +166,30 @@ export async function GET(req: NextRequest) {
       pageValues
     );
 
+    // Flag documents whose file is no longer on disk so the registry can say
+    // "missing — re-upload" instead of handing staff an Open link that 404s.
+    // Only the current page's rows are stat'd, so this stays cheap.
+    const items = await Promise.all(
+      (pageRes.rows || []).map(async (row: any) => {
+        const docs = Array.isArray(row?.documents) ? row.documents : [];
+        if (!docs.length) return row;
+        return {
+          ...row,
+          documents: await Promise.all(
+            docs.map(async (doc: any) => ({
+              ...doc,
+              file_available: String(doc?.doc_path || '').startsWith('http')
+                ? true
+                : await localFileExists(String(doc?.doc_path || '')),
+            }))
+          ),
+        };
+      })
+    );
+
     const summary = summaryRes.rows[0];
     return NextResponse.json({
-      items: pageRes.rows || [],
+      items,
       total: Number(summary?.total || 0),
       summary: {
         total: Number(summary?.total || 0),
