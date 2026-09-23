@@ -130,9 +130,9 @@ export async function POST(req: NextRequest) {
 
     try {
       const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        host: process.env.SMTP_HOST || 'mail.notification.rwb.rw',
         port: parseInt(process.env.SMTP_PORT || '587', 10),
-        secure: false,
+        secure: (process.env.SMTP_PORT || '587') === '465',
         auth: { user: smtpUser, pass: smtpPass },
       })
       await transporter.sendMail({

@@ -50,9 +50,9 @@ export async function sendSmtpEmail(params: SendSmtpEmailParams) {
   }
 
   const transporter = nodemailer.createTransport({
-    host: smtpHost || 'smtp.gmail.com',
+    host: smtpHost || 'mail.notification.rwb.rw',
     port: smtpPort,
-    secure: false,
+    secure: smtpPort === 465,
     auth: { user: smtpUser, pass: smtpPass },
   })
 
