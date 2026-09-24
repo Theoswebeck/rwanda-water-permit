@@ -229,6 +229,8 @@ export function LoginForm() {
         return;
       }
       setSuccess(tx("A new sign-in code is on its way to your email."));
+    } catch {
+      setError(tx("Could not send the code. Please try again."));
     } finally {
       setResendingCode(false);
     }

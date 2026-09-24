@@ -22,6 +22,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Invalid email' }, { status: 400 })
     }
 
+    // SECURITY: this route needs no session, so it may only touch the purposes
+    // that exist before one — anyone could otherwise spend a staff member's
+    // pending sign-in code by asking for a 'login_2fa' code on their address.
+    if (purpose !== 'signup' && purpose !== 'password_reset') {
+      return NextResponse.json({ success: false, message: 'Invalid request' }, { status: 400 })
+    }
+
     // SECURITY: this endpoint sends mail on demand and is the entry point of
     // the password-reset flow. Without a limit it can be used to flood an
     // inbox or to churn through reset codes.

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { readPendingTwoFactorToken, verifyPendingTwoFactorToken } from '@/lib/auth/session'
+import {
+  createPendingTwoFactorToken,
+  readPendingTwoFactorToken,
+  setPendingTwoFactorCookie,
+  verifyPendingTwoFactorToken,
+} from '@/lib/auth/session'
 import { sendTwoFactorCode } from '@/lib/auth/two-factor'
 import {
   AUTH_RATE_LIMITS,
@@ -37,7 +42,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const { devCode } = await sendTwoFactorCode(pending.email)
-    return NextResponse.json({ success: true, devCode })
+    // The new code lives ten minutes; so must the cookie that pairs with it,
+    // or a resend near the deadline sends a code the user cannot spend.
+    const response = NextResponse.json({ success: true, devCode })
+    setPendingTwoFactorCookie(response, await createPendingTwoFactorToken(pending.userId, pending.email))
+    return response
   } catch (err) {
     console.error('❌ 2FA resend failed:', err)
     return NextResponse.json({ success: false, message: 'Could not send the code. Please try again.' }, { status: 500 })

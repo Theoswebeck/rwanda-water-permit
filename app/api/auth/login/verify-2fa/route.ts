@@ -11,6 +11,7 @@ import {
   AUTH_RATE_LIMITS,
   checkRateLimit,
   getClientIp,
+  resetRateLimit,
   tooManyRequests,
 } from '@/lib/security/rate-limit'
 
@@ -42,12 +43,16 @@ export async function POST(req: NextRequest) {
     if (!ipCheck.allowed) {
       return tooManyRequests(ipCheck, 'Too many attempts from this network. Please try again later.')
     }
-    const accountCheck = checkRateLimit(`login2fa:account:${pending.email}`, AUTH_RATE_LIMITS.loginPerAccount)
+    const accountKey = `login2fa:account:${pending.email}`
+    const accountCheck = checkRateLimit(accountKey, AUTH_RATE_LIMITS.loginPerAccount)
     if (!accountCheck.allowed) {
       return tooManyRequests(accountCheck, 'Too many incorrect codes. Please wait before trying again.')
     }
 
     const ok = await consumeTwoFactorCode(pending.email, code)
+    // A correct code clears the counter: five *correct* sign-ins in a morning
+    // (desktop, phone, a session timeout) must not lock a staff member out.
+    if (ok) resetRateLimit(accountKey)
     if (!ok) {
       return NextResponse.json({ success: false, message: 'Invalid or expired code' }, { status: 401 })
     }

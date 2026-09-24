@@ -41,6 +41,8 @@ const AUTH_PAGES = ['/login', '/register']
 const PUBLIC_API_PREFIXES = [
   // Data behind the public Water Use Dashboard. Aggregate counts only.
   '/api/public/water-use-dashboard',
+  // Site chrome (contact details, guideline links) rendered on public pages.
+  '/api/public/site-content',
   // Government-agency API access request form (design: docs/api-access-DESIGN.md).
   // POST-only by route shape; zod-validated, honeypot + IP throttle in-route.
   '/api/public/api-access-requests',
