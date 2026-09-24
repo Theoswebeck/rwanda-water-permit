@@ -80,8 +80,7 @@ export async function sendTwoFactorCode(email: string): Promise<{ devCode?: stri
     text:
       `Your sign-in code is ${code}\n\n` +
       `It expires in ${CODE_TTL_MINUTES} minutes and can be used once.\n\n` +
-      `If you did not try to sign in, change your password and tell the system administrator — ` +
-      `someone else knows it.`,
+      `If you did not try to sign in, change your password and tell the system administrator.`,
   })
 
   const isDev = process.env.NODE_ENV !== 'production' || process.env.EMAIL_DEV_MODE === 'true'
