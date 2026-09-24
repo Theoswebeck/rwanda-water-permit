@@ -8,3 +8,8 @@ create table if not exists site_content (
   updated_at timestamptz not null default now(),
   updated_by text
 );
+
+-- Tables here are owned by postgres and the app connects as waterpermit_app,
+-- which inherits nothing: without this the admin Content tab saves into a
+-- permission error.
+grant select, insert, update, delete on public.site_content to waterpermit_app;
