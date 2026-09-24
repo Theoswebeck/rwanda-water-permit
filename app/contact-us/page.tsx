@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { BackToDashboardButton } from "@/components/ui/back-button";
 function ContactUsContent() {
   const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,12 +89,7 @@ function ContactUsContent() {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Button variant="ghost" size="sm" className="flex items-center gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Dashboard
-                </Button>
-              </Link>
+              <BackToDashboardButton size="sm" className="flex items-center gap-2" />
               <div className="h-6 w-px bg-gray-300" />
               <h1 className="text-2xl font-bold text-gray-900">Contact Support</h1>
             </div>

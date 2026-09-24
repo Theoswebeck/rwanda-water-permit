@@ -23,6 +23,7 @@ import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
 import { buildDocumentLookupPathPatterns, resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { mapFormDataToApplication as mapFormDataToApplicationShared } from "@/lib/application-utils";
+import { BackToDashboardButton } from "@/components/ui/back-button";
 
 interface ApplicationWithRelations extends Application {
   applicant?: UserType;
@@ -995,12 +996,7 @@ export default function EditApplicationPage() {
       <DashboardLayout>
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center mb-6">
-            <Link href="/dashboard">
-              <Button variant="ghost" className="gap-1">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Dashboard
-              </Button>
-            </Link>
+            <BackToDashboardButton className="gap-1" />
           </div>
           
           <Alert variant="destructive">
@@ -1044,12 +1040,7 @@ export default function EditApplicationPage() {
     <DashboardLayout>
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center mb-6">
-          <Link href="/dashboard">
-            <Button variant="ghost" className="gap-1">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Button>
-          </Link>
+          <BackToDashboardButton className="gap-1" />
         </div>
         
         <motion.div

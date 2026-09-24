@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuth } from "@/contexts/AuthContext";
+import { BackToDashboardButton } from "@/components/ui/back-button";
 import { 
   ArrowLeft, 
   Loader2, 
@@ -91,7 +92,15 @@ interface IssuedPermitMeta {
 // Transform Application data back to form format for viewing
 function mapApplicationToFormData(application: Application, userProfile?: any): any {
   const formData: any = {};
-  
+
+  // Whose contact details belong on this form. Always the APPLICANT's — an admin
+  // can open any application (ProtectedRoute lets admins through every page), and
+  // reading the logged-in profile here showed them their own name, email and phone
+  // as the applicant's, and again as the payment customer. Fall back to the logged-in
+  // profile only when the application carries no applicant, which is the applicant's
+  // own draft.
+  const contact = (application as any)?.applicant || userProfile || null;
+
   // Parse internal notes to extract form-specific data
   // Try to parse as JSON first (new format), fallback to legacy format
   let storedFormData: any = {};
@@ -123,10 +132,10 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     // Copy all stored form data
     Object.assign(formData, storedFormData);
     
-    // Override with profile data for contact information if available
-    if (userProfile) {
-      formData.telephoneContact = userProfile.phone || userProfile.company_phone || formData.telephoneContact;
-      formData.emailAddress = userProfile.email || formData.emailAddress;
+    // Override with the applicant's contact information if available
+    if (contact) {
+      formData.telephoneContact = contact.phone || contact.company_phone || formData.telephoneContact;
+      formData.emailAddress = contact.email || formData.emailAddress;
     }
     
     // Ensure polygons are properly formatted:
@@ -181,9 +190,9 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     formData.officeCell = application.cell || '';
     formData.officeVillage = application.village || '';
     
-    // Contact information - use profile data if available, otherwise try to extract from notes
-    formData.telephoneContact = userProfile?.phone || userProfile?.company_phone || '';
-    formData.emailAddress = userProfile?.email || legacyNotesMap['Contact']?.replace('Not provided', '') || '';
+    // Contact information - use the applicant's details if available, otherwise try to extract from notes
+    formData.telephoneContact = contact?.phone || contact?.company_phone || '';
+    formData.emailAddress = contact?.email || legacyNotesMap['Contact']?.replace('Not provided', '') || '';
   
     // Water source information
     const waterSourceMap: Record<string, string> = {
@@ -762,20 +771,26 @@ export default function ApplicationDetailPage() {
     loadRenewalPermit();
   }, [application, userProfile?.id]);
 
-  // Create userData object for the form (similar to new-application page)
+  // Create userData object for the form (similar to new-application page).
+  // This drives the applicant details shown on the form AND the customer shown on
+  // the payment tab, so it must describe the APPLICATION's applicant rather than
+  // whoever is logged in — otherwise an admin reviewing an application sees their
+  // own name and email as the customer. Falls back to the logged-in profile for an
+  // applicant's own draft, where no applicant row is joined yet.
+  const applicantProfile = (application as any)?.applicant || userProfile;
   const userData = {
-    email: userProfile?.email || "",
-    name: `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || userProfile?.company_name || "",
+    email: applicantProfile?.email || "",
+    name: `${applicantProfile?.first_name || ''} ${applicantProfile?.last_name || ''}`.trim() || applicantProfile?.company_name || "",
     // Separate fields required by PermitRenewalForm for permit holder name resolution
-    first_name: userProfile?.first_name || "",
-    last_name: userProfile?.last_name || "",
-    company_name: userProfile?.company_name || "",
-    phone: userProfile?.phone || userProfile?.company_phone || "",
-    address: userProfile?.company_address || "",
-    idNumber: userProfile?.id_number || "",
-    account_type: userProfile?.account_type || 'individual' as const,
-    id_number: userProfile?.id_number || "",
-    company_tin: userProfile?.company_tin,
+    first_name: applicantProfile?.first_name || "",
+    last_name: applicantProfile?.last_name || "",
+    company_name: applicantProfile?.company_name || "",
+    phone: applicantProfile?.phone || applicantProfile?.company_phone || "",
+    address: applicantProfile?.company_address || "",
+    idNumber: applicantProfile?.id_number || "",
+    account_type: applicantProfile?.account_type || 'individual' as const,
+    id_number: applicantProfile?.id_number || "",
+    company_tin: applicantProfile?.company_tin,
   };
 
   // Dummy handlers for read-only form (these won't be called in view mode)
@@ -962,9 +977,7 @@ export default function ApplicationDetailPage() {
           <div className="text-center py-12">
             <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl text-red-600 mb-4">Error</h2>
             <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mb-6">{error}</p>
-            <Link href="/dashboard">
-              <Button>Back to Dashboard</Button>
-            </Link>
+            <BackToDashboardButton variant="default" />
           </div>
         </div>
       </DashboardLayout>
@@ -980,9 +993,7 @@ export default function ApplicationDetailPage() {
             <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mb-6">
               Application not found. Please check the application ID and try again.
             </p>
-            <Link href="/dashboard">
-              <Button>Back to Dashboard</Button>
-            </Link>
+            <BackToDashboardButton variant="default" />
           </div>
         </div>
       </DashboardLayout>
@@ -994,12 +1005,7 @@ export default function ApplicationDetailPage() {
     <DashboardLayout>
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center mb-6">
-          <Link href="/dashboard">
-            <Button variant="ghost" className="gap-1">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Button>
-          </Link>
+          <BackToDashboardButton className="gap-1" />
         </div>
         
         <motion.div

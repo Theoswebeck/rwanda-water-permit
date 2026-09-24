@@ -18,18 +18,25 @@ import {
   type AppLanguage,
 } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
+import { useSiteContent } from "@/lib/use-site-content";
+import type { SiteContent } from "@/lib/site-content";
 
-const navItems = [
-  { label: "User Manual", href: "/assets/User_Manual_Guide_Rwanda_Water_Permit_Application_Portal.pdf", newTab: true },
-  { label: "Guidelines", href: "https://www.waterpermit.rwb.rw/Water_Use_Permitting_Guidelines.pdf" },
-  { label: "Water Use Dashboard", href: "/water-use-dashboard" },
-  { label: "Contact", href: "https://waterpermit.rwb.rw/contact" },
-];
+// The manual and guidelines links are admin-managed (admin panel → Content),
+// so a new version is published from the UI rather than edited here.
+function buildNavItems(content: SiteContent) {
+  return [
+    { label: "User Manual", href: content.user_manual_url, newTab: true },
+    { label: "Guidelines", href: content.guidelines_url, newTab: true },
+    { label: "Water Use Dashboard", href: "/water-use-dashboard" },
+    { label: "Contact", href: "/contact" },
+  ];
+}
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const [language, setLanguage] = useState<AppLanguage>("en");
   const pathname = usePathname();
+  const navItems = buildNavItems(useSiteContent());
   const { userProfile, isAuthenticated } = useAuth();
   const isApplyPage = pathname === "/apply";
   const isLoginPage = pathname === "/login";
@@ -183,11 +190,21 @@ export function Header() {
                   </Button>
                 </Link>
               ) : (
-                <Link href="/apply">
-                  <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
-                    {tx("APPLY NOW")}
-                  </Button>
-                </Link>
+                /* Staff have no application to start, so "APPLY NOW" alone left
+                   them clicking Apply just to reach the sign-in form. The login
+                   page already routes each account to its own landing page. */
+                <div className="flex items-center gap-3">
+                  <Link href="/login">
+                    <Button variant="outline" className="rounded-full px-6">
+                      {tx("LOGIN")}
+                    </Button>
+                  </Link>
+                  <Link href="/apply">
+                    <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
+                      {tx("APPLY NOW")}
+                    </Button>
+                  </Link>
+                </div>
               )}
             </motion.div>
           </div>
@@ -287,11 +304,18 @@ export function Header() {
                         </Button>
                       </Link>
                     ) : (
-                      <Link href="/apply" onClick={() => setIsOpen(false)}>
-                        <Button className="w-full bg-primary hover:bg-primary/90 rounded-full mt-4">
-                          {tx("APPLY NOW")}
-                        </Button>
-                      </Link>
+                      <>
+                        <Link href="/login" onClick={() => setIsOpen(false)}>
+                          <Button variant="outline" className="w-full rounded-full mt-4">
+                            {tx("LOGIN")}
+                          </Button>
+                        </Link>
+                        <Link href="/apply" onClick={() => setIsOpen(false)}>
+                          <Button className="w-full bg-primary hover:bg-primary/90 rounded-full mt-4">
+                            {tx("APPLY NOW")}
+                          </Button>
+                        </Link>
+                      </>
                     )}
                   </div>
                 </nav>

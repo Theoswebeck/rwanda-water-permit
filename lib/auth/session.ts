@@ -109,3 +109,65 @@ export function clearSessionCookie(response: NextResponse): void {
     maxAge: 0,
   })
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pending two-factor step
+//
+// RWB staff sign-in is two steps: password, then an emailed code. Between them
+// the browser holds this short-lived token INSTEAD of a session — it proves the
+// password was accepted for one specific user and nothing more, so a stolen
+// copy cannot read or write anything on its own.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PENDING_2FA_COOKIE = 'wp_2fa'
+const PENDING_2FA_TTL_SECONDS = 10 * 60
+
+export async function createPendingTwoFactorToken(userId: string, email: string): Promise<string> {
+  const now = Math.floor(Date.now() / 1000)
+  return new SignJWT({ email, purpose: 'pending_2fa' })
+    .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+    .setSubject(userId)
+    .setIssuedAt(now)
+    .setExpirationTime(now + PENDING_2FA_TTL_SECONDS)
+    .sign(getJwtKey())
+}
+
+export async function verifyPendingTwoFactorToken(
+  token: string
+): Promise<{ userId: string; email: string } | null> {
+  try {
+    const { payload } = await jwtVerify(token, getJwtKey())
+    if (payload.purpose !== 'pending_2fa' || !payload.sub || !payload.email) return null
+    return { userId: String(payload.sub), email: String(payload.email) }
+  } catch {
+    return null
+  }
+}
+
+export function readPendingTwoFactorToken(request: NextRequest): string | null {
+  return request.cookies.get(PENDING_2FA_COOKIE)?.value || null
+}
+
+export function setPendingTwoFactorCookie(response: NextResponse, token: string): void {
+  response.cookies.set({
+    name: PENDING_2FA_COOKIE,
+    value: token,
+    httpOnly: true,
+    secure: getAuthCookieSecure(),
+    sameSite: 'lax',
+    path: '/',
+    maxAge: PENDING_2FA_TTL_SECONDS,
+  })
+}
+
+export function clearPendingTwoFactorCookie(response: NextResponse): void {
+  response.cookies.set({
+    name: PENDING_2FA_COOKIE,
+    value: '',
+    httpOnly: true,
+    secure: getAuthCookieSecure(),
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0,
+  })
+}

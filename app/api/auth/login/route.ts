@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { verifyPassword } from '@/lib/auth/password'
-import { createSessionToken, setSessionCookie } from '@/lib/auth/session'
-import { resolveEffectiveRoles } from '@/lib/auth/effective-roles'
+import { createPendingTwoFactorToken, setPendingTwoFactorCookie } from '@/lib/auth/session'
+import { issueSessionResponse } from '@/lib/auth/issue-session'
+import { requiresTwoFactor, sendTwoFactorCode } from '@/lib/auth/two-factor'
 import {
   AUTH_RATE_LIMITS,
   checkRateLimit,
@@ -92,40 +93,31 @@ export async function POST(req: NextRequest) {
     // is intentionally left in place.
     resetRateLimit(accountKey)
 
-    const resolved = await resolveEffectiveRoles({
-      userId: user.id,
-      claimsRole: user.role,
-    })
+    // RWB staff need a second factor; applicants sign in on the password alone.
+    if (requiresTwoFactor(user.role)) {
+      try {
+        const { devCode } = await sendTwoFactorCode(user.email)
+        const pending = await createPendingTwoFactorToken(user.id, user.email)
+        const response = NextResponse.json({
+          success: true,
+          twoFactorRequired: true,
+          email: user.email,
+          devCode,
+        })
+        setPendingTwoFactorCookie(response, pending)
+        return response
+      } catch (mailErr) {
+        // No session is issued if the code could not be delivered — signing the
+        // user in anyway would silently disable the second factor.
+        console.error('❌ 2FA code delivery failed:', mailErr)
+        return NextResponse.json(
+          { success: false, message: 'Could not send your sign-in code. Please try again or contact the administrator.' },
+          { status: 500 }
+        )
+      }
+    }
 
-    const token = await createSessionToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      status: user.status,
-      accountType: user.account_type,
-      effectiveRoles: resolved.effectiveRoles,
-    })
-
-    await query(`update public.users set last_login_at = now(), updated_at = now() where id = $1`, [user.id])
-
-    const response = NextResponse.json({
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        user_metadata: {
-          role: user.role,
-          status: user.status,
-          account_type: user.account_type,
-          base_role: resolved.baseRole,
-          delegated_roles: resolved.delegatedRoles,
-          effective_roles: resolved.effectiveRoles,
-        },
-      },
-      mustChangePassword: Boolean(user.must_change_password),
-    })
-    setSessionCookie(response, token)
-    return response
+    return await issueSessionResponse(user)
   } catch (err) {
     console.error('❌ login server error:', err)
     return NextResponse.json({ success: false, message: 'Server error' }, { status: 500 })

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
+import { useSiteContent } from "@/lib/use-site-content";
 
 export default function ContactPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -84,14 +85,18 @@ export default function ContactPage() {
     }
   };
 
+  // Office details and contact persons are published from the admin panel
+  // (Content tab), so RWB updates them without a code change.
+  const { office, contacts } = useSiteContent();
+
   const contactCard = {
     icon: MessageSquare,
     title: tx("General Inquiries"),
     description: tx("Questions about water permits, applications, and general information"),
     items: [
-      { icon: Phone, label: tx("Toll Free Line: 9977"), href: "tel:9977" },
-      { icon: Mail, label: "info@rwb.rw", href: "mailto:info@rwb.rw" },
-      { icon: Clock, label: tx("Mon-Fri: 8:00 AM - 5:00 PM") }
+      { icon: Phone, label: `${tx("Toll Free Line:")} ${office.phone}`, href: `tel:${office.phone}` },
+      { icon: Mail, label: office.email, href: `mailto:${office.email}` },
+      { icon: Clock, label: tx(office.hours) }
     ],
     color: "bg-blue-50 border-blue-200"
   };
@@ -99,9 +104,9 @@ export default function ContactPage() {
   const officeLocations = [
     {
       title: tx("Main Office - Kigali"),
-      address: "KN 3 Ave, Kigali, Rwanda",
-      phone: "9977",
-      email: "info@rwb.rw"
+      address: office.address,
+      phone: office.phone,
+      email: office.email
     }
   ];
 
@@ -378,6 +383,49 @@ export default function ContactPage() {
                 </CardContent>
               </Card>
 
+              {contacts.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <MessageSquare className="h-5 w-5" />
+                      {tx("Contact Persons")}
+                    </CardTitle>
+                    <CardDescription>
+                      {tx("Reach the officer responsible for your request directly")}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      {contacts.map((person, index) => (
+                        <div key={index} className="border-b border-border last:border-b-0 pb-4 last:pb-0">
+                          <h4 className="font-semibold text-sm">{person.name}</h4>
+                          {person.title && (
+                            <p className="text-xs text-muted-foreground mb-2">{person.title}</p>
+                          )}
+                          <div className="space-y-2 text-sm text-muted-foreground">
+                            {person.phone && (
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4 flex-shrink-0" />
+                                <a href={`tel:${person.phone}`} className="hover:text-primary transition-colors">
+                                  {person.phone}
+                                </a>
+                              </div>
+                            )}
+                            {person.email && (
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 flex-shrink-0" />
+                                <a href={`mailto:${person.email}`} className="hover:text-primary transition-colors">
+                                  {person.email}
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
             </motion.div>
           </div>

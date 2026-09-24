@@ -10,6 +10,7 @@ import { SystemOverview } from "@/components/admin/system-overview";
 import { ApplicationOversight } from "@/components/admin/application-oversight";
 import { AdminReports } from "@/components/admin/admin-reports";
 import { ApiAccessManagement } from "@/components/admin/api-access-management";
+import { SiteContentManagement } from "@/components/admin/site-content-management";
 import { ActivityLogs } from "@/components/admin/activity-logs";
 import { RoleDelegationManagement } from "@/components/admin/role-delegation-management";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
@@ -194,7 +195,7 @@ export default function AdminDashboard() {
 
           {/* Main Content Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-9">
+            <TabsList className="grid w-full grid-cols-10">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="users">User Management</TabsTrigger>
               <TabsTrigger value="delegations" className="flex items-center gap-1">
@@ -207,6 +208,10 @@ export default function AdminDashboard() {
               <TabsTrigger value="api-access" className="flex items-center gap-1">
                 <KeyRound className="h-3.5 w-3.5" />
                 API Access
+              </TabsTrigger>
+              <TabsTrigger value="content" className="flex items-center gap-1">
+                <FileText className="h-3.5 w-3.5" />
+                Content
               </TabsTrigger>
               <TabsTrigger value="logs">Activity Logs</TabsTrigger>
               <TabsTrigger value="reports">Reports</TabsTrigger>
@@ -240,6 +245,10 @@ export default function AdminDashboard() {
               <ApiAccessManagement />
             </TabsContent>
             
+            <TabsContent value="content" className="space-y-4">
+              <SiteContentManagement />
+            </TabsContent>
+
             <TabsContent value="logs" className="space-y-4">
               <ActivityLogs />
             </TabsContent>

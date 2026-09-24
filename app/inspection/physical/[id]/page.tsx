@@ -34,6 +34,7 @@ import { ReportsSection } from "@/components/inspection/checklist/section-report
 import { ConflictsInitiativesSection } from "@/components/inspection/checklist/section-conflicts-initiatives";
 import { OverallAssessmentSection } from "@/components/inspection/checklist/section-overall-assessment";
 
+import { BackToDashboardButton } from "@/components/ui/back-button";
 interface InspectionFormData {
   // Section 2: Activity Details
   activityType?: string;
@@ -397,12 +398,7 @@ export default function PermitInspectionPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/inspection">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Dashboard
-                </Button>
-              </Link>
+              <BackToDashboardButton size="sm" className="gap-2" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
                   Permit Holder Inspection

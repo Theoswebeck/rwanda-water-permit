@@ -327,6 +327,13 @@ export function ApiAccessManagement() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Agency access requests</CardTitle>
+            {/* RWB asked what this tab is for: it grants machines, not people.
+                Saying so here avoids reading it as another staff role. */}
+            <p className="text-sm text-slate-500">
+              Government institutions asking for machine-to-machine access to permit data. Approving a
+              request issues an API key to that institution&apos;s system — it does not create a user
+              account and gives nobody a role or a sign-in to this portal.
+            </p>
           </CardHeader>
           <CardContent>
             {requests.length === 0 ? (

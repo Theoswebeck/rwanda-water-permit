@@ -44,6 +44,7 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import type { AppLanguage } from "@/lib/i18n/language";
 import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
+import { BackToDashboardButton } from "@/components/ui/back-button";
 
 function renderInlineBold(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
@@ -2009,12 +2010,11 @@ export default function TermsConditionsPage() {
                         </Button>
                       </Link>
                     )}
-                    <Link href="/dashboard">
-                      <Button variant="outline" className="w-full sm:w-auto">
-                        <Home className="mr-2 h-4 w-4" />
-                        {tx("Back to Dashboard")}
-                      </Button>
-                    </Link>
+                    <BackToDashboardButton
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      label={tx("Back to Dashboard")}
+                    />
                   </div>
                 </div>
               ) : (

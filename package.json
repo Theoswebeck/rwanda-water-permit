@@ -19,6 +19,7 @@
     "test:water-use-report-template": "node --test scripts/test-water-use-report-template.mjs",
     "test:permit-concession-source": "node --test scripts/test-permit-concession-source.mjs",
     "test:concession-boundary-points": "node --test scripts/test-concession-boundary-points.mjs",
+    "test:two-factor-scope": "node --test scripts/test-two-factor-scope.mjs",
     "check:file-integrity": "node scripts/check-file-integrity.mjs",
     "test:file-integrity": "node scripts/check-file-integrity.test.mjs"
   },

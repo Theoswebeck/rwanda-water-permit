@@ -56,6 +56,7 @@ import { VerificationSummary, VerificationChecklist, RecommendationData } from "
 import { RegistryPermitComparisonCard } from "@/components/inspection/registry-permit-comparison-card";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 
+import { BackToDashboardButton } from "@/components/ui/back-button";
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
   () => import("@/components/dashboard/application-form-new"),
@@ -1012,12 +1013,7 @@ export default function InspectorApplicationView() {
           {/* Header */}
           <div className="space-y-6">
             <div className="flex items-center">
-              <Link href="/inspection">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Dashboard
-                </Button>
-              </Link>
+              <BackToDashboardButton size="sm" className="gap-2" />
             </div>
             
             <div className="space-y-2">

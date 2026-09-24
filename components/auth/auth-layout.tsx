@@ -29,72 +29,16 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             transition={{ duration: 0.5 }}
             className="flex items-center gap-2"
           >
-            {/* Make the entire logo bounce */}
-            <motion.svg 
-              width="24" 
-              height="24" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              xmlns="http://www.w3.org/2000/svg"
+            {/* RWB's own mark, not a generic placeholder — the logo must be
+                the Rwanda Water Resources Board's on every page. */}
+            <motion.img
+              src="/assets/rwanda_water_board_Logo.png"
+              alt="Rwanda Water Resources Board"
+              className="h-10 w-auto bg-white rounded p-1"
               initial={{ y: 0 }}
-              animate={{ 
-                y: [0, -10, -2, -8, 0], 
-                scale: [1, 0.95, 1.02, 0.97, 1]
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut",
-                times: [0, 0.35, 0.5, 0.65, 1] // Adjusted timing for more dynamic bounce
-              }}
-            >
-              {/* Outer circle */}
-              <circle 
-                cx="12" 
-                cy="12" 
-                r="10" 
-                stroke="white" 
-                strokeWidth="2" 
-                fill="none" 
-              />
-              
-              {/* Inner circle with pronounced movement */}
-              <motion.circle 
-                cx="12" 
-                cy="12" 
-                r="3.5"
-                fill="white"
-                stroke="rgba(0,0,0,0.1)"
-                strokeWidth="0.5"
-                animate={{ 
-                  scale: [1, 0.85, 1.05, 0.9, 1],
-                  y: [0, 0.5, -0.5, 0.25, 0] // Add slight vertical movement within the outer circle
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                  times: [0, 0.35, 0.5, 0.65, 1]
-                }}
-              />
-              
-              {/* Enhanced shadow in white dot */}
-              <motion.ellipse 
-                cx="12.5" 
-                cy="12.5" 
-                rx="1.5" 
-                ry="1.5"
-                fill="rgba(0, 0, 0, 0.1)"
-                initial={{ opacity: 0.1 }}
-                animate={{ opacity: [0.1, 0.3, 0.15, 0.25, 0.1] }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                  times: [0, 0.35, 0.5, 0.65, 1]
-                }}
-              />
-            </motion.svg>
+              animate={{ y: [0, -6, 0] }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+            />
             <Link href="/" className="text-xl font-bold">
               {tx("Rwanda Water Resources Board")}
             </Link>

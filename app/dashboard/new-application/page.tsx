@@ -84,6 +84,7 @@ import {
 } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
 
+import { BackToDashboardButton } from "@/components/ui/back-button";
 // Helper function to create storage bucket if it doesn't exist
 async function ensureStorageBucket() {
   try {
@@ -2712,12 +2713,7 @@ function NewApplicationContent() {
       <DashboardLayout>
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center mb-6">
-            <Link href="/dashboard">
-              <Button variant="ghost" className="gap-1">
-                <ArrowLeft className="h-4 w-4" />
-                {tx("Back to Dashboard")}
-              </Button>
-            </Link>
+            <BackToDashboardButton className="gap-1" label={tx("Back to Dashboard")} />
           </div>
         
           <motion.div

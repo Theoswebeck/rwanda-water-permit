@@ -26,6 +26,7 @@ import {
 import type { PermitWithApplication } from "@/hooks/usePermitsQuery";
 import type { WaterUseReportTemplate } from "@/types/database";
 
+import { BackToDashboardButton } from "@/components/ui/back-button";
 // Lazy load the form component
 const WaterUseReportForm = dynamic(
   () => import("@/components/dashboard/water-use-report-form").then(mod => ({ default: mod.WaterUseReportForm })),
@@ -294,12 +295,9 @@ function WaterUseReportContent() {
                 {error || tx('Permit not found. Please select a valid permit.')}
               </AlertDescription>
             </Alert>
-            <Link href="/dashboard" className="mt-4 inline-block">
-              <Button variant="outline">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                {tx("Back to Dashboard")}
-              </Button>
-            </Link>
+            <div className="mt-4 inline-block">
+              <BackToDashboardButton variant="outline" label={tx("Back to Dashboard")} />
+            </div>
           </div>
         </DashboardLayout>
       </ProtectedRoute>
@@ -315,12 +313,7 @@ function WaterUseReportContent() {
       <DashboardLayout>
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center mb-6">
-            <Link href="/dashboard">
-              <Button variant="ghost" className="gap-1">
-                <ArrowLeft className="h-4 w-4" />
-                {tx("Back to Dashboard")}
-              </Button>
-            </Link>
+            <BackToDashboardButton className="gap-1" label={tx("Back to Dashboard")} />
           </div>
 
           <motion.div

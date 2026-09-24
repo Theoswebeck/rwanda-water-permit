@@ -45,7 +45,12 @@ interface AuthContextType {
   userProfile: User | null;
   loading: boolean;
   isAuthenticated: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: string; mustChangePassword?: boolean }>;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{ error?: string; mustChangePassword?: boolean; twoFactorRequired?: boolean }>;
+  /** Second step of RWB staff sign-in: the code emailed after the password. */
+  verifyTwoFactor: (code: string) => Promise<{ error?: string; mustChangePassword?: boolean }>;
   signUp: (data: SignUpData & { emailCode?: string }) => Promise<{ error?: string; userId?: string }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -122,6 +127,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     void bootstrap();
   }, []);
 
+  /** Take up the session a login response just established. */
+  const adoptSession = async (data: any) => {
+    setUser((data.user || null) as AuthUser | null);
+    // A new authenticated identity — drop any cached query data from a prior
+    // user so a shared-workstation account switch never renders stale lists.
+    try {
+      getQueryClient().clear();
+    } catch {
+      // no-op — cache clearing is best-effort
+    }
+    await refreshProfile();
+  };
+
   const signIn = async (email: string, password: string) => {
     try {
       const response = await fetch("/api/auth/login", {
@@ -135,18 +153,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return { error: data?.message || "Authentication failed" };
       }
 
-      setUser((data.user || null) as AuthUser | null);
-      // A new authenticated identity — drop any cached query data from a prior
-      // user so a shared-workstation account switch never renders stale lists.
-      try {
-        getQueryClient().clear();
-      } catch {
-        // no-op — cache clearing is best-effort
+      // Staff stop here: the password was accepted but no session exists yet,
+      // only a pending-2FA cookie. verifyTwoFactor finishes the sign-in.
+      if (data.twoFactorRequired) {
+        return { twoFactorRequired: true };
       }
-      await refreshProfile();
+
+      await adoptSession(data);
       return { mustChangePassword: Boolean(data.mustChangePassword) };
     } catch (err) {
       console.error("❌ signIn error:", err);
+      return { error: "An unexpected error occurred" };
+    }
+  };
+
+  const verifyTwoFactor = async (code: string) => {
+    try {
+      const response = await fetch("/api/auth/login/verify-2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const data = await readJsonSafe(response);
+
+      if (!response.ok || !data?.success) {
+        return { error: data?.message || "Invalid or expired code" };
+      }
+
+      await adoptSession(data);
+      return { mustChangePassword: Boolean(data.mustChangePassword) };
+    } catch (err) {
+      console.error("❌ verifyTwoFactor error:", err);
       return { error: "An unexpected error occurred" };
     }
   };
@@ -256,6 +293,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     loading,
     isAuthenticated: Boolean(user),
     signIn,
+    verifyTwoFactor,
     signOut,
     signUp,
     refreshProfile,

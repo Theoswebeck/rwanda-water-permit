@@ -16,7 +16,7 @@ import { translateText } from "@/lib/i18n/translator";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signIn, userProfile, user } = useAuth();
+  const { signIn, verifyTwoFactor, userProfile, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>("");
@@ -26,6 +26,10 @@ export function LoginForm() {
   const [resendingEmail, setResendingEmail] = useState(false);
   const [isClearingSession, setIsClearingSession] = useState(false);
   const [shouldRedirect, setShouldRedirect] = useState(false);
+  // RWB staff sign-in is two steps; applicants never see this one.
+  const [twoFactorRequired, setTwoFactorRequired] = useState(false);
+  const [code, setCode] = useState("");
+  const [resendingCode, setResendingCode] = useState(false);
   const [language, setLanguage] = useState<AppLanguage>("en");
   useEffect(() => {
     setLanguage(getPreferredLanguage());
@@ -167,6 +171,12 @@ export function LoginForm() {
         return;
       }
       
+      if (result.twoFactorRequired) {
+        setSuccess(tx("We sent a sign-in code to your email address."));
+        setTwoFactorRequired(true);
+        return;
+      }
+
       // Check if user needs to change password (admin-created staff accounts)
       if (result.mustChangePassword) {
         console.log("🔐 Password change required, redirecting...");
@@ -181,6 +191,46 @@ export function LoginForm() {
       setError(tx("An unexpected error occurred. Please try again."));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!code) return;
+
+    setError("");
+    setIsLoading(true);
+    try {
+      const result = await verifyTwoFactor(code.trim());
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      if (result.mustChangePassword) {
+        router.push("/change-password-required");
+        return;
+      }
+      setShouldRedirect(true);
+    } catch {
+      setError(tx("An unexpected error occurred. Please try again."));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setResendingCode(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/login/resend-2fa", { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setError(json?.message || tx("Could not send the code. Please try again."));
+        return;
+      }
+      setSuccess(tx("A new sign-in code is on its way to your email."));
+    } finally {
+      setResendingCode(false);
     }
   };
 
@@ -216,13 +266,17 @@ export function LoginForm() {
   return (
     <Card className="mx-auto max-w-sm">
       <CardHeader>
-        <CardTitle className="text-2xl">{tx("Login to your account")}</CardTitle>
+        <CardTitle className="text-2xl">
+          {twoFactorRequired ? tx("Enter your sign-in code") : tx("Login to your account")}
+        </CardTitle>
         <CardDescription>
-          {tx("Enter your email below to login to your account")}
+          {twoFactorRequired
+            ? tx("For security, RWB staff sign-in needs a code sent to your email address.")
+            : tx("Enter your email below to login to your account")}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+        <form onSubmit={twoFactorRequired ? handleVerifyCode : handleSubmit} className="grid gap-4">
           {error && (
             <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
               {error}
@@ -262,44 +316,93 @@ export function LoginForm() {
               </AlertDescription>
             </Alert>
           )}
-          <div className="grid gap-2">
-            <Label htmlFor="email">{tx("Email")}</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="m@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={isLoading}
-            />
-          </div>
-          <div className="grid gap-2">
-            <div className="flex items-center">
-              <Label htmlFor="password">{tx("Password")}</Label>
-              <Link
-                href="/forgot-password"
-                className="ml-auto inline-block text-sm underline"
-              >
-                {tx("Forgot your password?")}
-              </Link>
+          {twoFactorRequired ? (
+            <>
+              <div className="grid gap-2">
+                <Label htmlFor="code">{tx("Verification code")}</Label>
+                <Input
+                  id="code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  disabled={isLoading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {tx("The code expires in 10 minutes and can be used once.")}
+                </p>
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading || code.length < 6}>
+                {isLoading ? tx("Verifying...") : tx("Verify and continue")}
+              </Button>
+              <div className="flex items-center justify-between text-sm">
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={resendingCode || isLoading}
+                  className="underline"
+                >
+                  {resendingCode ? tx("Sending…") : tx("Resend code")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTwoFactorRequired(false);
+                    setCode("");
+                    setPassword("");
+                    setSuccess("");
+                  }}
+                  disabled={isLoading}
+                  className="underline"
+                >
+                  {tx("Use a different account")}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+            <div className="grid gap-2">
+              <Label htmlFor="email">{tx("Email")}</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="m@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={isLoading}
+              />
             </div>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={isLoading}
-            />
-          </div>
-          <Button 
-            type="submit" 
-            className="w-full"
-            disabled={isLoading || !email || !password}
-          >
-            {isLoading ? tx("Signing in...") : tx("Login")}
-          </Button>
+            <div className="grid gap-2">
+              <div className="flex items-center">
+                <Label htmlFor="password">{tx("Password")}</Label>
+                <Link
+                  href="/forgot-password"
+                  className="ml-auto inline-block text-sm underline"
+                >
+                  {tx("Forgot your password?")}
+                </Link>
+              </div>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isLoading}
+              />
+            </div>
+            <Button 
+              type="submit" 
+              className="w-full"
+              disabled={isLoading || !email || !password}
+            >
+              {isLoading ? tx("Signing in...") : tx("Login")}
+            </Button>
+            </>
+          )}
         </form>
         <div className="mt-4 text-center text-sm">
           {tx("Don't have an account?")}{" "}

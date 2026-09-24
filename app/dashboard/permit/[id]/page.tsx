@@ -13,6 +13,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { parsePermitDate } from "@/lib/permit/resolve-modification-validity";
+import { BackToDashboardButton } from "@/components/ui/back-button";
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   individual: "Individual",
@@ -511,9 +512,7 @@ export default function PermitDetailPage() {
           <div className="text-center py-12">
             <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl">Permit Not Found</h2>
             <p className="text-muted-foreground mt-2">The permit you are looking for does not exist or has been removed.</p>
-            <Button asChild className="mt-6">
-              <Link href="/dashboard">Back to Dashboard</Link>
-            </Button>
+            <BackToDashboardButton variant="default" className="mt-6" />
           </div>
         </div>
       </DashboardLayout>
@@ -524,12 +523,7 @@ export default function PermitDetailPage() {
     <DashboardLayout>
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center mb-6">
-          <Link href="/dashboard">
-            <Button variant="ghost" className="gap-1">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Button>
-          </Link>
+          <BackToDashboardButton className="gap-1" />
         </div>
         
         <motion.div

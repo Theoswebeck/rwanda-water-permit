@@ -4,6 +4,18 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import { safeInternalPath } from "@/lib/safe-internal-path"
+import { useAuth } from "@/contexts/AuthContext"
+import { dashboardHomeForRole } from "@/lib/staff-nav"
+
+// Local copy, as in protected-route.tsx: the shared normalizeRole lives in
+// lib/auth/effective-roles.ts, which imports the database client and so cannot
+// be pulled into a client component.
+function normalizeRole(role: unknown): string {
+  const raw = String(role ?? "").trim().toLowerCase()
+  if (!raw) return ""
+  if (raw === "application") return "applicant"
+  return raw
+}
 
 interface BackButtonProps {
   label?: string
@@ -89,5 +101,43 @@ export function SmartBackButton({
       <ArrowLeft className="h-4 w-4" />
       {label}
     </Button>
+  )
+}
+
+interface BackToDashboardButtonProps {
+  label?: string
+  className?: string
+  variant?: "ghost" | "outline" | "default" | "secondary" | "link" | "destructive"
+  size?: "default" | "sm" | "lg" | "icon"
+}
+
+/**
+ * "Back to Dashboard" that lands on the signed-in role's OWN dashboard.
+ *
+ * Pages under /dashboard hardcoded href="/dashboard", which is the applicant
+ * dashboard. Admins (who may open any page) were returned there from an
+ * application they had opened from /admin, and saw an empty list — "no
+ * applications, no permits" — because that list only ever holds their own
+ * applications. Resolving the destination from the role fixes every such page
+ * at once; SmartBackButton still prefers real in-app history so the originating
+ * tab is preserved when there is one.
+ */
+export function BackToDashboardButton({
+  label = "Back to Dashboard",
+  className,
+  variant = "ghost",
+  size = "default",
+}: BackToDashboardButtonProps) {
+  const { userProfile } = useAuth()
+  const fallbackHref = dashboardHomeForRole(normalizeRole((userProfile as any)?.role))
+
+  return (
+    <SmartBackButton
+      fallbackHref={fallbackHref}
+      label={label}
+      className={className}
+      variant={variant}
+      size={size}
+    />
   )
 }
