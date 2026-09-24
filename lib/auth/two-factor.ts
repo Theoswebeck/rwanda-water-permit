@@ -14,17 +14,43 @@ export const TWO_FACTOR_PURPOSE = 'login_2fa'
 const CODE_TTL_MINUTES = 10
 
 /**
- * Staff carry a second factor; applicants do not.
+ * Domains whose accounts are RWB staff. A staff role alone is not enough: the
+ * portal also carries staff-role accounts on outside addresses (support and
+ * test accounts), and challenging those sends a code to a mailbox RWB does not
+ * control. Override with STAFF_2FA_EMAIL_DOMAINS as a comma-separated list.
+ */
+function staffEmailDomains(): string[] {
+  const raw = process.env.STAFF_2FA_EMAIL_DOMAINS?.trim()
+  return (raw ? raw.split(',') : ['rwb.rw'])
+    .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
+    .filter(Boolean)
+}
+
+/** An RWB mailbox — the account belongs to the institution. */
+export function isRwbStaffEmail(email: string | null | undefined): boolean {
+  const normalized = String(email ?? '').trim().toLowerCase()
+  const at = normalized.lastIndexOf('@')
+  if (at < 0) return false
+  const domain = normalized.slice(at + 1)
+  return staffEmailDomains().some((d) => domain === d || domain.endsWith(`.${d}`))
+}
+
+/**
+ * RWB staff carry a second factor; applicants do not.
+ *
+ * Both tests must pass: a staff role AND an RWB mailbox. Role alone challenged
+ * staff-role accounts on personal addresses, which RWB flagged.
  *
  * `STAFF_2FA_ENABLED=false` is the break-glass switch: if RWB's mail server is
  * down, every staff account is locked out until it comes back, and an admin
  * with server access must be able to turn the step off without a deploy.
  */
-export function requiresTwoFactor(role: string | null | undefined): boolean {
+export function requiresTwoFactor(role: string | null | undefined, email?: string | null): boolean {
   if (String(process.env.STAFF_2FA_ENABLED ?? '').trim().toLowerCase() === 'false') return false
   const normalized = String(role ?? '').trim().toLowerCase()
   if (!normalized) return false
-  return normalized !== 'applicant' && normalized !== 'application'
+  if (normalized === 'applicant' || normalized === 'application') return false
+  return isRwbStaffEmail(email)
 }
 
 /** Generate, store and email a fresh sign-in code. Returns it only in dev. */

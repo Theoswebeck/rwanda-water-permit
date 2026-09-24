@@ -25,14 +25,23 @@ vm.runInNewContext(compiled, {
 });
 const { requiresTwoFactor } = module.exports;
 
-test("RWB staff roles require a second factor", () => {
+const RWB = "j.doe@rwb.rw";
+
+test("RWB staff mailboxes are challenged", () => {
   for (const role of ["admin", "approver", "reviewer", "verifier", "assessor", "inspector", "ADMIN"]) {
-    assert.equal(requiresTwoFactor(role), true, `${role} must be challenged`);
+    assert.equal(requiresTwoFactor(role, RWB), true, `${role} must be challenged`);
   }
+  assert.equal(requiresTwoFactor("admin", "IT@Permits.RWB.RW"), true, "subdomain and case must still match");
 });
 
 test("applicants are exempt", () => {
   for (const role of ["applicant", "Applicant", "application", null, undefined, ""]) {
-    assert.equal(requiresTwoFactor(role), false, `${role} must not be challenged`);
+    assert.equal(requiresTwoFactor(role, RWB), false, `${role} must not be challenged`);
+  }
+});
+
+test("staff roles on non-RWB mailboxes are exempt", () => {
+  for (const email of ["someone@gmail.com", "staff@rwb.rw.attacker.com", "no-at-sign", "", null, undefined]) {
+    assert.equal(requiresTwoFactor("admin", email), false, `${email} must not be challenged`);
   }
 });

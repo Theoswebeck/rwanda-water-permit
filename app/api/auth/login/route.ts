@@ -93,8 +93,9 @@ export async function POST(req: NextRequest) {
     // is intentionally left in place.
     resetRateLimit(accountKey)
 
-    // RWB staff need a second factor; applicants sign in on the password alone.
-    if (requiresTwoFactor(user.role)) {
+    // RWB staff need a second factor; applicants and staff-role accounts on
+    // outside mailboxes sign in on the password alone.
+    if (requiresTwoFactor(user.role, user.email)) {
       try {
         const { devCode } = await sendTwoFactorCode(user.email)
         const pending = await createPendingTwoFactorToken(user.id, user.email)
