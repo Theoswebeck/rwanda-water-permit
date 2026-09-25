@@ -246,7 +246,6 @@ export async function POST(req: NextRequest) {
         })
         await transporter.sendMail({
           from: process.env.EMAIL_FROM || smtpUser,
-          replyTo: process.env.EMAIL_REPLY_TO || undefined,
           to: emailLower,
           subject: `Your ${orgName} Staff Account`,
           html,

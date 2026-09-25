@@ -122,7 +122,6 @@ async function sendAlert(subject, body) {
   await transporter.sendMail({
     from: process.env.EMAIL_FROM || user,
     to: ALERT_TO,
-    replyTo: process.env.EMAIL_REPLY_TO,
     subject,
     text: body,
   });

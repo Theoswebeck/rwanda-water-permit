@@ -38,7 +38,6 @@ export async function sendSmtpEmail(params: SendSmtpEmailParams) {
   const smtpUser = process.env.SMTP_USER
   const smtpPass = process.env.SMTP_PASS
   const fromEmail = process.env.EMAIL_FROM || smtpUser || ''
-  const replyTo = process.env.EMAIL_REPLY_TO
   const isDev = process.env.NODE_ENV !== 'production' || process.env.EMAIL_DEV_MODE === 'true'
 
   if (!smtpUser || !smtpPass) {
@@ -60,7 +59,6 @@ export async function sendSmtpEmail(params: SendSmtpEmailParams) {
 
   await transporter.sendMail({
     from: fromEmail,
-    replyTo: replyTo || undefined,
     to: params.to,
     subject: params.subject,
     text: params.text,
