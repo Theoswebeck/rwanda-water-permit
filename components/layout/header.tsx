@@ -190,21 +190,13 @@ export function Header() {
                   </Button>
                 </Link>
               ) : (
-                /* Staff have no application to start, so "APPLY NOW" alone left
-                   them clicking Apply just to reach the sign-in form. The login
-                   page already routes each account to its own landing page. */
-                <div className="flex items-center gap-3">
-                  <Link href="/login">
-                    <Button variant="outline" className="rounded-full px-6">
-                      {tx("LOGIN")}
-                    </Button>
-                  </Link>
-                  <Link href="/apply">
-                    <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
-                      {tx("APPLY NOW")}
-                    </Button>
-                  </Link>
-                </div>
+                /* The login page routes each account to its own landing page;
+                   "APPLY NOW" lives on the hero instead of the header. */
+                <Link href="/login">
+                  <Button variant="outline" className="rounded-full px-6">
+                    {tx("LOGIN")}
+                  </Button>
+                </Link>
               )}
             </motion.div>
           </div>
@@ -304,18 +296,11 @@ export function Header() {
                         </Button>
                       </Link>
                     ) : (
-                      <>
-                        <Link href="/login" onClick={() => setIsOpen(false)}>
-                          <Button variant="outline" className="w-full rounded-full mt-4">
-                            {tx("LOGIN")}
-                          </Button>
-                        </Link>
-                        <Link href="/apply" onClick={() => setIsOpen(false)}>
-                          <Button className="w-full bg-primary hover:bg-primary/90 rounded-full mt-4">
-                            {tx("APPLY NOW")}
-                          </Button>
-                        </Link>
-                      </>
+                      <Link href="/login" onClick={() => setIsOpen(false)}>
+                        <Button variant="outline" className="w-full rounded-full mt-4">
+                          {tx("LOGIN")}
+                        </Button>
+                      </Link>
                     )}
                   </div>
                 </nav>

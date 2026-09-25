@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
@@ -34,7 +35,6 @@ const floatingDots = [
 ];
 
 export function HeroSection() {
-  const [isHovered, setIsHovered] = useState(false);
   const [isInView, setIsInView] = useState(false);
   const [language, setLanguage] = useState<AppLanguage>("en");
 
@@ -72,7 +72,7 @@ export function HeroSection() {
   const buttonVariants = {
     hover: {
       scale: 1.05,
-      boxShadow: "0 10px 15px rgba(0, 0, 0, 0.1)",
+      boxShadow: "0 12px 32px rgba(255, 255, 255, 0.35)",
       transition: {
         type: "spring",
         stiffness: 400,
@@ -153,34 +153,27 @@ export function HeroSection() {
               >
                 <Link href="/apply">
                   <motion.div
+                    className="relative"
                     whileHover="hover"
                     whileTap="tap"
                     variants={buttonVariants}
                   >
-                    <Button size="lg" className="bg-white text-primary hover:bg-white/90 rounded-full px-8 h-12 font-medium relative overflow-hidden group">
-                      <motion.span
-                        className="relative z-10"
-                        animate={{
-                          y: [0, -2, 0],
-                          transition: {
-                            repeat: Infinity,
-                            repeatType: "reverse",
-                            duration: 1.5
-                          }
-                        }}
-                      >
+                    {/* Pulsing halo draws the eye to the primary CTA */}
+                    <motion.span
+                      aria-hidden
+                      className="absolute inset-0 rounded-full bg-white/40 pointer-events-none"
+                      animate={{ scale: [1, 1.25], opacity: [0.6, 0] }}
+                      transition={{ repeat: Infinity, duration: 1.8, ease: "easeOut" }}
+                    />
+                    <Button size="lg" className="bg-white text-primary hover:bg-white rounded-full px-8 h-12 font-medium relative overflow-hidden group">
+                      <span className="relative z-10 flex items-center gap-2">
                         {tx("APPLY NOW")}
-                      </motion.span>
-                      <motion.div
-                        className="absolute top-0 left-0 w-full h-full bg-white/20"
-                        initial={{ x: "-100%" }}
-                        animate={{
-                          x: isHovered ? "100%" : "-100%",
-                        }}
-                        transition={{
-                          duration: 0.8,
-                          ease: "easeInOut"
-                        }}
+                        <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+                      </span>
+                      {/* Shimmer sweeps across on hover */}
+                      <span
+                        aria-hidden
+                        className="absolute inset-y-0 -left-full w-full bg-gradient-to-r from-transparent via-sky-200/70 to-transparent skew-x-12 transition-transform duration-700 ease-out group-hover:translate-x-[200%]"
                       />
                     </Button>
                   </motion.div>
