@@ -54,3 +54,6 @@ next-env.d.ts
 # cannot remove even the symlink — is what prevents a repeat.
 # Never commit uploads, and never run git workflows on the prod checkout.
 /public/uploads
+
+# Local dev database + portable PostgreSQL (scripts/dev-db.mjs)
+/.localdb

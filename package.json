@@ -6,7 +6,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev-db.mjs && next dev",
+    "db:pull": "node scripts/dev-db.mjs --pull",
     "dev:clean": "node scripts/clean-next.mjs && next dev",
     "build": "next build",
     "start": "next start",

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthCookieName, verifySessionToken, clearSessionCookie } from '@/lib/auth/session'
+import { DEV_LOGIN_PATH, isDevAuthBypass } from '@/lib/auth/dev-bypass'
 
 const SUPERUSER_EMAILS = new Set(['nizzogentl1@gmail.com', 'nshutidavy@gmail.com'])
 
@@ -188,6 +189,17 @@ async function guardApiRequest(request: NextRequest, pathname: string) {
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+
+  // Local dev only: sign in automatically instead of showing /login (lib/auth/dev-bypass.ts).
+  if (isDevAuthBypass(request.headers.get('host'))) {
+    if (pathname === DEV_LOGIN_PATH) return NextResponse.next()
+    const token = request.cookies.get(getAuthCookieName())?.value
+    if (!pathname.startsWith('/api/') && !(token && (await verifySessionToken(token)))) {
+      const url = new URL(DEV_LOGIN_PATH, request.url)
+      url.searchParams.set('next', AUTH_PAGES.includes(pathname) ? '/' : pathname + request.nextUrl.search)
+      return NextResponse.redirect(url)
+    }
+  }
 
   if (pathname.startsWith('/api/')) {
     const blocked = await guardApiRequest(request, pathname)
