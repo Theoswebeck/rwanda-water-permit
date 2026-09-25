@@ -153,7 +153,7 @@ export function HeroSection() {
               >
                 <Link href="/apply">
                   <motion.div
-                    className="relative"
+                    className="relative w-fit rounded-full"
                     whileHover="hover"
                     whileTap="tap"
                     variants={buttonVariants}
