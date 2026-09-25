@@ -6,7 +6,8 @@
 // Single-point map for water abstraction coordinates (LAT/LONG)
 // =============================================
 
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Popup, useMapEvents } from "react-leaflet";
+import BaseLayers from "@/components/maps/base-layers";
 import L from "leaflet";
 
 export interface AbstractionPointMapProps {
@@ -59,10 +60,7 @@ export function AbstractionPointMap({
         style={{ height: "100%", width: "100%" }}
         className="z-0"
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <BaseLayers />
 
         <MapClickHandler onPointChange={onPointChange} readOnly={readOnly} />
 

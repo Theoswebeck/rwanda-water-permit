@@ -12,7 +12,7 @@ import { EnhancedWaterConcessionMap } from "@/components/maps/EnhancedWaterConce
 
 // Dynamically import Leaflet components to avoid SSR issues
 const MapContainer = dynamic(() => import("react-leaflet").then((mod) => mod.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import("react-leaflet").then((mod) => mod.TileLayer), { ssr: false });
+const BaseLayers = dynamic(() => import("@/components/maps/base-layers"), { ssr: false });
 const CircleMarker = dynamic(() => import("react-leaflet").then((mod) => mod.CircleMarker), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then((mod) => mod.Popup), { ssr: false });
 const Tooltip = dynamic(() => import("react-leaflet").then((mod) => mod.Tooltip), { ssr: false });
@@ -321,10 +321,7 @@ export function LegacyWaterConcessionMap() {
               style={{ height: '100%', width: '100%' }}
               className="z-0"
             >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
+              <BaseLayers />
               
               {filteredPermits.map((permit) => (
                 <CircleMarker

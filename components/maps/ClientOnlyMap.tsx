@@ -5,7 +5,8 @@
 // Rwanda Water Resources Board - Water Permit System
 // =============================================
 
-import { MapContainer, TileLayer, Marker, Polygon, Popup, useMapEvents } from "react-leaflet";
+import { MapContainer, Marker, Polygon, Popup, useMapEvents } from "react-leaflet";
+import BaseLayers from "@/components/maps/base-layers";
 import L from 'leaflet';
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -97,10 +98,7 @@ export default function ClientOnlyMap({
       style={{ height: '100%', width: '100%' }}
       className="z-0"
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <BaseLayers />
       
       <MapClickHandler onMapClick={onMapClick} isDrawing={isDrawing} />
       

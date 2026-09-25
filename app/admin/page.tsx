@@ -27,8 +27,45 @@ import {
   Clock,
   Loader2,
   UserCheck,
-  KeyRound
+  KeyRound,
+  LayoutDashboard,
+  Droplets,
+  Map,
+  PenSquare,
+  ScrollText,
+  BarChart3
 } from "lucide-react";
+
+const NAV_GROUPS = [
+  {
+    label: "General",
+    items: [
+      { value: "overview", label: "Overview", icon: LayoutDashboard },
+      { value: "reports", label: "Reports", icon: BarChart3 },
+      { value: "logs", label: "Activity Logs", icon: ScrollText },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { value: "applications", label: "Applications", icon: FileText },
+      { value: "water-reports", label: "Water Use Reports", icon: Droplets },
+      { value: "map", label: "Consolidated Map", icon: Map },
+    ],
+  },
+  {
+    label: "Access",
+    items: [
+      { value: "users", label: "User Management", icon: Users },
+      { value: "delegations", label: "Delegations", icon: UserCheck },
+      { value: "api-access", label: "API Access", icon: KeyRound },
+    ],
+  },
+  {
+    label: "Website",
+    items: [{ value: "content", label: "Content", icon: PenSquare }],
+  },
+];
 
 interface AdminDashboardStats {
   totalUsers: number;
@@ -193,30 +230,34 @@ export default function AdminDashboard() {
             </Card>
           </div>
 
-          {/* Main Content Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-10">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="users">User Management</TabsTrigger>
-              <TabsTrigger value="delegations" className="flex items-center gap-1">
-                <UserCheck className="h-3.5 w-3.5" />
-                Delegations
-              </TabsTrigger>
-              <TabsTrigger value="applications">Applications</TabsTrigger>
-              <TabsTrigger value="water-reports">Water Use Reports</TabsTrigger>
-              <TabsTrigger value="map">Consolidated Map</TabsTrigger>
-              <TabsTrigger value="api-access" className="flex items-center gap-1">
-                <KeyRound className="h-3.5 w-3.5" />
-                API Access
-              </TabsTrigger>
-              <TabsTrigger value="content" className="flex items-center gap-1">
-                <FileText className="h-3.5 w-3.5" />
-                Content
-              </TabsTrigger>
-              <TabsTrigger value="logs">Activity Logs</TabsTrigger>
-              <TabsTrigger value="reports">Reports</TabsTrigger>
+          {/* Main Content — sidebar nav on desktop, scrollable strip on mobile */}
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            orientation="vertical"
+            className="flex flex-col gap-6 lg:flex-row lg:items-start"
+          >
+            <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl border bg-white p-2 shadow-sm lg:sticky lg:top-6 lg:w-56 lg:shrink-0 lg:flex-col lg:items-stretch lg:overflow-visible dark:bg-gray-950">
+              {NAV_GROUPS.map((group) => (
+                <div key={group.label} className="contents lg:flex lg:flex-col lg:gap-0.5 lg:[&:not(:first-child)]:mt-3">
+                  <p className="hidden px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground lg:block">
+                    {group.label}
+                  </p>
+                  {group.items.map(({ value, label, icon: Icon }) => (
+                    <TabsTrigger
+                      key={value}
+                      value={value}
+                      className="h-9 flex-none justify-start gap-2.5 px-3 text-muted-foreground hover:bg-muted hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none"
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </TabsTrigger>
+                  ))}
+                </div>
+              ))}
             </TabsList>
-            
+
+            <div className="min-w-0 flex-1">
             <TabsContent value="overview" className="space-y-4">
               <SystemOverview />
             </TabsContent>
@@ -256,6 +297,7 @@ export default function AdminDashboard() {
             <TabsContent value="reports" className="space-y-4">
               <AdminReports />
             </TabsContent>
+            </div>
           </Tabs>
           </div>
         </motion.div>

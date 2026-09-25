@@ -63,6 +63,7 @@ export function ApplicationOversight() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     fetchApplications();
@@ -197,6 +198,16 @@ export function ApplicationOversight() {
       return matchesSearch && matchesType && matchesStatus;
     });
   }, [applications, searchTerm, filterType, filterStatus]);
+
+  const PAGE_SIZE = 20;
+  const totalPages = Math.max(1, Math.ceil(filteredApplications.length / PAGE_SIZE));
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pagedApplications = filteredApplications.slice(pageStart, pageStart + PAGE_SIZE);
+
+  // Back to page 1 whenever the search/filters change the result set
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType, filterStatus]);
 
   // Function to get the appropriate status with icon and color (matching dashboard)
   const getStatusConfig = (status: string) => {
@@ -481,7 +492,7 @@ export function ApplicationOversight() {
           </TableHeader>
           <TableBody>
             {filteredApplications.length > 0 ? (
-              filteredApplications.map((application) => (
+              pagedApplications.map((application) => (
                 <TableRow key={application.id} className="hover:bg-blue-50/30 transition-colors duration-150 border-b border-gray-100">
                   <TableCell className="font-medium text-gray-900 px-6 py-4">
                     <div className="text-sm">
@@ -575,6 +586,37 @@ export function ApplicationOversight() {
             )}
           </TableBody>
         </Table>
+        {filteredApplications.length > PAGE_SIZE && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-6 py-3">
+            <p className="text-sm text-muted-foreground">
+              Showing <span className="font-medium text-foreground">{pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filteredApplications.length)}</span> of{" "}
+              <span className="font-medium text-foreground">{filteredApplications.length}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                Page <span className="font-medium text-foreground">{currentPage}</span> of {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   );

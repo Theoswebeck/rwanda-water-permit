@@ -96,7 +96,7 @@ function formatRegistryDate(dateString: string | null | undefined): string {
 }
 
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
+const BaseLayers = dynamic(() => import("@/components/maps/base-layers"), { ssr: false });
 const CircleMarker = dynamic(() => import("react-leaflet").then((m) => m.CircleMarker), { ssr: false });
 const LeafletPolygon = dynamic(() => import("react-leaflet").then((m) => m.Polygon), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then((m) => m.Popup), { ssr: false });
@@ -1634,10 +1634,7 @@ function PermitLocationMap({ entry }: { entry: PermitRegistryEntry }) {
           style={{ height: "100%", width: "100%" }}
           className="z-0"
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <BaseLayers />
           {isPolygon ? (
             <LeafletPolygon
               positions={polyCoords}

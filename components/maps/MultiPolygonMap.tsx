@@ -5,7 +5,8 @@
 // Rwanda Water Resources Board - Water Permit System
 // =============================================
 
-import { MapContainer, TileLayer, Marker, Polygon, Popup, ScaleControl, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polygon, Popup, ScaleControl, useMap } from "react-leaflet";
+import BaseLayers from "@/components/maps/base-layers";
 import L from "leaflet";
 import { useEffect } from "react";
 import type { Feature, Polygon as GeoPolygon } from "geojson";
@@ -101,10 +102,7 @@ export function MultiPolygonMap({
   return (
     <div style={{ height }}>
       <MapContainer center={rwandaCenter} zoom={8} style={{ height: "100%", width: "100%" }} className="z-0">
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <BaseLayers />
 
         <FitBounds coords={allCoords} />
 
