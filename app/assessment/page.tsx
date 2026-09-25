@@ -25,7 +25,7 @@ import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { sortBySubmissionDateDescending, getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { StaffSidebar, staffNavItems } from "@/components/shared/staff-sidebar";
 import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
@@ -380,8 +380,8 @@ function AssessmentDashboardContent() {
   // ─── Loading / Error states ─────────────────────────────────────────────────
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="container mx-auto px-4 py-6">
+      <DashboardLayout wide>
+        <div className="mx-auto w-full px-4 py-6">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">
               <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
@@ -395,8 +395,8 @@ function AssessmentDashboardContent() {
 
   if (error) {
     return (
-      <DashboardLayout>
-        <div className="container mx-auto px-4 py-6">
+      <DashboardLayout wide>
+        <div className="mx-auto w-full px-4 py-6">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">
               <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
@@ -413,26 +413,20 @@ function AssessmentDashboardContent() {
   const activeChipLabel = ASSESSOR_CHIPS.find((c) => c.id === activeChipId)?.label ?? "All Applications";
 
   return (
-    <DashboardLayout>
+    <DashboardLayout wide>
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="container mx-auto px-4 py-6"
+        className="mx-auto w-full px-4 py-6"
       >
-        <div className="space-y-6">
-          <StaffTopTabs
+          <StaffSidebar
             value={topTab}
             onValueChange={(v) => setTopTab(v as any)}
-            tabs={[
-              { value: "assessment", label: "Permitting" },
-              { value: "inspections", label: "Inspections" },
-              { value: "water-reports", label: "Water Use Reports" },
-              { value: "permit-registry", label: "Permit Registry" },
-            ]}
-          />
+            items={staffNavItems("assessment")}
+          >
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
                 {topTab === "assessment" ? "Application Assessment Dashboard"
@@ -538,7 +532,7 @@ function AssessmentDashboardContent() {
           ) : (
             <PermitRegistryList />
           )}
-        </div>
+        </StaffSidebar>
       </motion.div>
     </DashboardLayout>
   );

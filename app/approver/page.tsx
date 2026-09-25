@@ -13,7 +13,7 @@ import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { AllApplicationsList } from "@/components/approver/all-applications-list";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { StaffSidebar, staffNavItems } from "@/components/shared/staff-sidebar";
 import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
@@ -76,7 +76,7 @@ function ApproverDashboardContent() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-6 py-8">
+      <div className="mx-auto w-full max-w-[96rem] px-6 py-8">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
@@ -88,24 +88,19 @@ function ApproverDashboardContent() {
 
   return (
     <ProtectedRoute allowedRoles={['approver', 'admin']} requireProfile={true}>
-      <div className="container mx-auto px-6 py-8 space-y-8">
+      <div className="mx-auto w-full max-w-[96rem] px-6 py-8 space-y-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-        <StaffTopTabs
+        <StaffSidebar
           value={topTab}
           onValueChange={(v) => {
             if (isTopTab(v)) setTopTab(v);
           }}
-          tabs={[
-            { value: "approval", label: "Permitting" },
-            { value: "inspections", label: "Inspections" },
-            { value: "water-reports", label: "Water Use Reports" },
-            { value: "permit-registry", label: "Permit Registry" },
-          ]}
-        />
+          items={staffNavItems("approval")}
+        >
 
         <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-6">
           <div>
@@ -178,6 +173,7 @@ function ApproverDashboardContent() {
         ) : (
           <PermitRegistryList />
         )}
+        </StaffSidebar>
         </motion.div>
       </div>
     </ProtectedRoute>

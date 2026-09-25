@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabsContent } from "@/components/ui/tabs";
+import { StaffSidebar, type StaffNavItem } from "@/components/shared/staff-sidebar";
 import { UserManagement } from "@/components/admin/user-management";
 import { SystemOverview } from "@/components/admin/system-overview";
 import { ApplicationOversight } from "@/components/admin/application-oversight";
@@ -36,35 +37,17 @@ import {
   BarChart3
 } from "lucide-react";
 
-const NAV_GROUPS = [
-  {
-    label: "General",
-    items: [
-      { value: "overview", label: "Overview", icon: LayoutDashboard },
-      { value: "reports", label: "Reports", icon: BarChart3 },
-      { value: "logs", label: "Activity Logs", icon: ScrollText },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { value: "applications", label: "Applications", icon: FileText },
-      { value: "water-reports", label: "Water Use Reports", icon: Droplets },
-      { value: "map", label: "Consolidated Map", icon: Map },
-    ],
-  },
-  {
-    label: "Access",
-    items: [
-      { value: "users", label: "User Management", icon: Users },
-      { value: "delegations", label: "Delegations", icon: UserCheck },
-      { value: "api-access", label: "API Access", icon: KeyRound },
-    ],
-  },
-  {
-    label: "Website",
-    items: [{ value: "content", label: "Content", icon: PenSquare }],
-  },
+const ADMIN_NAV: StaffNavItem[] = [
+  { value: "overview", label: "Overview", icon: LayoutDashboard, group: "General" },
+  { value: "reports", label: "Reports", icon: BarChart3, group: "General" },
+  { value: "logs", label: "Activity Logs", icon: ScrollText, group: "General" },
+  { value: "applications", label: "Applications", icon: FileText, group: "Operations" },
+  { value: "water-reports", label: "Water Use Reports", icon: Droplets, group: "Operations" },
+  { value: "map", label: "Consolidated Map", icon: Map, group: "Operations" },
+  { value: "users", label: "User Management", icon: Users, group: "Access" },
+  { value: "delegations", label: "Delegations", icon: UserCheck, group: "Access" },
+  { value: "api-access", label: "API Access", icon: KeyRound, group: "Access" },
+  { value: "content", label: "Content", icon: PenSquare, group: "Website" },
 ];
 
 interface AdminDashboardStats {
@@ -102,8 +85,8 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
-        <DashboardLayout>
-          <div className="container mx-auto px-4 py-6">
+        <DashboardLayout wide>
+          <div className="mx-auto w-full px-4 py-6">
             <div className="flex items-center justify-center h-64">
               <Loader2 className="h-8 w-8 animate-spin" />
             </div>
@@ -116,8 +99,8 @@ export default function AdminDashboard() {
   if (error) {
     return (
       <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
-        <DashboardLayout>
-          <div className="container mx-auto px-4 py-6">
+        <DashboardLayout wide>
+          <div className="mx-auto w-full px-4 py-6">
             <div className="text-center py-12">
               <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
               <h2 className="scroll-m-20 text-2xl font-semibold tracking-tight mb-2">Error Loading Dashboard</h2>
@@ -131,12 +114,12 @@ export default function AdminDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
-      <DashboardLayout>
+      <DashboardLayout wide>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
-            className="container mx-auto px-4 py-6"
+            className="mx-auto w-full px-4 py-6"
           >
           <div className="space-y-6">
           {/* Header */}
@@ -230,34 +213,8 @@ export default function AdminDashboard() {
             </Card>
           </div>
 
-          {/* Main Content — sidebar nav on desktop, scrollable strip on mobile */}
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            orientation="vertical"
-            className="flex flex-col gap-6 lg:flex-row lg:items-start"
-          >
-            <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl border bg-white p-2 shadow-sm lg:sticky lg:top-6 lg:w-56 lg:shrink-0 lg:flex-col lg:items-stretch lg:overflow-visible dark:bg-gray-950">
-              {NAV_GROUPS.map((group) => (
-                <div key={group.label} className="contents lg:flex lg:flex-col lg:gap-0.5 lg:[&:not(:first-child)]:mt-3">
-                  <p className="hidden px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground lg:block">
-                    {group.label}
-                  </p>
-                  {group.items.map(({ value, label, icon: Icon }) => (
-                    <TabsTrigger
-                      key={value}
-                      value={value}
-                      className="h-9 flex-none justify-start gap-2.5 px-3 text-muted-foreground hover:bg-muted hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none"
-                    >
-                      <Icon className="h-4 w-4" />
-                      {label}
-                    </TabsTrigger>
-                  ))}
-                </div>
-              ))}
-            </TabsList>
-
-            <div className="min-w-0 flex-1">
+          {/* Main Content */}
+          <StaffSidebar value={activeTab} onValueChange={setActiveTab} items={ADMIN_NAV}>
             <TabsContent value="overview" className="space-y-4">
               <SystemOverview />
             </TabsContent>
@@ -297,8 +254,7 @@ export default function AdminDashboard() {
             <TabsContent value="reports" className="space-y-4">
               <AdminReports />
             </TabsContent>
-            </div>
-          </Tabs>
+          </StaffSidebar>
           </div>
         </motion.div>
       </DashboardLayout>

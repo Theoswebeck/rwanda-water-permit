@@ -48,7 +48,7 @@ import {
 import Link from "next/link";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import type { Application } from "@/types/database";
-import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { StaffSidebar, staffNavItems } from "@/components/shared/staff-sidebar";
 import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
@@ -632,8 +632,8 @@ function ReviewerDashboardContent() {
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="container mx-auto px-4 py-6">
+      <DashboardLayout wide>
+        <div className="mx-auto w-full px-4 py-6">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">
               <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
@@ -647,8 +647,8 @@ function ReviewerDashboardContent() {
 
   if (error) {
     return (
-      <DashboardLayout>
-        <div className="container mx-auto px-4 py-6">
+      <DashboardLayout wide>
+        <div className="mx-auto w-full px-4 py-6">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">
               <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
@@ -668,26 +668,20 @@ function ReviewerDashboardContent() {
 
   return (
     <ProtectedRoute allowedRoles={['reviewer', 'admin']} requireProfile={true}>
-      <DashboardLayout>
+      <DashboardLayout wide>
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="container mx-auto px-4 py-6"
+          className="mx-auto w-full px-4 py-6"
         >
-        <div className="space-y-6">
-          <StaffTopTabs
+          <StaffSidebar
             value={topTab}
             onValueChange={(v) => setTopTab(v as any)}
-            tabs={[
-              { value: "review", label: "Permitting" },
-              { value: "inspections", label: "Inspections" },
-              { value: "water-reports", label: "Water Use Reports" },
-              { value: "permit-registry", label: "Permit Registry" },
-            ]}
-          />
+            items={staffNavItems("review")}
+          >
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
                 {topTab === "review" ? "Application Review Dashboard"
@@ -766,7 +760,7 @@ function ReviewerDashboardContent() {
           ) : (
             <PermitRegistryList />
           )}
-        </div>
+        </StaffSidebar>
       </motion.div>
 
         {/* Assign to Assessor Dialog */}

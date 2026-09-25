@@ -8,9 +8,11 @@ import { Loader2 } from "lucide-react";
 
 interface DashboardLayoutProps {
   children: ReactNode;
+  /** Wider page for dashboards with a sidebar, so the content column keeps its width. */
+  wide?: boolean;
 }
 
-export function DashboardLayout({ children }: DashboardLayoutProps) {
+export function DashboardLayout({ children, wide = false }: DashboardLayoutProps) {
   const router = useRouter();
   const { userProfile, loading, isAuthenticated } = useAuth();
 
@@ -60,7 +62,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
-            className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8"
+            className={`${wide ? "max-w-[96rem]" : "max-w-7xl"} mx-auto py-6 sm:px-6 lg:px-8`}
           >
             {children}
           </motion.div>

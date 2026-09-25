@@ -500,7 +500,7 @@ export function EnhancedWaterConcessionMap({
       {/* Main Map Card */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+          <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <CardTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5" />
               Rwanda Water Permits Map
@@ -560,7 +560,7 @@ export function EnhancedWaterConcessionMap({
             </div>
 
             {/* Filters */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Filter className="h-4 w-4" />
               
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -608,7 +608,7 @@ export function EnhancedWaterConcessionMap({
 
           {/* Legend */}
           <div className="text-xs text-muted-foreground space-y-1">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <span className="font-medium">Status:</span>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-green-500"></div>

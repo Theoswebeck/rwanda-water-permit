@@ -381,13 +381,13 @@ export function AllApplicationsTab() {
                       <TableCell className="p-4">
                         <div className="font-medium text-slate-900 dark:text-slate-100">{app.application_number}</div>
                       </TableCell>
-                      <TableCell className="p-4">
+                      <TableCell className="p-4 whitespace-normal min-w-40">
                         <div className="font-medium text-slate-900 dark:text-slate-100">{getApplicantName(app)}</div>
                         <div className="text-sm text-slate-600 dark:text-slate-400">
                           {app.water_purpose ? getWaterPurposeLabel(app.water_purpose) : 'N/A'}
                         </div>
                       </TableCell>
-                      <TableCell className="p-4">
+                      <TableCell className="p-4 whitespace-normal min-w-40">
                         <div className="flex items-center gap-1">
                           <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400" />
                           <span className="text-sm text-slate-700 dark:text-slate-300">{getWaterSourceLocation(app)}</span>

@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TabsContent } from "@/components/ui/tabs"
+import { StaffSidebar } from "@/components/shared/staff-sidebar"
 import { Badge } from "@/components/ui/badge"
 import { StatsPanel } from "./stats-panel"
 import { ApplicationsTab } from "./applications-tab"
@@ -13,6 +13,7 @@ import { WaterConcessionMap } from "@/components/shared/water-concession-map"
 import { 
   ClipboardList, 
   FileCheck,
+  Files,
   Loader2,
   MapPin
 } from "lucide-react"
@@ -86,6 +87,13 @@ export function InspectionDashboard() {
     fetchCounts()
   }, [])
 
+  const countBadge = (n: number) =>
+    loading ? (
+      <Loader2 className="h-3 w-3 animate-spin" />
+    ) : (
+      <Badge variant="secondary" className="px-1.5 tabular-nums">{n}</Badge>
+    )
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -102,62 +110,29 @@ export function InspectionDashboard() {
       <StatsPanel />
 
       {/* Main Content */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileCheck className="h-5 w-5" />
-            Inspection Management
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="assessments" className="flex items-center gap-2">
-                <ClipboardList className="h-4 w-4" />
-                Technical Assessment
-                {loading ? (
-                  <Loader2 className="h-3 w-3 animate-spin ml-2" />
-                ) : (
-                  <Badge variant="secondary" className="ml-2">
-                    {stats.pendingAssessmentCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="inspections" className="flex items-center gap-2">
-                <FileCheck className="h-4 w-4" />
-                Post-Permit Inspections
-                {loading ? (
-                  <Loader2 className="h-3 w-3 animate-spin ml-2" />
-                ) : (
-                  <Badge variant="secondary" className="ml-2">
-                    {stats.allApplicationsCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="applications" className="flex items-center gap-2">
-                <FileCheck className="h-4 w-4" />
-                All Applications
-              </TabsTrigger>
-              <TabsTrigger value="map" className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Consolidated Map
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="assessments" className="mt-6">
-              <AssessmentTab />
-            </TabsContent>
-            <TabsContent value="inspections" className="mt-6">
-              <InspectionsTab />
-            </TabsContent>
-            <TabsContent value="applications" className="mt-6">
-              <AllApplicationsTab />
-            </TabsContent>
-            <TabsContent value="map" className="mt-6">
-              <WaterConcessionMap />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+      <StaffSidebar
+        value={activeTab}
+        onValueChange={setActiveTab}
+        items={[
+          { value: "assessments", label: "Technical Assessment", icon: ClipboardList, badge: countBadge(stats.pendingAssessmentCount) },
+          { value: "inspections", label: "Post-Permit Inspections", icon: FileCheck, badge: countBadge(stats.allApplicationsCount) },
+          { value: "applications", label: "All Applications", icon: Files },
+          { value: "map", label: "Consolidated Map", icon: MapPin },
+        ]}
+      >
+        <TabsContent value="assessments" className="mt-0">
+          <AssessmentTab />
+        </TabsContent>
+        <TabsContent value="inspections" className="mt-0">
+          <InspectionsTab />
+        </TabsContent>
+        <TabsContent value="applications" className="mt-0">
+          <AllApplicationsTab />
+        </TabsContent>
+        <TabsContent value="map" className="mt-0">
+          <WaterConcessionMap />
+        </TabsContent>
+      </StaffSidebar>
     </div>
   )
 } 

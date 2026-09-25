@@ -125,14 +125,14 @@ export function AdminReports() {
       {/* Report Controls */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>System Reports & Analytics</CardTitle>
               <CardDescription>
                 Comprehensive insights and performance metrics
               </CardDescription>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Select value={timeRange} onValueChange={setTimeRange}>
                 <SelectTrigger className="w-[140px]">
                   <SelectValue />

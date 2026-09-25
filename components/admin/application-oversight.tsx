@@ -278,9 +278,32 @@ export function ApplicationOversight() {
           icon: <XCircle className="h-4 w-4" />,
           className: "bg-slate-200 text-slate-700 border-0 hover:bg-slate-200 px-3 py-2 rounded-full font-medium"
         };
+      case "pending_review":
+      case "pending_verification":
+      case "pending_inspection":
+      case "pending_payment":
+        return {
+          label: formatApplicationType(status),
+          icon: <Clock className="h-4 w-4" />,
+          className: "bg-blue-100 text-blue-700 border-0 hover:bg-blue-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "approved_pending_permit":
+        return {
+          label: "Awaiting Terms",
+          icon: <CheckCircle className="h-4 w-4" />,
+          className: "bg-teal-100 text-teal-700 border-0 hover:bg-teal-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "returned_to_assessment":
+      case "returned_to_review":
+      case "returned_to_verification":
+        return {
+          label: formatApplicationType(status),
+          icon: <AlertTriangle className="h-4 w-4" />,
+          className: "bg-orange-100 text-orange-700 border-0 hover:bg-orange-100 px-3 py-2 rounded-full font-medium"
+        };
       default:
         return {
-          label: "Unknown",
+          label: status ? formatApplicationType(status) : "Unknown",
           icon: <Circle className="h-4 w-4" />,
           className: "bg-gray-100 text-gray-700 border-0 hover:bg-gray-100 px-3 py-2 rounded-full font-medium"
         };
@@ -424,8 +447,8 @@ export function ApplicationOversight() {
 
       {/* Search and Filters - Match dashboard layout exactly */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
+          <div className="relative w-full sm:max-w-sm sm:flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search applications..."
@@ -435,10 +458,10 @@ export function ApplicationOversight() {
             />
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Label className="text-sm whitespace-nowrap">Filter by:</Label>
             <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -453,7 +476,7 @@ export function ApplicationOversight() {
             </Select>
             
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -482,42 +505,42 @@ export function ApplicationOversight() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-gray-50/50">
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Date</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Application ID</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Type</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Status</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Location</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4 text-right">Actions</TableHead>
+              <TableHead className="font-semibold text-gray-700 pl-6 pr-4 py-3.5">Date</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-4 py-3.5">Application ID</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-4 py-3.5">Type</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-4 py-3.5">Status</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-4 py-3.5">Location</TableHead>
+              <TableHead className="font-semibold text-gray-700 pl-4 pr-6 py-3.5 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredApplications.length > 0 ? (
               pagedApplications.map((application) => (
                 <TableRow key={application.id} className="hover:bg-blue-50/30 transition-colors duration-150 border-b border-gray-100">
-                  <TableCell className="font-medium text-gray-900 px-6 py-4">
+                  <TableCell className="font-medium text-gray-900 pl-6 pr-4 py-3.5 whitespace-nowrap">
                     <div className="text-sm">
                       {formatDate(application.submittedDate)}
                     </div>
                   </TableCell>
-                  <TableCell className="text-gray-600 px-6 py-4">
+                  <TableCell className="text-gray-600 px-4 py-3.5">
                     <span className="font-mono text-xs bg-blue-50 text-blue-700 px-2.5 py-1.5 rounded-md font-medium">
                       {application.applicationNumber || `RWB-${application.id.slice(-6)}`}
                     </span>
                   </TableCell>
-                  <TableCell className="text-gray-600 px-6 py-4">
+                  <TableCell className="text-gray-600 px-4 py-3.5 whitespace-normal">
                     <div className="text-sm">
                       {formatApplicationType(application.applicationType)}
                     </div>
                   </TableCell>
-                  <TableCell className="px-6 py-4">
+                  <TableCell className="px-4 py-3.5">
                     {getStatusBadge(application.status)}
                   </TableCell>
-                  <TableCell className="text-gray-600 px-6 py-4">
+                  <TableCell className="text-gray-600 px-4 py-3.5 whitespace-normal">
                     <div className="text-sm">
                       {application.district}, {application.province}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right px-6 py-4">
+                  <TableCell className="text-right pl-4 pr-6 py-3.5">
                     <div className="flex justify-end gap-1.5">
                       <Link href={`/dashboard/application/${application.id}`}>
                         <Button 

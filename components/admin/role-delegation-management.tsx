@@ -349,7 +349,7 @@ export function RoleDelegationManagement() {
       {/* Main Delegation Management Card */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <UserCheck className="h-5 w-5" />

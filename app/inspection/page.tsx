@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function InspectionPage() {
   return (
     // <ProtectedRoute allowedRoles={['inspector']} requireProfile={true}>
-      <div className="container mx-auto py-6">
+      <div className="mx-auto w-full max-w-[96rem] px-4 py-6 sm:px-6 lg:px-8">
         <InspectionDashboard />
       </div>
     // </ProtectedRoute>
