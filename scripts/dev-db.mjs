@@ -129,6 +129,13 @@ async function pgBin() {
 }
 
 // ---------------------------------------------------------------- database
+function grantApp(psql, user) {
+  psql('waterpermit', `grant usage, create on schema public to "${user}";
+    grant all on all tables in schema public to "${user}";
+    grant all on all sequences in schema public to "${user}";
+    grant execute on all functions in schema public to "${user}"`)
+}
+
 async function main() {
   ensureEnvFile()
   const url = databaseUrl()
@@ -177,7 +184,21 @@ async function main() {
       log('server not reachable — keeping the existing local copy.')
       return
     }
-    fail(`cannot reach ${SOURCE.host}:5432. Connect the RWB VPN once and run npm run dev again.`)
+    // Offline: empty database with the production structure + one local admin, so every page opens.
+    log(`cannot reach ${SOURCE.host} (no VPN) — creating an EMPTY local database from database/schema-prod.sql.`)
+    log('Connect the RWB VPN later and run  npm run db:pull  to load real data.')
+    const tables = hasDb ? psql('waterpermit', `select count(*) from pg_tables where schemaname='public'`).stdout.trim() : '0'
+    if (tables === '0') {
+      if (!hasDb) psql('postgres', `create database waterpermit owner "${user}"`)
+      for (const ext of ['postgis', 'pgcrypto', '"uuid-ossp"']) psql('waterpermit', `create extension if not exists ${ext}`)
+      run(tool('psql'), ['-h', '127.0.0.1', '-p', '5432', '-U', 'postgres', '-d', 'waterpermit', '-q', '-f', join(ROOT, 'database', 'schema-prod.sql')], { quiet: true })
+    }
+    grantApp(psql, user)
+    psql('waterpermit', `insert into public.users (email, role, status, account_type, first_name, last_name, password_hash)
+      values ('admin@localhost', 'admin', 'active', 'individual', 'Local', 'Admin', 'local-dev-no-login')
+      on conflict do nothing`)
+    log('local database ready (empty, signed in as admin@localhost)')
+    return
   }
 
   const dump = join(tmpdir(), `waterpermit-${Date.now()}.dump`)
@@ -192,10 +213,7 @@ async function main() {
     { allowFail: true, quiet: true })
   rmSync(dump, { force: true })
 
-  psql('waterpermit', `grant usage, create on schema public to "${user}";
-    grant all on all tables in schema public to "${user}";
-    grant all on all sequences in schema public to "${user}";
-    grant execute on all functions in schema public to "${user}"`)
+  grantApp(psql, user)
   const counts = psql('waterpermit',
     `select 'users='||(select count(*) from users)||' applications='||(select count(*) from applications)||' permits='||(select count(*) from permits)`).stdout.trim()
   if (!/users=[1-9]/.test(counts)) fail(`copy looks incomplete (${counts}) — see messages above.`)
