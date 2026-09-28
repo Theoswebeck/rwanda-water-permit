@@ -32,7 +32,7 @@ const POSTGIS_ZIP = 'https://download.osgeo.org/postgis/windows/pg14/postgis-bun
 
 const APP_USER = 'waterpermit_app'
 const APP_PASSWORD = 'local-dev-only'
-const LOCAL_URL = `postgresql://${APP_USER}:${APP_PASSWORD}@127.0.0.1:5432/waterpermit`
+const LOCAL_URL = `postgresql://${APP_USER}:${APP_PASSWORD}@127.0.0.1:5433/waterpermit` // 5433: 5432 is often taken by an installed PostgreSQL
 
 const SOURCE = {
   host: process.env.PULL_HOST || '10.10.82.199',
@@ -139,8 +139,9 @@ function grantApp(psql, user) {
 async function main() {
   ensureEnvFile()
   const url = databaseUrl()
-  if (!/@(127\.0\.0\.1|localhost):5432\//.test(url)) {
-    log('DATABASE_URL in .env.local is not a local :5432 database — leaving it alone.')
+  const port = url.match(/@(?:127\.0\.0\.1|localhost):(\d+)\//)?.[1]
+  if (!port) {
+    log('DATABASE_URL in .env.local is not a local database — leaving it alone.')
     return
   }
   const forcePull = process.argv.includes('--pull')
@@ -148,9 +149,9 @@ async function main() {
   const bin = await pgBin()
   const tool = (name) => join(bin, name + EXE)
   const psql = (db, sql, opts) =>
-    run(tool('psql'), ['-h', '127.0.0.1', '-p', '5432', '-U', 'postgres', '-d', db, '-v', 'ON_ERROR_STOP=1', '-qtAc', sql], opts)
+    run(tool('psql'), ['-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', db, '-v', 'ON_ERROR_STOP=1', '-qtAc', sql], opts)
 
-  const ready = run(tool('pg_isready'), ['-q', '-h', '127.0.0.1', '-p', '5432'], { allowFail: true, quiet: true }).status === 0
+  const ready = run(tool('pg_isready'), ['-q', '-h', '127.0.0.1', '-p', port], { allowFail: true, quiet: true }).status === 0
   if (!ready) {
     const data = join(LOCAL, 'data')
     if (!existsSync(join(data, 'PG_VERSION'))) {
@@ -158,12 +159,14 @@ async function main() {
       mkdirSync(data, { recursive: true })
       run(tool('initdb'), ['-D', data, '-U', 'postgres', '--auth=trust', '--encoding=UTF8', '--locale=C'])
     }
-    log('starting PostgreSQL on 127.0.0.1:5432')
-    run(tool('pg_ctl'), ['-D', data, '-l', join(LOCAL, 'postgres.log'), '-o', '-p 5432 -c listen_addresses=127.0.0.1', '-w', 'start'])
+    log(`starting PostgreSQL on 127.0.0.1:${port}`)
+    run(tool('pg_ctl'), ['-D', data, '-l', join(LOCAL, 'postgres.log'), '-o', `-p ${port} -c listen_addresses=127.0.0.1`, '-w', 'start'])
+  } else if (run(tool('psql'), ['-w', '-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-c', 'select 1'], { allowFail: true, quiet: true }).status !== 0) {
+    fail(`port ${port} is used by another PostgreSQL that needs a password. Pick a free port in DATABASE_URL in .env.local (e.g. :5434) and run again.`)
   }
 
   // The app connects with whatever user/password is in DATABASE_URL.
-  const m = url.match(/^postgres(?:ql)?:\/\/([^:]+):(.*)@(?:127\.0\.0\.1|localhost):5432\//)
+  const m = url.match(/^postgres(?:ql)?:\/\/([^:]+):(.*)@(?:127\.0\.0\.1|localhost):\d+\//)
   const [user, password] = m ? [decodeURIComponent(m[1]), decodeURIComponent(m[2])] : [APP_USER, APP_PASSWORD]
   const lit = (s) => `'${s.replace(/'/g, "''")}'`
   const hasRole = psql('postgres', `select 1 from pg_roles where rolname=${lit(user)}`).stdout.trim() === '1'
@@ -191,7 +194,7 @@ async function main() {
     if (tables === '0') {
       if (!hasDb) psql('postgres', `create database waterpermit owner "${user}"`)
       for (const ext of ['postgis', 'pgcrypto', '"uuid-ossp"']) psql('waterpermit', `create extension if not exists ${ext}`)
-      run(tool('psql'), ['-h', '127.0.0.1', '-p', '5432', '-U', 'postgres', '-d', 'waterpermit', '-q', '-f', join(ROOT, 'database', 'schema-prod.sql')], { quiet: true })
+      run(tool('psql'), ['-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'waterpermit', '-q', '-f', join(ROOT, 'database', 'schema-prod.sql')], { quiet: true })
     }
     grantApp(psql, user)
     psql('waterpermit', `insert into public.users (email, role, status, account_type, first_name, last_name, password_hash)
@@ -209,7 +212,7 @@ async function main() {
   psql('postgres', `create database waterpermit owner "${user}"`)
   for (const ext of ['postgis', 'pgcrypto', '"uuid-ossp"']) psql('waterpermit', `create extension if not exists ${ext}`)
   // Restore reports "already exists" for the public schema / PostGIS objects; that is expected.
-  run(tool('pg_restore'), ['-h', '127.0.0.1', '-p', '5432', '-U', 'postgres', '-d', 'waterpermit', '--no-owner', '--no-privileges', dump],
+  run(tool('pg_restore'), ['-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'waterpermit', '--no-owner', '--no-privileges', dump],
     { allowFail: true, quiet: true })
   rmSync(dump, { force: true })
 
