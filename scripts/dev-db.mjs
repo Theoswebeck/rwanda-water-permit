@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 // Local development setup — runs automatically before `npm run dev`.
 //
-//   npm run dev       first run: creates .env.local, downloads PostgreSQL 14 + PostGIS
-//                     (Windows) into .localdb/, creates the database and copies the RWB
-//                     server data into it (RWB VPN needed ONCE). Later runs: offline.
-//   npm run db:pull   refresh the local copy from the server (VPN needed).
+//   npm run dev   first run: creates .env.local, downloads PostgreSQL 14 + PostGIS (Windows)
+//                 into .localdb/ and creates an empty database from database/schema-prod.sql.
+//                 Later runs reuse it — everything created locally is kept (.localdb/data).
+//                 Start over: delete .localdb/data.
 //
 // Windows: everything is portable inside .localdb/ — no installer, no admin rights.
 // macOS:   uses Postgres.app (https://postgresapp.com, v14) if installed.
 // Linux:   set PG_BIN to a PostgreSQL 14 bin folder that has PostGIS.
-// The server copy is read with the read-only role rwb_it_readonly; production cannot be changed.
-// Uploaded files are not copied, so document links in the local app will 404.
+// Fully offline: nothing is read from or written to the RWB server.
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync, readdirSync, createWriteStream } from 'node:fs'
@@ -19,7 +18,6 @@ import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { tmpdir } from 'node:os'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const LOCAL = join(ROOT, '.localdb')
@@ -33,12 +31,6 @@ const POSTGIS_ZIP = 'https://download.osgeo.org/postgis/windows/pg14/postgis-bun
 const APP_USER = 'waterpermit_app'
 const APP_PASSWORD = 'local-dev-only'
 const LOCAL_URL = `postgresql://${APP_USER}:${APP_PASSWORD}@127.0.0.1:5433/waterpermit` // 5433: 5432 is often taken by an installed PostgreSQL
-
-const SOURCE = {
-  host: process.env.PULL_HOST || '10.10.82.199',
-  user: process.env.PULL_USER || 'rwb_it_readonly',
-  password: process.env.PULL_PASSWORD || 'RwbView-0367c6293848-2026',
-}
 
 const log = (msg) => console.log(`[dev-db] ${msg}`)
 function fail(msg) {
@@ -144,7 +136,6 @@ async function main() {
     log('DATABASE_URL in .env.local is not a local database — leaving it alone.')
     return
   }
-  const forcePull = process.argv.includes('--pull')
 
   const bin = await pgBin()
   const tool = (name) => join(bin, name + EXE)
@@ -175,54 +166,19 @@ async function main() {
   psql('postgres', `${hasRole ? 'alter' : 'create'} role "${user}" login password ${lit(password)}`)
 
   const hasDb = psql('postgres', `select 1 from pg_database where datname='waterpermit'`).stdout.trim() === '1'
-  const users = hasDb ? psql('waterpermit', 'select count(*) from public.users', { allowFail: true, quiet: true }).stdout.trim() : ''
-  if (!forcePull && users && users !== '0') {
-    log(`local database ready (${users} users)`)
-    return
+  if (!hasDb) psql('postgres', `create database waterpermit owner "${user}"`)
+  const tables = psql('waterpermit', `select count(*) from pg_tables where schemaname='public'`).stdout.trim()
+  if (tables === '0') {
+    log('creating an EMPTY local database from database/schema-prod.sql')
+    for (const ext of ['postgis', 'pgcrypto', '"uuid-ossp"']) psql('waterpermit', `create extension if not exists ${ext}`)
+    run(tool('psql'), ['-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'waterpermit', '-q', '-f', join(ROOT, 'database', 'schema-prod.sql')], { quiet: true })
   }
-
-  // ------------------------------------------------------------ copy from the RWB server
-  log(`copying the database from ${SOURCE.host} (read-only) — the RWB VPN must be connected…`)
-  const reachable = run(tool('pg_isready'), ['-q', '-h', SOURCE.host, '-p', '5432', '-t', '8'], { allowFail: true, quiet: true }).status === 0
-  if (!reachable) {
-    if (hasDb && users && users !== '0') {
-      log('server not reachable — keeping the existing local copy.')
-      return
-    }
-    // Offline: empty database with the production structure + one local admin, so every page opens.
-    log(`cannot reach ${SOURCE.host} (no VPN) — creating an EMPTY local database from database/schema-prod.sql.`)
-    log('Connect the RWB VPN later and run  npm run db:pull  to load real data.')
-    const tables = hasDb ? psql('waterpermit', `select count(*) from pg_tables where schemaname='public'`).stdout.trim() : '0'
-    if (tables === '0') {
-      if (!hasDb) psql('postgres', `create database waterpermit owner "${user}"`)
-      for (const ext of ['postgis', 'pgcrypto', '"uuid-ossp"']) psql('waterpermit', `create extension if not exists ${ext}`)
-      run(tool('psql'), ['-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'waterpermit', '-q', '-f', join(ROOT, 'database', 'schema-prod.sql')], { quiet: true })
-    }
-    grantApp(psql, user)
-    psql('waterpermit', `insert into public.users (email, role, status, account_type, first_name, last_name, password_hash)
-      values ('admin@localhost', 'admin', 'active', 'individual', 'Local', 'Admin', 'local-dev-no-login')
-      on conflict do nothing`)
-    log('local database ready (empty, signed in as admin@localhost)')
-    return
-  }
-
-  const dump = join(tmpdir(), `waterpermit-${Date.now()}.dump`)
-  run(tool('pg_dump'), [`host=${SOURCE.host} user=${SOURCE.user} dbname=waterpermit sslmode=require`,
-    '-n', 'public', '-Fc', '--no-owner', '--no-privileges', '-f', dump], { env: { PGPASSWORD: SOURCE.password } })
-
-  psql('postgres', 'drop database if exists waterpermit with (force)')
-  psql('postgres', `create database waterpermit owner "${user}"`)
-  for (const ext of ['postgis', 'pgcrypto', '"uuid-ossp"']) psql('waterpermit', `create extension if not exists ${ext}`)
-  // Restore reports "already exists" for the public schema / PostGIS objects; that is expected.
-  run(tool('pg_restore'), ['-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'waterpermit', '--no-owner', '--no-privileges', dump],
-    { allowFail: true, quiet: true })
-  rmSync(dump, { force: true })
-
   grantApp(psql, user)
-  const counts = psql('waterpermit',
-    `select 'users='||(select count(*) from users)||' applications='||(select count(*) from applications)||' permits='||(select count(*) from permits)`).stdout.trim()
-  if (!/users=[1-9]/.test(counts)) fail(`copy looks incomplete (${counts}) — see messages above.`)
-  log(`copied: ${counts}`)
+  psql('waterpermit', `insert into public.users (email, role, status, account_type, first_name, last_name, password_hash)
+    values ('admin@localhost', 'admin', 'active', 'individual', 'Local', 'Admin', 'local-dev-no-login')
+    on conflict do nothing`)
+  const users = psql('waterpermit', 'select count(*) from public.users').stdout.trim()
+  log(`local database ready (${users} users) — data is kept between runs`)
 }
 
 main().catch((err) => fail(err.stack || String(err)))
