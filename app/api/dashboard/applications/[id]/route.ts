@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
+import { syncPaymentWithIrembo } from '@/lib/payments/sync-irembo-payment'
 import { buildApplicationUpdateParts, getMissingApplicationColumnFromError } from '@/lib/db/application-payload'
 import {
   getInvalidEnumFallbackFromError,
@@ -413,6 +414,20 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     if (!id) {
       return NextResponse.json({ success: false, message: 'Application id is required' }, { status: 400 })
     }
+
+    // A pending_payment app may have been paid without us knowing (no webhooks);
+    // ask IremboPay first so a paid application is submitted, not deleted.
+    const pending = await query(
+      `
+      select p.*, row_to_json(a) as applications
+      from public.payments p
+      join public.applications a on a.id = p.application_id
+      where p.application_id = $1 and a.applicant_id = $2
+        and p.status in ('pending', 'processing') and p.irembo_payment_ref is not null
+      `,
+      [id, userId]
+    )
+    for (const payment of pending.rows) await syncPaymentWithIrembo(payment)
 
     const result = await query(
       `
