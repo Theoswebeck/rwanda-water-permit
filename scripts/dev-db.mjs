@@ -70,9 +70,9 @@ function ensureEnvFile() {
   )
 }
 
-function databaseUrl() {
-  const line = readFileSync(ENV_FILE, 'utf8').split(/\r?\n/).filter((l) => l.startsWith('DATABASE_URL=')).pop()
-  return line ? line.slice('DATABASE_URL='.length).trim() : ''
+function envValue(key) {
+  const line = readFileSync(ENV_FILE, 'utf8').split(/\r?\n/).filter((l) => l.startsWith(`${key}=`)).pop()
+  return line ? line.slice(key.length + 1).trim() : ''
 }
 
 // ---------------------------------------------------------------- PostgreSQL binaries
@@ -130,7 +130,9 @@ function grantApp(psql, user) {
 
 async function main() {
   ensureEnvFile()
-  const url = databaseUrl()
+  const url = envValue('DATABASE_URL')
+  // Password of the local `postgres` superuser, if one was set (default: none, trust auth).
+  if (envValue('PGPASSWORD')) process.env.PGPASSWORD = envValue('PGPASSWORD')
   const port = url.match(/@(?:127\.0\.0\.1|localhost):(\d+)\//)?.[1]
   if (!port) {
     log('DATABASE_URL in .env.local is not a local database — leaving it alone.')
@@ -155,7 +157,7 @@ async function main() {
     const started = spawnSync(tool('pg_ctl'), ['-D', data, '-l', join(LOCAL, 'postgres.log'), '-o', `-p ${port} -c listen_addresses=127.0.0.1`, '-w', 'start'], { stdio: 'ignore' })
     if (started.status !== 0) fail(`PostgreSQL did not start — see ${join(LOCAL, 'postgres.log')}`)
   } else if (run(tool('psql'), ['-w', '-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-c', 'select 1'], { allowFail: true, quiet: true }).status !== 0) {
-    fail(`port ${port} is used by another PostgreSQL that needs a password. Pick a free port in DATABASE_URL in .env.local (e.g. :5434) and run again.`)
+    fail(`cannot sign in to PostgreSQL on port ${port}. If you set a postgres password, put it in .env.local as PGPASSWORD=...; otherwise another PostgreSQL uses this port — pick a free one in DATABASE_URL (e.g. :5434).`)
   }
 
   // The app connects with whatever user/password is in DATABASE_URL.
