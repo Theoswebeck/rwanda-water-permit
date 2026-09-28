@@ -160,7 +160,9 @@ async function main() {
       run(tool('initdb'), ['-D', data, '-U', 'postgres', '--auth=trust', '--encoding=UTF8', '--locale=C'])
     }
     log(`starting PostgreSQL on 127.0.0.1:${port}`)
-    run(tool('pg_ctl'), ['-D', data, '-l', join(LOCAL, 'postgres.log'), '-o', `-p ${port} -c listen_addresses=127.0.0.1`, '-w', 'start'])
+    // stdio 'ignore': on Windows the server inherits piped handles and spawnSync would wait on it forever.
+    const started = spawnSync(tool('pg_ctl'), ['-D', data, '-l', join(LOCAL, 'postgres.log'), '-o', `-p ${port} -c listen_addresses=127.0.0.1`, '-w', 'start'], { stdio: 'ignore' })
+    if (started.status !== 0) fail(`PostgreSQL did not start — see ${join(LOCAL, 'postgres.log')}`)
   } else if (run(tool('psql'), ['-w', '-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-c', 'select 1'], { allowFail: true, quiet: true }).status !== 0) {
     fail(`port ${port} is used by another PostgreSQL that needs a password. Pick a free port in DATABASE_URL in .env.local (e.g. :5434) and run again.`)
   }
