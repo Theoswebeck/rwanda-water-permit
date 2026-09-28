@@ -677,8 +677,8 @@ export default function EditApplicationPage() {
             setError('⛔ This application has expired (6 months since submission) and can no longer be edited or submitted.');
           }
 
-          // Check if application is editable (draft or revision_required status), unless expired (view-only)
-          if (!expiration.isExpired && app.status !== 'draft' && app.status !== 'revision_required') {
+          // Check if application is editable (draft, unpaid pending_payment or revision_required), unless expired (view-only)
+          if (!expiration.isExpired && app.status !== 'draft' && app.status !== 'pending_payment' && app.status !== 'revision_required') {
             setError('Only draft applications and applications returned for revision can be edited');
             return;
           }

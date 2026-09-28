@@ -564,7 +564,7 @@ export function ApplicationsList({
                 </p>
               </div>
               <div className="mt-4 flex items-center justify-end gap-2">
-                {(application.status === 'draft' || application.status === 'revision_required') && (
+                {(application.status === 'draft' || application.status === 'pending_payment' || application.status === 'revision_required') && (
                   <Link href={
                     isRenewalApplication(application)
                       ? `/dashboard/new-application?mode=renewal&applicationId=${application.id}&permitId=${getRenewalPermitId(application)}`
@@ -602,7 +602,7 @@ export function ApplicationsList({
                     <Eye className="h-4 w-4" />
                   </Button>
                 </Link>
-                {application.status === 'draft' && onDeleteApplications && (
+                {(application.status === 'draft' || application.status === 'pending_payment') && onDeleteApplications && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -703,7 +703,7 @@ export function ApplicationsList({
                   </TableCell>
                   <TableCell className="text-right px-4 py-4" data-row-click-ignore="true">
                     <div className="flex justify-end gap-1.5">
-                      {(application.status === 'draft' || application.status === 'revision_required') && (
+                      {(application.status === 'draft' || application.status === 'pending_payment' || application.status === 'revision_required') && (
                         <Link href={
                           isRenewalApplication(application)
                             ? `/dashboard/new-application?mode=renewal&applicationId=${application.id}&permitId=${getRenewalPermitId(application)}`
@@ -743,7 +743,7 @@ export function ApplicationsList({
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
-                      {application.status === 'draft' && onDeleteApplications && (
+                      {(application.status === 'draft' || application.status === 'pending_payment') && onDeleteApplications && (
                         <Button 
                           variant="ghost" 
                           size="sm" 

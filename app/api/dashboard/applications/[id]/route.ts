@@ -420,7 +420,10 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       where
         id = $1
         and applicant_id = $2
-        and status = 'draft'
+        and status in ('draft', 'pending_payment')
+        and not exists (
+          select 1 from public.payments p where p.application_id = applications.id and p.status = 'completed'
+        )
       `,
       [id, userId]
     )
