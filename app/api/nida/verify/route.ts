@@ -17,10 +17,17 @@ export async function POST(req: NextRequest) {
     const v = await verifyNationalId(documentNumber)
     return NextResponse.json({ success: true, data: v })
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'National ID could not be verified'
-    const safeMessage =
-      process.env.NODE_ENV === 'production' ? 'National ID could not be verified' : `National ID verification failed: ${message}`
-    return NextResponse.json({ success: false, message: safeMessage }, { status: 400 })
+    const rawMessage = e instanceof Error ? e.message : 'National ID could not be verified'
+    console.error('❌ NIDA verification error:', rawMessage)
+
+    let userMessage = 'National ID could not be verified'
+    if (rawMessage.toLowerCase().includes('does not exist')) {
+      userMessage = 'National ID does not exist in the National Population Registry'
+    } else if (process.env.NODE_ENV !== 'production') {
+      userMessage = `National ID verification failed: ${rawMessage}`
+    }
+
+    return NextResponse.json({ success: false, message: userMessage }, { status: 400 })
   }
 }
 

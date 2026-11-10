@@ -113,12 +113,13 @@ export async function fetchNidaCitizenInfo(documentNumberRaw: string): Promise<G
   }
 
   const doRequest = async (token: string) => {
+    const serviceName = process.env.NIDA_SERVICE_NAME || 'rwbcitizeninfo'
     const res = await fetch(`${baseUrl}/sync/message/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-        serviceName: 'rwandawbcitezneauthenticate',
+        serviceName,
       },
       body: JSON.stringify({ args: { documentNumber } }),
       cache: 'no-store',
