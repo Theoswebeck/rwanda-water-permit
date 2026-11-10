@@ -293,7 +293,7 @@ export default function RegisterPage() {
                 {rwbConfig.name}
               </h3>
               <p className="text-xs text-white/85 leading-relaxed mb-6">
-                Register for secure access to the Water Permitting and Licensing System. 
+                Register for secure access to the Rwanda Water Permit Portal. 
                 Apply for water concessions, track your permits, and manage compliance obligations.
               </p>
 

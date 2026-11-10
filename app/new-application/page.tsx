@@ -26,3 +26,4 @@ export default async function NewApplicationRedirectPage({
   const query = params.toString();
   redirect(`/dashboard/new-application${query ? `?${query}` : "?mode=new"}`);
 }
+

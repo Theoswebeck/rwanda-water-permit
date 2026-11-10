@@ -3,7 +3,7 @@
  * Rwanda Water Resources Board (RWB) - System Configuration
  * ========================================================
  * Unified Enterprise Configuration for Rwanda Water Resources Board (RWB)
- * System: Water Permitting and Licensing System (WPLS)
+ * System: Rwanda Water Permit Portal (RWPP)
  */
 
 export interface SystemConfig {
@@ -39,8 +39,8 @@ export interface SystemConfig {
 }
 
 export const rwbConfig: SystemConfig = {
-  name: "Water Permitting and Licensing System",
-  acronym: "WPLS",
+  name: "Rwanda Water Permit Portal",
+  acronym: "RWPP",
   tagline: "Water Concession Application & Compliance Portal",
   description:
     "Official digital water permit application, technical assessment, site inspection, and concession management platform of the Rwanda Water Resources Board.",

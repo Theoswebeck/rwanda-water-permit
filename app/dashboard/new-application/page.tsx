@@ -2441,10 +2441,10 @@ function NewApplicationContent() {
       return (
         <>
           <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+            <h1 className="text-primary text-2xl sm:text-3xl font-semibold tracking-tight">
               Edit Water Permit Application
             </h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Continue editing your water permit application. Your changes are automatically saved.
             </p>
             {currentApplication && (
@@ -2478,10 +2478,10 @@ function NewApplicationContent() {
       return (
         <>
           <div className="text-center mb-8">
-            <h1 className="text-primary leading-tighter max-w-2xl mx-auto text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+            <h1 className="text-primary text-2xl sm:text-3xl font-semibold tracking-tight mx-auto">
               Water Permit Application
             </h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2 max-w-xl mx-auto">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1 max-w-xl mx-auto">
               Select the type of application you want to submit. You can apply for a new water use permit, modify an existing permit, or transfer a permit to another holder.
             </p>
           </div>
@@ -2496,10 +2496,10 @@ function NewApplicationContent() {
       return (
         <>
           <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+            <h1 className="text-primary text-2xl sm:text-3xl font-semibold tracking-tight">
               Transfer Water Use Permit
             </h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Select the permit you want to transfer. You can search by permit number, project name, or current holder.
             </p>
           </div>
@@ -2519,10 +2519,10 @@ function NewApplicationContent() {
       return (
         <>
           <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+            <h1 className="text-primary text-2xl sm:text-3xl font-semibold tracking-tight">
               Transfer Permit: {selectedPermit.permit_number}
             </h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Complete the transfer form for the selected permit. All fields marked with an asterisk (*) are required.
             </p>
             <div className="mt-2">
@@ -2554,10 +2554,10 @@ function NewApplicationContent() {
       return (
         <>
           <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+            <h1 className="text-primary text-2xl sm:text-3xl font-semibold tracking-tight">
               Modify Water Use Permit
             </h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Select the permit you want to modify. Only your active permits can be modified. The permit number will remain the same.
             </p>
           </div>
@@ -2579,7 +2579,7 @@ function NewApplicationContent() {
       return (
         <>
           <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+            <h1 className="text-primary text-2xl sm:text-3xl font-semibold tracking-tight">
               Modify Permit: {selectedPermitForModification.permit_number}
             </h1>
 
@@ -2601,7 +2601,7 @@ function NewApplicationContent() {
             )}
 
             {!isManualModificationPermit && (
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+              <p className="text-sm sm:text-base text-muted-foreground mt-1">
                 Update the details of your existing permit. Modified fields will be tracked and reviewed. The permit number remains unchanged.
               </p>
             )}
@@ -2650,10 +2650,10 @@ function NewApplicationContent() {
       return (
         <>
           <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+            <h1 className="text-primary text-2xl sm:text-3xl font-semibold tracking-tight">
               Renew Water Use Permit
             </h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Select the permit you want to renew. Permits nearing expiration or recently expired are shown with urgency indicators.
             </p>
           </div>
@@ -2673,10 +2673,10 @@ function NewApplicationContent() {
       return (
         <>
           <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+            <h1 className="text-primary text-2xl sm:text-3xl font-semibold tracking-tight">
               Renew Permit: {selectedPermitForRenewal.permit_number}
             </h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Complete the renewal process for your water use permit. Submit your water use report, required documents, and payment.
             </p>
             {/* Only show "Select different permit" if this is a new renewal, not editing existing */}
@@ -2710,10 +2710,10 @@ function NewApplicationContent() {
     return (
       <>
         <div>
-          <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+          <h1 className="text-primary text-2xl sm:text-3xl font-semibold tracking-tight">
             {tx("New Water Permit Application")}
           </h1>
-          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             {tx("Fill out all required information to apply for your water permit. All fields marked with an asterisk (*) are required.")}
           </p>
           <div className="mt-2">

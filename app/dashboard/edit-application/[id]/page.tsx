@@ -1074,8 +1074,8 @@ export default function EditApplicationPage() {
             </Alert>
           )}
           <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">Edit Water Permit Application</h1>
-            <p className="text-muted-foreground mt-2">
+            <h1 className="text-primary text-2xl sm:text-3xl font-semibold tracking-tight">Edit Water Permit Application</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               {isExpired
                 ? 'This application has expired and is now view-only.'
                 : 'Update your draft application below. You can save changes as a draft or submit for review.'}
