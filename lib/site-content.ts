@@ -21,7 +21,7 @@ export type SiteContent = {
 }
 
 export const SITE_CONTENT_DEFAULTS: SiteContent = {
-  guidelines_url: "https://www.waterpermit.rwb.rw/Water_Use_Permitting_Guidelines.pdf",
+  guidelines_url: "/Water_Use_Permitting_Guidelines.pdf",
   user_manual_url: "/assets/User_Manual_Guide_Rwanda_Water_Permit_Application_Portal.pdf",
   office: {
     address: "KN 3 AV Avenue, Nyarugenge Pension Plaza, Sopetrade",

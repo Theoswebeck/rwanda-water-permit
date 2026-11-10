@@ -304,11 +304,11 @@ function TechnicalAssessmentContent() {
             </Link>
           </div>
 
-          <div className="space-y-2">
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">
               Technical Assessment
             </h1>
-            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed">
+            <p className="text-sm text-muted-foreground mt-1">
               Conduct field assessment and provide technical recommendation for water permit application
             </p>
           </div>

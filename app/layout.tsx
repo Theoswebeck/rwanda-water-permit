@@ -9,7 +9,7 @@ import { SessionInitializer } from "@/components/auth/session-initializer";
 import { ReactQueryProvider } from "@/lib/react-query-provider";
 import { KeepWarmHeartbeat } from "@/components/shared/keep-warm-heartbeat";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], display: "swap", preload: false });
 
 export const metadata: Metadata = {
   title: "RWater Permit - Water Concession Application Portal",

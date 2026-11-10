@@ -21,14 +21,25 @@ import { translateText } from "@/lib/i18n/translator";
 import { useSiteContent } from "@/lib/use-site-content";
 import type { SiteContent } from "@/lib/site-content";
 
-// The manual and guidelines links are admin-managed (admin panel → Content),
-// so a new version is published from the UI rather than edited here.
 function buildNavItems(content: SiteContent) {
   return [
-    { label: "User Manual", href: content.user_manual_url, newTab: true },
-    { label: "Guidelines", href: content.guidelines_url, newTab: true },
-    { label: "Water Use Dashboard", href: "/water-use-dashboard" },
-    { label: "Contact", href: "/contact" },
+    { label: "About", href: "/#about" },
+    { label: "Permit Categories", href: "/#features" },
+    { label: "Application Process", href: "/#process" },
+    { label: "Water Dashboard", href: "/#water-dashboard" },
+    { label: "Request API", href: "/api-access" },
+    { label: "API Docs", href: "/api-access/docs" },
+    {
+      label: "User Manual",
+      href: content.user_manual_url || "/assets/User_Manual_Guide_Rwanda_Water_Permit_Application_Portal.pdf",
+      newTab: true,
+    },
+    {
+      label: "Guidelines",
+      href: content.guidelines_url || "/Water_Use_Permitting_Guidelines.pdf",
+      newTab: true,
+    },
+    { label: "Contact", href: "/#contact" },
   ];
 }
 
@@ -41,8 +52,10 @@ export function Header() {
   const isApplyPage = pathname === "/apply";
   const isLoginPage = pathname === "/login";
   const isRegisterPage = pathname === "/register";
+  const isForgotPasswordPage = pathname.startsWith("/forgot-password");
+  const isResetPasswordPage = pathname.startsWith("/reset-password");
+  const isAuthPage = isLoginPage || isRegisterPage || isForgotPasswordPage || isResetPasswordPage;
   const isDashboardPage = pathname.startsWith('/dashboard');
-  const isApplicationPage = pathname.includes('/application');
   const isInspectionPage = pathname.startsWith('/inspection');
   const isReviewPage = pathname.startsWith('/review');
   const isAssessmentPage = pathname.startsWith('/assessment');
@@ -50,6 +63,7 @@ export function Header() {
   const isAdminPage = pathname.startsWith('/admin');
   const isApproverPage = pathname.startsWith('/approver');
   const isManagementPage = pathname.startsWith('/management');
+  const isChangePasswordPage = pathname.startsWith('/change-password-required');
   const isTechnicalAssessmentPage = pathname.startsWith("/technical-assessment");
 
   // Staff-facing sections should not show the public marketing navigation.
@@ -76,240 +90,202 @@ export function Header() {
 
   const tx = (value: string) => translateText(value, language);
 
-  return (
-    <header className="py-4 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between gap-6">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5 }}
-            className="min-w-0 flex-1"
-          >
-            <Link href="/" className="flex items-center gap-3">
-              <Image
-                src="/assets/rwanda_water_board_Logo.png"
-                alt="Rwanda Water Resources Board"
-                width={48}
-                height={48}
-                className="shrink-0"
-              />
-              <span className="text-foreground font-semibold tracking-tight truncate text-sm sm:text-base">
-                {tx("Rwanda Water Permit Portal")}
-              </span>
-            </Link>
-          </motion.div>
+  // When inside internal dashboard/staff pages, the RWB shell provides its own 60px header.
+  // When on the landing page (/), or on auth pages (/login, /register, /forgot-password), hide the public header.
+  if (isStaffPage || isDashboardPage || pathname === "/" || isAuthPage || isChangePasswordPage) {
+    return null;
+  }
 
-          {/* Desktop Navigation */}
-          {shouldShowMinimalHeaderForStaff ? null : (
-            <nav className="hidden md:flex shrink-0 space-x-10">
-              {navItems.map((item, index) => (
-                <motion.div
-                  key={item.label}
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
+  return (
+    <header className="py-2.5 bg-[#0072bc] shadow-md sticky top-0 z-50">
+      <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+        {/* Brand Logo */}
+        <div className="flex items-center shrink-0">
+          <Link href="/" className="flex items-center gap-3">
+            <Image
+              src="/images/favicon_new.png"
+              alt="Rwanda Water Resources Board"
+              width={56}
+              height={56}
+              className="h-10 sm:h-12 w-auto object-contain brightness-0 invert shrink-0"
+              priority
+            />
+          </Link>
+        </div>
+
+        {/* Desktop Navigation */}
+        {shouldShowMinimalHeaderForStaff ? null : (
+          <nav className="hidden lg:flex flex-1 items-center justify-center gap-4 xl:gap-6 mx-4">
+            {navItems.map((item, index) => (
+              <motion.div
+                key={item.label}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: index * 0.04 }}
+              >
+                {item.href.startsWith("http") || item.newTab ? (
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs xl:text-sm font-semibold text-white/90 hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    {tx(item.label)}
+                  </a>
+                ) : (
+                  <Link
+                    href={item.href}
+                    className="text-xs xl:text-sm font-semibold text-white/90 hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    {tx(item.label)}
+                  </Link>
+                )}
+              </motion.div>
+            ))}
+          </nav>
+        )}
+
+        {/* Action Controls & Profile / Auth */}
+        <div className="hidden lg:flex shrink-0 items-center gap-3">
+          {!shouldShowMinimalHeaderForStaff && (
+            <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+          )}
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4 }}
+            className="flex items-center gap-2.5"
+          >
+            {shouldShowMinimalHeaderForStaff ? (
+              <Link href="/dashboard/profile">
+                <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-white/50 transition-all border border-white/20">
+                  <AvatarImage src={undefined} alt="Profile" />
+                  <AvatarFallback className="bg-[#005a96] text-white">
+                    <User className="h-5 w-5" />
+                  </AvatarFallback>
+                </Avatar>
+              </Link>
+            ) : isAuthenticated ? (
+              <Link href="/dashboard/profile">
+                <Button variant="outline" className="rounded-lg px-5 py-2 text-xs xl:text-sm font-bold bg-white/10 text-white border-white/30 hover:bg-white/20 hover:text-white">
+                  {tx("MY PROFILE")}
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="px-4 py-2 rounded-lg text-xs xl:text-sm font-bold border-2 border-white text-white hover:bg-white hover:text-[#0072bc] transition-all whitespace-nowrap"
                 >
-                  {item.href.startsWith('http') || item.newTab ? (
+                  Sign In
+                </Link>
+                <Link
+                  href="/register"
+                  className="px-4 py-2 rounded-lg text-xs xl:text-sm font-bold bg-white text-[#0072bc] hover:bg-blue-50 transition-all shadow-md whitespace-nowrap"
+                >
+                  Register
+                </Link>
+              </>
+            )}
+          </motion.div>
+        </div>
+
+        {/* Mobile Navigation Trigger */}
+        <div className="lg:hidden flex shrink-0 items-center gap-2">
+          {!shouldShowMinimalHeaderForStaff && (
+            <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+          )}
+
+          <Sheet open={isOpen} onOpenChange={setIsOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-10 h-10 rounded-lg text-white hover:bg-white/15 focus:bg-white/15"
+                aria-label="Toggle navigation menu"
+              >
+                <Menu className="h-6 w-6" />
+                <span className="sr-only">{tx("Toggle menu")}</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="border-l border-slate-200 bg-white p-6 w-[300px] sm:w-[360px]">
+              <div className="flex items-center mb-6 pb-4 border-b">
+                <Link href="/" className="flex items-center gap-3" onClick={() => setIsOpen(false)}>
+                  <Image
+                    src="/images/favicon_new.png"
+                    alt="RWB"
+                    width={40}
+                    height={40}
+                    className="h-9 w-auto object-contain"
+                  />
+                  <span className="text-gray-900 font-bold text-sm leading-tight">
+                    Rwanda Water<br />Permit Portal
+                  </span>
+                </Link>
+              </div>
+
+              <nav className="flex flex-col space-y-1">
+                {navItems.map((item) => {
+                  return item.href.startsWith("http") || item.newTab ? (
                     <a
+                      key={item.label}
                       href={item.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
+                      className="flex items-center justify-between text-gray-700 hover:text-[#0072bc] hover:bg-blue-50 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors"
+                      onClick={() => setIsOpen(false)}
                     >
-                      {tx(item.label)}
+                      <span>{tx(item.label)}</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
                     </a>
                   ) : (
                     <Link
+                      key={item.label}
                       href={item.href}
-                      className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
+                      className="text-gray-700 hover:text-[#0072bc] hover:bg-blue-50 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors"
+                      onClick={() => setIsOpen(false)}
                     >
                       {tx(item.label)}
                     </Link>
-                  )}
-                </motion.div>
-              ))}
+                  );
+                })}
 
-            </nav>
-          )}
-
-          <div className="hidden md:flex shrink-0 items-center gap-3">
-            {!shouldShowMinimalHeaderForStaff && (
-              <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
-            )}
-            {/* CTA Button */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              {shouldShowMinimalHeaderForStaff ? (
-                <Link href="/dashboard/profile">
-                  <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
-                    <AvatarImage src={undefined} alt="Profile" />
-                    <AvatarFallback>
-                      <User className="h-5 w-5" />
-                    </AvatarFallback>
-                  </Avatar>
-                </Link>
-              ) : isDashboardPage ? (
-                /* On dashboard pages, show the profile link if not already in profile */
-                pathname === "/dashboard/profile" ? null : (
-                  <Link href="/dashboard/profile">
-                    <Button variant="outline" className="rounded-full px-6">
+                <div className="pt-5 mt-4 border-t space-y-3">
+                  {isAuthenticated ? (
+                    <Link
+                      href="/dashboard/profile"
+                      className="w-full block text-center py-2.5 rounded-lg border-2 border-[#0072bc] text-[#0072bc] text-sm font-bold"
+                      onClick={() => setIsOpen(false)}
+                    >
                       {tx("MY PROFILE")}
-                    </Button>
-                  </Link>
-                )
-              ) : isApplyPage ? (
-                <Link href="/login">
-                  <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
-                    {tx("LOGIN")}
-                  </Button>
-                </Link>
-              ) : isLoginPage || isRegisterPage ? (
-                <Link href="/">
-                  <Button variant="outline" className="rounded-full px-6">
-                    {tx("HOME")}
-                  </Button>
-                </Link>
-              ) : isInspectionPage || isReviewPage || isAssessmentPage || isVerificationPage || isAdminPage || isApproverPage || isManagementPage || isTechnicalAssessmentPage ? (
-                /* Show profile icon on inspection, review, admin, and approver pages */
-                <Link href="/dashboard/profile">
-                  <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
-                    <AvatarImage src={undefined} alt="Profile" />
-                    <AvatarFallback>
-                      <User className="h-5 w-5" />
-                    </AvatarFallback>
-                  </Avatar>
-                </Link>
-              ) : isAuthenticated ? (
-                <Link href="/dashboard/profile">
-                  <Button variant="outline" className="rounded-full px-6">
-                    {tx("MY PROFILE")}
-                  </Button>
-                </Link>
-              ) : (
-                /* The login page routes each account to its own landing page;
-                   "APPLY NOW" lives on the hero instead of the header. */
-                <Link href="/login">
-                  <Button variant="outline" className="rounded-full px-6">
-                    {tx("LOGIN")}
-                  </Button>
-                </Link>
-              )}
-            </motion.div>
-          </div>
-
-          {/* Mobile Navigation */}
-          <div className="md:hidden flex shrink-0 items-center gap-2">
-            {!shouldShowMinimalHeaderForStaff && (
-              <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
-            )}
-            {shouldShowMinimalHeaderForStaff ? (
-              isAuthenticated ? (
-                <Link href="/dashboard/profile">
-                  <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
-                    <AvatarImage src={undefined} alt="Profile" />
-                    <AvatarFallback>
-                      <User className="h-5 w-5" />
-                    </AvatarFallback>
-                  </Avatar>
-                </Link>
-              ) : null
-            ) : (
-              <Sheet open={isOpen} onOpenChange={setIsOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="text-primary">
-                    <Menu className="h-6 w-6" />
-                    <span className="sr-only">{tx("Toggle menu")}</span>
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="border-l border-border">
-                <div className="flex items-center mb-8 mt-2">
-                  <Link href="/" className="flex items-center" onClick={() => setIsOpen(false)}>
-                    <Image
-                      src="/assets/rwanda_water_board_Logo.png"
-                      alt="Rwanda Water Resources Board"
-                      width={32}
-                      height={32}
-                      className="mr-2"
-                    />
-                    <span className="text-foreground font-semibold text-sm">{tx("Rwanda Water Permit Portal")}</span>
-                  </Link>
-                </div>
-
-                <nav className="flex flex-col space-y-6 mt-8">
-                  {navItems.map((item) => {
-                    return item.href.startsWith('http') || item.newTab ? (
-                      <a
-                        key={item.label}
-                        href={item.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-foreground hover:text-primary transition-colors text-base font-medium"
-                        onClick={() => setIsOpen(false)}
-                      >
-                        {tx(item.label)}
-                      </a>
-                    ) : (
+                    </Link>
+                  ) : (
+                    <>
                       <Link
-                        key={item.label}
-                        href={item.href}
-                        className="text-foreground hover:text-primary transition-colors text-base font-medium"
+                        href="/login"
+                        className="w-full block text-center py-2.5 rounded-lg border-2 border-[#0072bc] text-[#0072bc] text-sm font-bold hover:bg-blue-50"
                         onClick={() => setIsOpen(false)}
                       >
-                        {tx(item.label)}
+                        Sign In
                       </Link>
-                    );
-                  })}
-
-                  <div className="pt-6 mt-6 border-t">
-                    {isDashboardPage ? (
-                      /* On dashboard pages, show the profile link if not already in profile */
-                      pathname === "/dashboard/profile" ? null : (
-                        <Link href="/dashboard/profile" onClick={() => setIsOpen(false)}>
-                          <Button variant="outline" className="w-full rounded-full mt-4">
-                            {tx("MY PROFILE")}
-                          </Button>
-                        </Link>
-                      )
-                    ) : isApplyPage ? (
-                      <Link href="/login" onClick={() => setIsOpen(false)}>
-                        <Button className="w-full bg-primary hover:bg-primary/90 rounded-full mt-4">
-                          {tx("LOGIN")}
-                        </Button>
+                      <Link
+                        href="/register"
+                        className="w-full block text-center py-2.5 rounded-lg bg-[#0072bc] text-white text-sm font-bold hover:bg-[#005a96] shadow-sm"
+                        onClick={() => setIsOpen(false)}
+                      >
+                        Register
                       </Link>
-                    ) : isLoginPage || isRegisterPage ? (
-                      <Link href="/" onClick={() => setIsOpen(false)}>
-                        <Button variant="outline" className="w-full rounded-full mt-4">
-                          {tx("HOME")}
-                        </Button>
-                      </Link>
-                    ) : isInspectionPage || isReviewPage || isAssessmentPage || isVerificationPage || isAdminPage || isApproverPage || isManagementPage || isTechnicalAssessmentPage ? (
-                      /* Hide button on inspection, review, and admin pages */
-                      null
-                    ) : isAuthenticated ? (
-                      <Link href="/dashboard/profile" onClick={() => setIsOpen(false)}>
-                        <Button variant="outline" className="w-full rounded-full mt-4">
-                          {tx("MY PROFILE")}
-                        </Button>
-                      </Link>
-                    ) : (
-                      <Link href="/login" onClick={() => setIsOpen(false)}>
-                        <Button variant="outline" className="w-full rounded-full mt-4">
-                          {tx("LOGIN")}
-                        </Button>
-                      </Link>
-                    )}
-                  </div>
-                </nav>
-                </SheetContent>
-              </Sheet>
-            )}
-          </div>
+                    </>
+                  )}
+                </div>
+              </nav>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
     </header>
   );
-} 
+}

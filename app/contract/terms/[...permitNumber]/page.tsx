@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 import { ContractTermsPreview } from "@/components/contract/contract-terms-preview";
+import { ContractTermsActions } from "@/components/contract/contract-terms-actions";
 import type { PermitVariant } from "@/lib/permit-variant";
 
 function isPermitVariant(v: string | undefined | null): v is PermitVariant {
@@ -37,6 +38,11 @@ export default async function PublicContractTermsPage({
     <div className="min-h-screen bg-slate-50">
       <div className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-4xl space-y-6">
+          <ContractTermsActions
+            application={application as Record<string, any> | null}
+            permitNumber={permitNumber}
+            variantOverride={variantOverride}
+          />
           <ContractTermsPreview
             application={application as Record<string, any> | null}
             permitNumber={permitNumber}

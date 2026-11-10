@@ -14,12 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
 import {
   Dialog,
@@ -32,10 +32,10 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import { getApplicationWorkflowKind } from "@/lib/application-workflow";
-import { 
-  ArrowLeft, 
-  X, 
-  Send, 
+import {
+  ArrowLeft,
+  X,
+  Send,
   AlertTriangle,
   Loader2,
   XCircle,
@@ -237,14 +237,14 @@ type DocReviewMeta = {
 // Transform Application data back to form format for viewing
 function mapApplicationToFormData(application: Application, userProfile?: any): any {
   const formData: any = {};
-  
+
   // Parse internal notes to extract form-specific data
   // Try to parse as JSON first (new format), fallback to legacy format
   let storedFormData: any = {};
   let legacyNotesMap: Record<string, string> = {};
-  
+
   const notes = application.internal_notes || '';
-  
+
   try {
     // Try parsing as JSON (new comprehensive format)
     storedFormData = JSON.parse(notes);
@@ -260,21 +260,21 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       }
     });
   }
-  
+
   // If we have comprehensive stored data, use it directly
   if (Object.keys(storedFormData).length > 0 && storedFormData.fullNameApplicant !== undefined) {
     // New format: restore all form fields directly from stored data
     console.log('🔄 Restoring form data from comprehensive JSON storage');
-    
+
     // Copy all stored form data
     Object.assign(formData, storedFormData);
-    
+
     // Override with profile data for contact information if available
     if (userProfile) {
       formData.telephoneContact = userProfile.phone || userProfile.company_phone || formData.telephoneContact;
       formData.emailAddress = userProfile.email || formData.emailAddress;
     }
-    
+
     // Ensure polygons are properly formatted (back-compat with legacy waterSourceCoordinates)
     if (Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0) {
       // ok
@@ -325,16 +325,16 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
         if (!formData.waterSourceLatitude) formData.waterSourceLatitude = String(lat);
         if (!formData.waterSourceLongitude) formData.waterSourceLongitude = String(lng);
       }
-    } catch {}
-    
+    } catch { }
+
   } else {
     // Legacy format: reconstruct from basic database fields and legacy notes
     console.log('🔄 Restoring form data from legacy format');
-    
+
     // Basic applicant information (using internal notes and project title)
     formData.fullNameApplicant = application.project_title?.replace(' Water Permit Application', '') || 'Draft Application';
     formData.categoryApplicant = legacyNotesMap['Category']?.toLowerCase() || 'individual';
-  
+
     // Office address (from application location) - reverse the province mapping
     const provinceReverseMap: Record<string, string> = {
       'Kigali': 'Kigali',
@@ -348,11 +348,11 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     formData.officeSector = application.sector || '';
     formData.officeCell = application.cell || '';
     formData.officeVillage = application.village || '';
-    
+
     // Contact information
     formData.telephoneContact = userProfile?.phone || userProfile?.company_phone || '';
     formData.emailAddress = userProfile?.email || legacyNotesMap['Contact']?.replace('Not provided', '') || '';
-  
+
     // Water source information
     const waterSourceMap: Record<string, string> = {
       'surface_water': 'stream_river',
@@ -361,14 +361,14 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     formData.waterSourceType = waterSourceMap[application.water_source] || 'stream_river';
     formData.nameSourceWater = application.water_body_name || '';
     formData.tributaryToMain = application.tributary_name || '';
-    
+
     // Water source location
     formData.waterSourceProvince = provinceReverseMap[application.province] || application.province || '';
     formData.waterSourceDistrict = application.district || '';
     formData.waterSourceSector = application.sector || '';
     formData.waterSourceCell = application.cell || '';
     formData.waterSourceVillage = application.village || '';
-  
+
     // Coordinates - normalize Polygon/MultiPolygon/Point into waterSourcePolygons
     try {
       const polys = geometryToCoordinatePolygons(application.coordinates);
@@ -376,12 +376,12 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
         polys && polys.length > 0
           ? polys
           : [
-              [
-                { latitude: "", longitude: "" },
-                { latitude: "", longitude: "" },
-                { latitude: "", longitude: "" }
-              ]
-            ];
+            [
+              { latitude: "", longitude: "" },
+              { latitude: "", longitude: "" },
+              { latitude: "", longitude: "" }
+            ]
+          ];
     } catch (error) {
       console.warn('Error parsing coordinates:', error);
       formData.waterSourcePolygons = [
@@ -392,10 +392,10 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
         ]
       ];
     }
-  
+
     // Water reliability
     formData.waterReliability = 'water_always_available';
-    
+
     // Intended activities - reverse map from water_purpose
     const purposeToActivity: Record<string, string> = {
       'domestic': 'water_supply',
@@ -411,7 +411,7 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       'other_concession': 'other_concession',
       'livestock': 'livestock'
     };
-    
+
     let mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
     if (Array.isArray((application as any).intended_activities) && (application as any).intended_activities.length > 0) {
       formData.intendedActivities = (application as any).intended_activities;
@@ -419,7 +419,7 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     } else {
       formData.intendedActivities = [mappedActivity];
     }
-    
+
     // Water abstraction details
     formData.waterAbstractionDetails = [{
       activity: mappedActivity,
@@ -428,11 +428,11 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       maxAverageYearly: application.estimated_usage_volume || 0,
       abstractionMethod: application.water_taking_method || 'pump'
     }];
-    
+
     // Land ownership
     formData.ownsAllLand = true;
     formData.hasLandAccess = true;
-    
+
     // Annexes
     if (application.electricity_generation_capacity) {
       formData.annexF_electricityDetails = application.electricity_generation_capacity;
@@ -440,7 +440,7 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     if (application.mining_operations_type) {
       formData.annexG_miningDetails = application.mining_operations_type;
     }
-  
+
     // Certification
     formData.certificationAgreement = true;
   }
@@ -484,11 +484,11 @@ export default function AssessmentApplicationPage() {
   const [terminationReason, setTerminationReason] = useState("");
   const [showSendToReviewDialog, setShowSendToReviewDialog] = useState(false);
   const [previewsUnlocked, setPreviewsUnlocked] = useState(false);
-  
+
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
-  
+
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
   const [loadingRenewalPermit, setLoadingRenewalPermit] = useState(false);
@@ -520,14 +520,14 @@ export default function AssessmentApplicationPage() {
     eligibilityConfirmed: false,
     completenessConfirmed: false,
   });
-  
+
   // Field Report State
   const [fieldReportFiles, setFieldReportFiles] = useState<FieldReportFile[]>([]);
   const [fieldReportSummary, setFieldReportSummary] = useState("");
   const [inspectorName, setInspectorName] = useState("");
   const [inspectionDate, setInspectionDate] = useState(new Date().toISOString().split('T')[0]);
   const [assessmentSubmittedDate, setAssessmentSubmittedDate] = useState("");
-  
+
   // Verification Checklist State
   const [checklist, setChecklist] = useState<VerificationChecklist>({
     locationVerified: false,
@@ -536,7 +536,7 @@ export default function AssessmentApplicationPage() {
     technicalFeasibilityConfirmed: false,
     infrastructureAdequate: false
   });
-  
+
   // Recommendation State
   const [recommendation, setRecommendation] = useState<RecommendationData>({
     recommendation: null,
@@ -558,7 +558,7 @@ export default function AssessmentApplicationPage() {
   const bumpPreviewRefresh = useCallback(() => {
     setPreviewRefreshKey((k) => k + 1);
   }, []);
-  
+
   // Original requested values (from applicant submission - read-only)
   const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
   const [requestedVolumeM3, setRequestedVolumeM3] = useState<number | undefined>(undefined);
@@ -658,7 +658,7 @@ export default function AssessmentApplicationPage() {
       } else if (notes && typeof notes === "object") {
         wuc = (notes as any)?.waterUseCategory ?? null;
       }
-    } catch {}
+    } catch { }
     return determineReportType(
       ((application as any)?.intended_activities as string[] | null | undefined) || null,
       application?.water_purpose || null,
@@ -675,48 +675,48 @@ export default function AssessmentApplicationPage() {
     if (!inspectionDate) missing.push("Field Visit Details: Assessment date is required");
 
     if (!isBulk) {
-    if (reportTypeForAssessment === "abstraction") {
-      const sourceFlowValue = assessmentReportData.sourceFlowValue ?? assessmentReportData.sourceFlowM3Day;
-      const sourceFlowUnit = assessmentReportData.sourceFlowUnit ?? "m3/day";
-      if (!isNumericText(sourceFlowValue)) missing.push("Section 2: Flow of the water source value (number)");
-      if (!isVolumeRateUnit(sourceFlowUnit)) {
-        missing.push("Section 2: Flow of the water source unit (m3/day or m3/year)");
-      }
-      // "Amount of water to be abstracted" (Section 3) is removed from the groundwater assessment
-      // report, so its fields are not rendered and must not be required for groundwater.
-      if (!isGroundwater) {
-        if (!isNumericText(assessmentReportData.flowRateM3Day)) missing.push("Section 4: Amount of water to be abstracted value (number)");
-        if (!isVolumeRateUnit(assessmentReportData.flowRateM3DayUnit ?? "m3/year")) {
-          missing.push("Section 4: Amount of water to be abstracted unit (m3/day or m3/year)");
+      if (reportTypeForAssessment === "abstraction") {
+        const sourceFlowValue = assessmentReportData.sourceFlowValue ?? assessmentReportData.sourceFlowM3Day;
+        const sourceFlowUnit = assessmentReportData.sourceFlowUnit ?? "m3/day";
+        if (!isNumericText(sourceFlowValue)) missing.push("Section 2: Flow of the water source value (number)");
+        if (!isVolumeRateUnit(sourceFlowUnit)) {
+          missing.push("Section 2: Flow of the water source unit (m3/day or m3/year)");
         }
-        if (!isNumericText(assessmentReportData.flowRateLps)) missing.push("Section 4: Flow rate value (number)");
-        if (!isVolumeRateUnit(assessmentReportData.flowRateUnit ?? "m3/day")) {
-          missing.push("Section 4: Flow rate unit (m3/day or m3/year)");
+        // "Amount of water to be abstracted" (Section 3) is removed from the groundwater assessment
+        // report, so its fields are not rendered and must not be required for groundwater.
+        if (!isGroundwater) {
+          if (!isNumericText(assessmentReportData.flowRateM3Day)) missing.push("Section 4: Amount of water to be abstracted value (number)");
+          if (!isVolumeRateUnit(assessmentReportData.flowRateM3DayUnit ?? "m3/year")) {
+            missing.push("Section 4: Amount of water to be abstracted unit (m3/day or m3/year)");
+          }
+          if (!isNumericText(assessmentReportData.flowRateLps)) missing.push("Section 4: Flow rate value (number)");
+          if (!isVolumeRateUnit(assessmentReportData.flowRateUnit ?? "m3/day")) {
+            missing.push("Section 4: Flow rate unit (m3/day or m3/year)");
+          }
         }
+        if (!hasText(assessmentReportData.waterBalanceDescription)) missing.push("Section 5: Description of the water balance");
+        if (!isNumericText(assessmentReportData.availableWaterQ)) missing.push("Section 5: Available water (Q) value (number)");
+        if (!isVolumeRateUnit(assessmentReportData.availableWaterQUnit ?? "m3/day")) missing.push("Section 5: Available water (Q) unit (m3/day or m3/year)");
+        if (!isNumericText(assessmentReportData.waterDemandD)) missing.push("Section 5: Water demand (D) value (number)");
+        if (!isVolumeRateUnit(assessmentReportData.waterDemandDUnit ?? "m3/day")) missing.push("Section 5: Water demand (D) unit (m3/day or m3/year)");
+        if (!isNumericText(assessmentReportData.existingDemandED)) missing.push("Section 5: Existing demand (ED) value (number)");
+        if (!isVolumeRateUnit(assessmentReportData.existingDemandEDUnit ?? "m3/day")) missing.push("Section 5: Existing demand (ED) unit (m3/day or m3/year)");
+        if (!isNumericText(assessmentReportData.remainingWater)) missing.push("Section 5: Remaining Water (Q-D-ED) value (number)");
+        if (!isVolumeRateUnit(assessmentReportData.remainingWaterUnit ?? "m3/day")) missing.push("Section 5: Remaining Water (Q-D-ED) unit (m3/day or m3/year)");
+        if (!isNumericText(assessmentReportData.waterStorage)) missing.push("Section 5: Water Storage (m3)");
+        if (!hasText(assessmentReportData.waterUseConflict)) missing.push("Section 5: Water use conflict");
+      } else {
+        if (!hasText(assessmentReportData.surfaceAreaHa)) missing.push("Section 4: Surface area");
+        if (!hasText(assessmentReportData.existingWaterUses)) missing.push("Section 5: Existing water uses");
+        if (!hasText(assessmentReportData.waterUseConflict)) missing.push("Section 5: Water use conflict");
       }
-      if (!hasText(assessmentReportData.waterBalanceDescription)) missing.push("Section 5: Description of the water balance");
-      if (!isNumericText(assessmentReportData.availableWaterQ)) missing.push("Section 5: Available water (Q) value (number)");
-      if (!isVolumeRateUnit(assessmentReportData.availableWaterQUnit ?? "m3/day")) missing.push("Section 5: Available water (Q) unit (m3/day or m3/year)");
-      if (!isNumericText(assessmentReportData.waterDemandD)) missing.push("Section 5: Water demand (D) value (number)");
-      if (!isVolumeRateUnit(assessmentReportData.waterDemandDUnit ?? "m3/day")) missing.push("Section 5: Water demand (D) unit (m3/day or m3/year)");
-      if (!isNumericText(assessmentReportData.existingDemandED)) missing.push("Section 5: Existing demand (ED) value (number)");
-      if (!isVolumeRateUnit(assessmentReportData.existingDemandEDUnit ?? "m3/day")) missing.push("Section 5: Existing demand (ED) unit (m3/day or m3/year)");
-      if (!isNumericText(assessmentReportData.remainingWater)) missing.push("Section 5: Remaining Water (Q-D-ED) value (number)");
-      if (!isVolumeRateUnit(assessmentReportData.remainingWaterUnit ?? "m3/day")) missing.push("Section 5: Remaining Water (Q-D-ED) unit (m3/day or m3/year)");
-      if (!isNumericText(assessmentReportData.waterStorage)) missing.push("Section 5: Water Storage (m3)");
-      if (!hasText(assessmentReportData.waterUseConflict)) missing.push("Section 5: Water use conflict");
-    } else {
-      if (!hasText(assessmentReportData.surfaceAreaHa)) missing.push("Section 4: Surface area");
-      if (!hasText(assessmentReportData.existingWaterUses)) missing.push("Section 5: Existing water uses");
-      if (!hasText(assessmentReportData.waterUseConflict)) missing.push("Section 5: Water use conflict");
-    }
 
-    if (!hasText(assessmentReportData.wastewaterSystemDescription)) {
-      missing.push("Section 6: Wastewater system description");
-    }
-    if (!hasText(assessmentReportData.pollutionDescription)) {
-      missing.push("Section 6: Pollution description");
-    }
+      if (!hasText(assessmentReportData.wastewaterSystemDescription)) {
+        missing.push("Section 6: Wastewater system description");
+      }
+      if (!hasText(assessmentReportData.pollutionDescription)) {
+        missing.push("Section 6: Pollution description");
+      }
     } // end !isBulk: assessment sections 2–5 are hidden for District Water Supply
     if (hasInvalidPhoneCharacters(assessmentReportData.contactTel)) {
       missing.push("Section 1: Contact telephone must not contain letters or other text");
@@ -863,7 +863,7 @@ export default function AssessmentApplicationPage() {
       setActiveTab(defaultTabValue);
     }
   }, [isTransferApp, activeTab, defaultTabValue]);
-  
+
   useEffect(() => {
     const fetchApplicationDetails = async () => {
       try {
@@ -950,7 +950,7 @@ export default function AssessmentApplicationPage() {
             .select('first_name, last_name, role')
             .eq('id', appData.assigned_inspector_id)
             .single();
-            
+
           if (assignedUserData) {
             (appData as any).assigned_to_user = assignedUserData;
             assignedInspectorName = formatFullName(assignedUserData);
@@ -1003,11 +1003,11 @@ export default function AssessmentApplicationPage() {
 
         const defaultInspectorName = currentUserIsAssignedAssessor
           ? currentAssessorName ||
-            (existingAssessment?.inspector_name || "").trim() ||
-            assignedInspectorName
+          (existingAssessment?.inspector_name || "").trim() ||
+          assignedInspectorName
           : (existingAssessment?.inspector_name || "").trim() ||
-            currentAssessorName ||
-            assignedInspectorName;
+          currentAssessorName ||
+          assignedInspectorName;
 
         // When the assessor was reassigned, force-update even if a previous value exists
         if (defaultInspectorName) {
@@ -1046,7 +1046,7 @@ export default function AssessmentApplicationPage() {
               setRegistryPermitAcknowledged(true);
             }
           }
-          
+
           // Restore field report data
           setFieldReportSummary(existingAssessment.field_report_summary || "");
           if (existingAssessment.inspection_date) {
@@ -1059,7 +1059,7 @@ export default function AssessmentApplicationPage() {
               existingAssessment.created_at
             )
           );
-          
+
           // Restore checklist
           setChecklist({
             locationVerified: existingAssessment.location_verified || false,
@@ -1068,7 +1068,7 @@ export default function AssessmentApplicationPage() {
             technicalFeasibilityConfirmed: existingAssessment.technical_feasibility_confirmed || false,
             infrastructureAdequate: existingAssessment.infrastructure_adequate || false
           });
-          
+
           // Restore recommendation
           setRecommendation({
             recommendation: existingAssessment.recommendation as "yes" | "no" | null,
@@ -1080,10 +1080,10 @@ export default function AssessmentApplicationPage() {
             const files = existingAssessment.field_report_files.map((path: string) => {
               const name = path.split('/').pop() || 'File';
               const timestampMatch = name.match(/^(\d+)-/);
-              const uploadedAt = timestampMatch 
-                ? new Date(parseInt(timestampMatch[1])).toISOString() 
+              const uploadedAt = timestampMatch
+                ? new Date(parseInt(timestampMatch[1])).toISOString()
                 : existingAssessment.created_at;
-                
+
               return {
                 id: Math.random().toString(36).substr(2, 9),
                 name: name.replace(/^\d+-/, ''),
@@ -1218,22 +1218,22 @@ export default function AssessmentApplicationPage() {
             }
           }
         }
-        
+
         // Initialize assessor adjustments
         // IMPORTANT: Only use _assessorAdjustments if an assessment actually exists for THIS application.
         // For modification applications, the form_data may carry stale _assessorAdjustments from the
         // previous submission cycle. We must NOT pre-fill recommended values from those stale adjustments.
         const hasAssessmentForThisApp = !!existingAssessment;
         const assessorAdjustments = hasAssessmentForThisApp ? (formData._assessorAdjustments || {}) : {};
-        
+
         // REQUESTED VALUES for assessor comparison (always current submission values)
         let originalRequestedValues = formData._originalRequestedValues || {};
-        
+
         const currentRequestedDuration = formData.permitLengthYears;
         if (typeof currentRequestedDuration === 'number' && currentRequestedDuration >= 1 && currentRequestedDuration <= 15) {
           setRequestedDurationYears(currentRequestedDuration);
         }
-        
+
         const isConcessionApp = determineReportType(
           appData.intended_activities as string[] | null,
           appData.water_purpose || null,
@@ -1304,7 +1304,7 @@ export default function AssessmentApplicationPage() {
           // Recommended pumping rate intentionally NOT pre-seeded from the requested value.
           // The assessor must explicitly enter & save it before approval is allowed.
         }
-        
+
         // Bulk network rows: prefer assessor adjustments, fall back to application's bulk_networks
         if ((appData as any).is_bulk) {
           const adjNetworks = Array.isArray(assessorAdjustments.bulkNetworks) ? assessorAdjustments.bulkNetworks : null;
@@ -1415,8 +1415,11 @@ export default function AssessmentApplicationPage() {
           prefilledReport.surfaceAreaUnit = renewalSurfaceAreaFallback.unit;
         }
         const mergedReport = mergeAssessmentReportData(prefilledReport, savedAssessmentReportData || null);
+        if (!mergedReport.reportDate) {
+          mergedReport.reportDate = existingAssessment?.inspection_date || new Date().toISOString().split('T')[0];
+        }
         setAssessmentReportData(mergedReport);
-        
+
         // Process documents for form
         const documentMap: Record<string, { url: string; name: string }> = {};
         const currentDocuments = (appData as { documents?: unknown }).documents;
@@ -1460,7 +1463,7 @@ export default function AssessmentApplicationPage() {
             }
           }
         }
-        
+
         setInitialFormData(mergeAdditionalDocumentUrls(formData, documentsForAdditionalLinks, getDocumentUrl));
         setInitialDocuments(documentMap);
 
@@ -1474,18 +1477,18 @@ export default function AssessmentApplicationPage() {
             : [],
           checklist: existingAssessment
             ? {
-                locationVerified: !!existingAssessment.location_verified,
-                waterSourceAccessible: !!existingAssessment.water_source_accessible,
-                environmentalImpactAssessed: !!existingAssessment.environmental_impact_assessed,
-                technicalFeasibilityConfirmed: !!existingAssessment.technical_feasibility_confirmed,
-                infrastructureAdequate: !!existingAssessment.infrastructure_adequate,
-              }
+              locationVerified: !!existingAssessment.location_verified,
+              waterSourceAccessible: !!existingAssessment.water_source_accessible,
+              environmentalImpactAssessed: !!existingAssessment.environmental_impact_assessed,
+              technicalFeasibilityConfirmed: !!existingAssessment.technical_feasibility_confirmed,
+              infrastructureAdequate: !!existingAssessment.infrastructure_adequate,
+            }
             : null,
           recommendation: existingAssessment
             ? {
-                recommendation: (existingAssessment.recommendation as any) || null,
-                explanationText: existingAssessment.explanation_text || "",
-              }
+              recommendation: (existingAssessment.recommendation as any) || null,
+              explanationText: existingAssessment.explanation_text || "",
+            }
             : null,
           inspectorName: (existingAssessment?.inspector_name || "").trim(),
           inspectionDate: existingAssessment?.inspection_date || "",
@@ -1498,7 +1501,7 @@ export default function AssessmentApplicationPage() {
         setLoading(false);
       }
     };
-    
+
     if (params.id) {
       fetchApplicationDetails();
     }
@@ -1508,7 +1511,7 @@ export default function AssessmentApplicationPage() {
   useEffect(() => {
     const loadRenewalPermit = async () => {
       if (!application) return;
-      
+
       let parsedNotesForRenewal: any = {};
       try {
         const raw = (application as any).internal_notes;
@@ -1527,10 +1530,10 @@ export default function AssessmentApplicationPage() {
         setRenewalRecommendedVolumeM3(undefined);
         return;
       }
-      
+
       try {
         setLoadingRenewalPermit(true);
-        
+
         let permitQuery = supabase
           .from('permits')
           .select(`
@@ -1645,7 +1648,7 @@ export default function AssessmentApplicationPage() {
         setLoadingRenewalPermit(false);
       }
     };
-    
+
     loadRenewalPermit();
   }, [application]);
 
@@ -2072,7 +2075,7 @@ export default function AssessmentApplicationPage() {
     }
   ) => {
     if (!application) return null;
-    
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
@@ -2085,6 +2088,9 @@ export default function AssessmentApplicationPage() {
       const hasReportData = assessmentReportData && typeof assessmentReportData === 'object' && Object.keys(assessmentReportData).length > 0;
       console.log('📊 Assessment report data has content:', hasReportData);
       const assessmentReportDataForSave = withDefaultVolumeRateUnits(assessmentReportData);
+      if (!assessmentReportDataForSave.reportDate) {
+        assessmentReportDataForSave.reportDate = assessmentSubmittedDate || inspectionDate || new Date().toISOString().split('T')[0];
+      }
 
       const assessmentData = {
         application_id: application.id,
@@ -2149,7 +2155,7 @@ export default function AssessmentApplicationPage() {
       }
 
       if (result.error) throw result.error;
-      
+
       if (result.data) {
         setAssessmentId(result.data.id);
         setAssessmentReportData(assessmentReportDataForSave);
@@ -2391,19 +2397,19 @@ export default function AssessmentApplicationPage() {
       setSubmitLoading(true);
       actionInFlightRef.current = true;
       const previousStatus = application.status;
-      
+
       // 1. Save assessment with forwarded status
       await saveAssessment('forwarded_to_approver');
-      
+
       // 2. Update application status
       const { error: appError } = await supabase
         .from('applications')
-        .update({ 
+        .update({
           status: 'pending_review',
           updated_at: new Date().toISOString()
         })
         .eq('id', application.id);
-        
+
       if (appError) throw appError;
 
       // Create audit log entry
@@ -2432,11 +2438,11 @@ export default function AssessmentApplicationPage() {
           entityId: application.id,
         }),
       }).catch(() => null)
-      
+
       setShowSendToReviewDialog(false);
       // Redirect to assessment dashboard
       router.push('/assessment');
-      
+
     } catch (err) {
       console.error('Error forwarding application:', err);
       const msg =
@@ -2459,7 +2465,7 @@ export default function AssessmentApplicationPage() {
       alert("⚠️ This application has already been confirmed complete and can no longer be returned for revision.");
       return;
     }
-    
+
     try {
       setSubmitLoading(true);
       actionInFlightRef.current = true;
@@ -2469,13 +2475,18 @@ export default function AssessmentApplicationPage() {
       // that unlocks the applicant's edit flow. If it fails, abort before touching
       // the assessment so the two records can never disagree (assessment saying
       // "returned" while the applicant is still locked out of editing).
+      const updatePayload: Record<string, unknown> = {
+        status: 'revision_required',
+        revision_notes: revisionNotes,
+        updated_at: new Date().toISOString(),
+      };
+      if (!application.assigned_assessor_id && currentUserId) {
+        updatePayload.assigned_assessor_id = currentUserId;
+      }
+
       const { data: updatedApp, error: appError } = await supabase
         .from('applications')
-        .update({
-          status: 'revision_required',
-          revision_notes: revisionNotes,
-          updated_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', application.id);
 
       if (appError) throw appError;
@@ -2492,7 +2503,7 @@ export default function AssessmentApplicationPage() {
           credentials: 'include',
           body: JSON.stringify({ applicationId: application.id }),
         }).catch(() => null);
-      } catch {}
+      } catch { }
 
       // 2. Save assessment with revision status. If this fails the applicant can
       // already revise; re-running "Return for revision" will retry this save.
@@ -2514,13 +2525,13 @@ export default function AssessmentApplicationPage() {
       } catch (auditErr) {
         console.warn('⚠️ Failed to create audit log:', auditErr);
       }
-      
+
       setShowRevisionDialog(false);
       setRevisionNotes("");
       alert("Application returned to applicant for revision.");
       // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
       router.refresh();
-      
+
     } catch (err) {
       console.error('Error returning application:', err);
       const msg =
@@ -2560,10 +2571,9 @@ export default function AssessmentApplicationPage() {
       alert(
         payload?.emailSent
           ? "Application terminated: the water use is exempted and no permit is required. The applicant has been notified by email."
-          : `Application terminated: the water use is exempted and no permit is required.\n\n${
-              payload?.warning ||
-              "The confirmation email to the applicant could not be delivered — please follow up with them directly."
-            }`
+          : `Application terminated: the water use is exempted and no permit is required.\n\n${payload?.warning ||
+          "The confirmation email to the applicant could not be delivered — please follow up with them directly."
+          }`
       );
       router.push('/assessment');
     } catch (err) {
@@ -2595,7 +2605,7 @@ export default function AssessmentApplicationPage() {
       terminated: { label: "Terminated (exempted use)", variant: "destructive" },
       closed_incomplete: { label: "Closed due to incompletion", variant: "outline" },
     };
-    
+
     const config = statusConfig[status] || { label: status, variant: "outline" };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
@@ -2633,15 +2643,15 @@ export default function AssessmentApplicationPage() {
       </DashboardLayout>
     );
   }
-  
+
   if (!application) return null;
-  
+
   return (
     <DashboardLayout>
       <div className="flex justify-end p-6">
         <UserProfileButton />
       </div>
-      
+
       <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -2659,7 +2669,7 @@ export default function AssessmentApplicationPage() {
                 className="ml-auto"
               />
             </div>
-      
+
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <h1 className="text-primary text-3xl font-semibold tracking-tight">
@@ -2671,7 +2681,7 @@ export default function AssessmentApplicationPage() {
               <p className="text-muted-foreground">
                 Perform field assessment and verification for water permit application
               </p>
-              
+
               {(application as any)?.assigned_to_user && (
                 <p className="text-sm text-muted-foreground">
                   Assigned to: {(application as any).assigned_to_user.first_name} {(application as any).assigned_to_user.last_name}
@@ -2788,11 +2798,10 @@ export default function AssessmentApplicationPage() {
             className="space-y-6"
           >
             <TabsList
-              className={`grid w-full ${
-                isTransferApp
+              className={`grid w-full ${isTransferApp
                   ? (previewsUnlocked ? "grid-cols-4" : "grid-cols-2")
                   : (previewsUnlocked ? "grid-cols-5" : "grid-cols-3")
-              } h-auto p-1 bg-muted/80`}
+                } h-auto p-1 bg-muted/80`}
             >
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               {!isTransferApp && (
@@ -2911,15 +2920,15 @@ export default function AssessmentApplicationPage() {
                     permit={transferPermit}
                     userData={{
                       email: application.applicant?.email || "",
-                      name: application.applicant?.company_name || 
-                        (application.applicant?.first_name && application.applicant?.last_name ? 
+                      name: application.applicant?.company_name ||
+                        (application.applicant?.first_name && application.applicant?.last_name ?
                           `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
                       phone: application.applicant?.phone || application.applicant?.company_phone || "",
                       address: application.applicant?.company_address || "",
                       account_type: application.applicant?.account_type || 'individual',
                     }}
-                    onSubmit={async () => {}}
-                    onSaveAsDraft={async () => {}}
+                    onSubmit={async () => { }}
+                    onSaveAsDraft={async () => { }}
                     isLoading={false}
                     initialData={transferFormData || undefined}
                     initialDocuments={initialDocuments}
@@ -2942,8 +2951,8 @@ export default function AssessmentApplicationPage() {
                     userData={{
                       email: application.applicant?.email || "",
                       name: application.applicant?.company_name ||
-                            (application.applicant?.first_name && application.applicant?.last_name ?
-                             `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
+                        (application.applicant?.first_name && application.applicant?.last_name ?
+                          `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
                       phone: application.applicant?.phone || "",
                       address: application.applicant?.address || "",
                       idNumber: "",
@@ -2951,8 +2960,8 @@ export default function AssessmentApplicationPage() {
                       id_number: "",
                       company_tin: "",
                     }}
-                    onSubmit={async () => {}} // Dummy handler for read-only form
-                    onSaveAsDraft={async () => {}} // Dummy handler for read-only form
+                    onSubmit={async () => { }} // Dummy handler for read-only form
+                    onSaveAsDraft={async () => { }} // Dummy handler for read-only form
                     isLoading={false}
                     initialData={initialFormData}
                     initialDocuments={initialDocuments}
@@ -2967,7 +2976,7 @@ export default function AssessmentApplicationPage() {
                   />
                 ) : null
               ) : (application as any).is_renewal && renewalPermit ? (
-                <PermitRenewalForm 
+                <PermitRenewalForm
                   permit={renewalPermit}
                   userData={{
                     id: application.applicant?.id,
@@ -2978,8 +2987,8 @@ export default function AssessmentApplicationPage() {
                     company_name: application.applicant?.company_name,
                     account_type: application.applicant?.account_type || 'individual',
                   }}
-                  onSubmit={async () => {}}
-                  onSaveAsDraft={async () => {}}
+                  onSubmit={async () => { }}
+                  onSaveAsDraft={async () => { }}
                   isLoading={false}
                   currentApplication={application}
                   readOnly={true}
@@ -2995,8 +3004,8 @@ export default function AssessmentApplicationPage() {
                   userData={{
                     email: application.applicant?.email || "",
                     name: application.applicant?.company_name ||
-                          (application.applicant?.first_name && application.applicant?.last_name ?
-                           `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
+                      (application.applicant?.first_name && application.applicant?.last_name ?
+                        `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
                     phone: application.applicant?.phone || "",
                     address: application.applicant?.address || "",
                     idNumber: "",
@@ -3004,8 +3013,8 @@ export default function AssessmentApplicationPage() {
                     id_number: "",
                     company_tin: "",
                   }}
-                  onSubmit={async () => {}}
-                  onSaveAsDraft={async () => {}}
+                  onSubmit={async () => { }}
+                  onSaveAsDraft={async () => { }}
                   isLoading={false}
                   initialData={initialFormData}
                   initialDocuments={initialDocuments}
@@ -3017,7 +3026,7 @@ export default function AssessmentApplicationPage() {
                   isBulkApplicant={!!(application as any)?.is_bulk}
                 />
               ) : null}
-              
+
             </TabsContent>
 
             {/* Assessment Report Tab - Hidden for transfer applications */}
@@ -3048,102 +3057,102 @@ export default function AssessmentApplicationPage() {
                     </CardContent>
                   </Card>
                 ) : (
-                (() => {
-                  const rt: ReportType = reportTypeForAssessment;
-                  return (
-                    <FieldReportUpload
-                      applicationId={application.id}
-                      existingFiles={fieldReportFiles}
-                      summary={fieldReportSummary}
-                      inspectorName={inspectorName}
-                      inspectionDate={inspectionDate}
-                      assessmentSubmittedDate={assessmentSubmittedDate}
-                      onFilesChange={setFieldReportFiles}
-                      onSummaryChange={setFieldReportSummary}
-                      onInspectorNameChange={setInspectorName}
-                      onInspectionDateChange={setInspectionDate}
-                      documentsTitle="Supporting Documents"
-                      documentsRequired={false}
-                      documentsDescription="Upload any supporting documents (optional): PDFs, Word docs, and photos"
-                      inspectorNameReadOnly={true}
-                      readOnly={isReadOnly}
-                      hideSummary={true}
-                      showInlineValidation={false}
-                      betweenDetailsAndDocuments={
-                        <div className="space-y-6">
-                          {/* Assessor Recommendations - Requested vs Recommended comparison */}
-                          <AssessorRecommendations
-                            requestedDurationYears={requestedDurationYears}
-                            requestedVolumeM3={requestedVolumeM3}
-                            recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : assessorPermitLength}
-                            recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : assessorRecommendedVolume}
-                            onDurationChange={(application as any).is_renewal ? undefined : savePermitLengthAdjustment}
-                            onVolumeChange={(application as any).is_renewal ? undefined : saveVolumeAdjustment}
-                            readOnly={isReadOnly || (application as any).is_renewal}
-                            durationSaving={permitLengthSaving}
-                            volumeSaving={volumeSaving}
-                            isConcession={rt === "concession"}
-                            isBulk={!!(application as any)?.is_bulk}
-                            isGroundwater={isGroundwater}
-                            requestedPumpingRateM3Day={requestedPumpingRateM3Day}
-                            recommendedPumpingRateM3Day={assessorRecommendedPumpingRateM3Day}
-                            onPumpingRateSave={(application as any).is_renewal ? undefined : savePumpingRateAdjustment}
-                            pumpingRateSaving={pumpingRateSaving}
-                          />
-                          
-                          {/* Assessment Report Form */}
-                          <AssessmentReportForm
-                            reportData={assessmentReportData}
-                            onReportDataChange={setAssessmentReportData}
-                            reportType={rt}
-                            readOnly={isReadOnly}
-                            onSourceCoordinatesSave={(application as any).is_renewal ? undefined : saveSourceCoordinatesAdjustment}
-                            onSourcePolygonSave={(application as any).is_renewal ? undefined : saveSourcePolygonAdjustment}
-                            coordinatesSaving={coordinatesSaving}
-                            inspectionDate={inspectionDate}
-                            assessmentSubmittedDate={assessmentSubmittedDate}
-                            recommendation={recommendation}
-                            onRecommendationChange={setRecommendation}
-                            isBulkApplication={!!(application as any).is_bulk}
-                            bulkNetworks={assessorBulkNetworks}
-                            onBulkNetworksSave={(application as any).is_renewal ? undefined : saveBulkNetworksAdjustment}
-                            bulkNetworksSaving={bulkNetworksSaving}
-                            bulkProvince={initialFormData?.waterSourceProvince ?? ""}
-                            bulkDistrict={initialFormData?.waterSourceDistrict ?? ""}
-                            isGroundwater={isGroundwater}
-                          />
-                        </div>
-                      }
-                      afterDocuments={
-                        isReadOnly ? null : (() => {
-                          return (
-                            <div className="flex flex-col items-end gap-2">
-                              {!canSendForReview && missingFieldReportRequirements.length > 0 && (
-                                <div className="w-full rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                                  <p className="font-medium mb-1">Complete the following before sending for review:</p>
-                                  <ul className="list-disc pl-5 space-y-0.5">
-                                    {missingFieldReportRequirements.map((m) => (
-                                      <li key={m}>{m}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                              <Button
-                                size="lg"
-                                onClick={handleOpenSendToReviewDialog}
-                                disabled={submitLoading || !canSendForReview}
-                                className="gap-2 bg-black hover:bg-gray-800 text-white"
-                              >
-                                {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                                Send for review
-                              </Button>
-                            </div>
-                          );
-                        })()
-                      }
-                    />
-                  );
-                })()
+                  (() => {
+                    const rt: ReportType = reportTypeForAssessment;
+                    return (
+                      <FieldReportUpload
+                        applicationId={application.id}
+                        existingFiles={fieldReportFiles}
+                        summary={fieldReportSummary}
+                        inspectorName={inspectorName}
+                        inspectionDate={inspectionDate}
+                        assessmentSubmittedDate={assessmentSubmittedDate}
+                        onFilesChange={setFieldReportFiles}
+                        onSummaryChange={setFieldReportSummary}
+                        onInspectorNameChange={setInspectorName}
+                        onInspectionDateChange={setInspectionDate}
+                        documentsTitle="Supporting Documents"
+                        documentsRequired={false}
+                        documentsDescription="Upload any supporting documents (optional): PDFs, Word docs, and photos"
+                        inspectorNameReadOnly={true}
+                        readOnly={isReadOnly}
+                        hideSummary={true}
+                        showInlineValidation={false}
+                        betweenDetailsAndDocuments={
+                          <div className="space-y-6">
+                            {/* Assessor Recommendations - Requested vs Recommended comparison */}
+                            <AssessorRecommendations
+                              requestedDurationYears={requestedDurationYears}
+                              requestedVolumeM3={requestedVolumeM3}
+                              recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : assessorPermitLength}
+                              recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : assessorRecommendedVolume}
+                              onDurationChange={(application as any).is_renewal ? undefined : savePermitLengthAdjustment}
+                              onVolumeChange={(application as any).is_renewal ? undefined : saveVolumeAdjustment}
+                              readOnly={isReadOnly || (application as any).is_renewal}
+                              durationSaving={permitLengthSaving}
+                              volumeSaving={volumeSaving}
+                              isConcession={rt === "concession"}
+                              isBulk={!!(application as any)?.is_bulk}
+                              isGroundwater={isGroundwater}
+                              requestedPumpingRateM3Day={requestedPumpingRateM3Day}
+                              recommendedPumpingRateM3Day={assessorRecommendedPumpingRateM3Day}
+                              onPumpingRateSave={(application as any).is_renewal ? undefined : savePumpingRateAdjustment}
+                              pumpingRateSaving={pumpingRateSaving}
+                            />
+
+                            {/* Assessment Report Form */}
+                            <AssessmentReportForm
+                              reportData={assessmentReportData}
+                              onReportDataChange={setAssessmentReportData}
+                              reportType={rt}
+                              readOnly={isReadOnly}
+                              onSourceCoordinatesSave={(application as any).is_renewal ? undefined : saveSourceCoordinatesAdjustment}
+                              onSourcePolygonSave={(application as any).is_renewal ? undefined : saveSourcePolygonAdjustment}
+                              coordinatesSaving={coordinatesSaving}
+                              inspectionDate={inspectionDate}
+                              assessmentSubmittedDate={assessmentSubmittedDate}
+                              recommendation={recommendation}
+                              onRecommendationChange={setRecommendation}
+                              isBulkApplication={!!(application as any).is_bulk}
+                              bulkNetworks={assessorBulkNetworks}
+                              onBulkNetworksSave={(application as any).is_renewal ? undefined : saveBulkNetworksAdjustment}
+                              bulkNetworksSaving={bulkNetworksSaving}
+                              bulkProvince={initialFormData?.waterSourceProvince ?? ""}
+                              bulkDistrict={initialFormData?.waterSourceDistrict ?? ""}
+                              isGroundwater={isGroundwater}
+                            />
+                          </div>
+                        }
+                        afterDocuments={
+                          isReadOnly ? null : (() => {
+                            return (
+                              <div className="flex flex-col items-end gap-2">
+                                {!canSendForReview && missingFieldReportRequirements.length > 0 && (
+                                  <div className="w-full rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                                    <p className="font-medium mb-1">Complete the following before sending for review:</p>
+                                    <ul className="list-disc pl-5 space-y-0.5">
+                                      {missingFieldReportRequirements.map((m) => (
+                                        <li key={m}>{m}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                <Button
+                                  size="lg"
+                                  onClick={handleOpenSendToReviewDialog}
+                                  disabled={submitLoading || !canSendForReview}
+                                  className="gap-2 bg-black hover:bg-gray-800 text-white"
+                                >
+                                  {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                  Send for review
+                                </Button>
+                              </div>
+                            );
+                          })()
+                        }
+                      />
+                    );
+                  })()
                 )}
               </TabsContent>
 
@@ -3300,14 +3309,14 @@ export default function AssessmentApplicationPage() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setShowSendToReviewDialog(false)}
               disabled={submitLoading}
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleForwardToApprover}
               disabled={submitLoading}
               className="bg-black hover:bg-gray-800 text-white gap-2"

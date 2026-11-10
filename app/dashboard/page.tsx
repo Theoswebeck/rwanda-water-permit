@@ -130,13 +130,11 @@ function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationSt
   ) {
     return status;
   }
-  if (
-    status === "returned_to_assessment" ||
-    status === "returned_to_review" ||
-    status === "returned_to_verification"
-  ) {
-    return "revision_required";
-  }
+  // Internal staff return statuses (returned_to_assessment, returned_to_review,
+  // returned_to_verification) are internal handoffs between RWB staff. They are
+  // NOT returned to the applicant and must be surfaced as 'under_review' so
+  // applicants are not misled into expecting an action or edit button.
+  // Only genuine 'revision_required' means action required by applicant.
   return "under_review";
 }
 
@@ -160,13 +158,13 @@ function DashboardContent() {
     setLanguage(getPreferredLanguage());
     return subscribeToLanguageChanges(setLanguage);
   }, []);
-  
+
   // Check for success parameters from URL
   useEffect(() => {
     const success = searchParams.get('success');
     const tab = searchParams.get('tab');
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    
+
     if (success === 'application-created') {
       setSuccessMessage(tx('Application Created Successfully! Your water permit application has been saved as a draft. You can continue editing it or submit it for review.'));
       setShowSuccessAlert(true);
@@ -185,7 +183,7 @@ function DashboardContent() {
       setShowSuccessAlert(true);
       timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);
     }
-    
+
     if (tab === 'applications') {
       setActiveTab('applications');
     } else if (tab === 'permits') {
@@ -198,7 +196,7 @@ function DashboardContent() {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [searchParams, tx]);
-  
+
   // ⚡ PERFORMANCE: Use React Query hooks - automatic caching, no manual refresh needed
   // ⚡ FIX: Only fetch when user.id is defined (prevents hanging when user is deleted)
   const {
@@ -231,7 +229,7 @@ function DashboardContent() {
 
   // ⚡ PERFORMANCE: Use mutation for deleting applications
   const deleteApplicationMutation = useDeleteApplicationMutation();
-  
+
   // Convert React Query errors to strings for display
   const applicationsError = applicationsQueryError?.message || null;
   const permitsError = permitsQueryError?.message || null;
@@ -305,7 +303,7 @@ function DashboardContent() {
   const handleBulkDeleteApplications = useCallback(async (applicationIds: string[]) => {
     try {
       // Delete applications one by one using mutation
-      const deletePromises = applicationIds.map(id => 
+      const deletePromises = applicationIds.map(id =>
         deleteApplicationMutation.mutateAsync(id)
       );
       await Promise.all(deletePromises);
@@ -452,10 +450,10 @@ function DashboardContent() {
             {/* Header */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
               <div>
-                <h1 className="text-primary leading-tight text-2xl sm:text-4xl font-semibold tracking-tight xl:text-5xl xl:tracking-tighter">
+                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">
                   {tx("Water Permit Dashboard")}
                 </h1>
-                <p className="mt-1 text-sm sm:text-base text-muted-foreground">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {tx("Manage your water permit applications and view your permits")}
                 </p>
               </div>
@@ -468,28 +466,28 @@ function DashboardContent() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => router.push("/dashboard/new-application?mode=new")}
                       className="cursor-pointer"
                     >
                       <FilePlus className="mr-2 h-4 w-4" />
                       {tx("New Water Permit")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => router.push("/dashboard/new-application?mode=renewal")}
                       className="cursor-pointer"
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />
                       {tx("Renew Existing Permit")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => router.push("/dashboard/new-application?mode=modification")}
                       className="cursor-pointer"
                     >
                       <FileEdit className="mr-2 h-4 w-4" />
                       {tx("Modify Existing Permit")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => router.push("/dashboard/new-application?mode=transfer")}
                       className="cursor-pointer"
                     >
@@ -555,11 +553,11 @@ function DashboardContent() {
                   <span className="sm:hidden">{tx("Reports")} ({waterUseReports.length})</span>
                 </TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="applications" className="space-y-4">
                 {/* Applications Status Overview */}
-                <ApplicationStatus 
-                  applications={applicantDashboardApplications} 
+                <ApplicationStatus
+                  applications={applicantDashboardApplications}
                   loading={applicationsLoading}
                   activeFilter={activeApplicationStatusPanel}
                   onFilterChange={handleApplicationStatusPanelChange}
@@ -668,7 +666,7 @@ function DashboardContent() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-                
+
                 {/* Applications List */}
                 <div className="grid gap-4">
                   <Card>
@@ -682,8 +680,8 @@ function DashboardContent() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <ApplicationsList 
-                        applications={applicantDashboardApplications} 
+                      <ApplicationsList
+                        applications={applicantDashboardApplications}
                         loading={applicationsLoading}
                         statusFilter={applicationsStatusFilter}
                         onStatusFilterChange={handleApplicationsStatusFilterChange}
@@ -693,7 +691,7 @@ function DashboardContent() {
                   </Card>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="permits" className="space-y-4">
                 {/* Permits Overview */}
                 <motion.div
@@ -703,7 +701,7 @@ function DashboardContent() {
                 >
                   <PermitStatus permits={permits} />
                 </motion.div>
-                
+
                 {/* Permits List */}
                 <div className="grid gap-4">
                   <Card>
@@ -764,7 +762,7 @@ function DashboardContent() {
             </Tabs>
           </motion.div>
         </div>
-        
+
         {/* Terms & Conditions Modal */}
         {/* This modal is now handled by the application detail page */}
 

@@ -57,3 +57,10 @@ next-env.d.ts
 
 # Local dev database + portable PostgreSQL (scripts/dev-db.mjs)
 /.localdb
+
+# Local DB dumps
+database/DB From Production Server/
+
+# UI Template scratch
+/template/
+

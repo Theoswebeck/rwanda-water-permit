@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchInspectionData, capUnitForVarchar20 } from "@/lib/inspection-utils";
@@ -545,23 +546,27 @@ export default function PermitInspectionUnifiedPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Loading inspection…</span>
+      <DashboardLayout>
+        <div className="container mx-auto py-8">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin text-[#0072bc]" />
+            <span>Loading inspection…</span>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto py-8">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      </div>
+      <DashboardLayout>
+        <div className="container mx-auto py-8">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </div>
+      </DashboardLayout>
     );
   }
 
@@ -581,7 +586,8 @@ export default function PermitInspectionUnifiedPage() {
   };
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
+    <DashboardLayout>
+      <div className="container mx-auto py-8 space-y-6">
       <SmartBackButton
         fallbackHref={staffListHref("approver", "inspections")}
         size="sm"
@@ -710,8 +716,9 @@ export default function PermitInspectionUnifiedPage() {
           }
           manualInspection={inspectionData?.source === "manual_unpermitted"}
           setField={(k, v) => setField(k as any, v as any)}
-                />
-              </div>
-    </div>
+        />
+        </div>
+      </div>
+    </DashboardLayout>
   );
 }

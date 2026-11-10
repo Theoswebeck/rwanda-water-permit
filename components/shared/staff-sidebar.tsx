@@ -26,14 +26,12 @@ export function staffNavItems(permittingValue: string): StaffNavItem[] {
     { value: "inspections", label: "Inspections", icon: ClipboardCheck, group: "Workflow" },
     { value: "water-reports", label: "Water Use Reports", icon: Droplets, group: "Workflow" },
     { value: "permit-registry", label: "Permit Registry", icon: BookOpen, group: "Registries" },
-    // UAT: Inspection Registry is prod-only, so it is intentionally left out here.
   ];
 }
 
 /**
- * Staff dashboard shell: a sticky sidebar menu on wide screens (xl+) that collapses
- * to a horizontally scrollable strip below that, so tables keep their full width. The active section's content
- * is rendered as children.
+ * Staff dashboard navigation shell: renders as a clean, full-width horizontal tab strip
+ * so data tables, maps, and workbenches always have 100% full-screen width.
  */
 export function StaffSidebar({
   value,
@@ -41,56 +39,40 @@ export function StaffSidebar({
   items,
   children,
   className,
+  showTopNav = false,
 }: {
   value: string;
   onValueChange: (v: string) => void;
   items: StaffNavItem[];
   children: React.ReactNode;
   className?: string;
+  showTopNav?: boolean;
 }) {
-  const groups: Array<{ label?: string; items: StaffNavItem[] }> = [];
-  for (const item of items) {
-    const last = groups[groups.length - 1];
-    if (last && last.label === item.group) last.items.push(item);
-    else groups.push({ label: item.group, items: [item] });
-  }
-
   return (
     <Tabs
       value={value}
       onValueChange={onValueChange}
-      orientation="vertical"
-      className={cn("flex flex-col gap-6 xl:flex-row xl:items-start", className)}
+      className={cn("flex flex-col gap-6 w-full", className)}
     >
-      <nav aria-label="Dashboard sections" className="xl:sticky xl:top-24 xl:w-56 xl:shrink-0">
-        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl border bg-card p-2 shadow-sm xl:flex-col xl:items-stretch xl:overflow-visible">
-          {groups.map((group, i) => (
-            <div
-              key={group.label ?? i}
-              className={cn("contents xl:flex xl:flex-col xl:gap-0.5", i > 0 && "xl:mt-3")}
-            >
-              {group.label && (
-                <p className="hidden px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground xl:block">
-                  {group.label}
-                </p>
-              )}
-              {group.items.map(({ value: v, label, icon: Icon, badge }) => (
-                <TabsTrigger
-                  key={v}
-                  value={v}
-                  className="h-9 flex-none justify-start gap-2.5 px-3 text-muted-foreground hover:bg-muted hover:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-0"
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="truncate">{label}</span>
-                  {badge != null && <span className="ml-auto pl-2">{badge}</span>}
-                </TabsTrigger>
-              ))}
-            </div>
-          ))}
-        </TabsList>
-      </nav>
+      {showTopNav && (
+        <nav aria-label="Dashboard sections" className="w-full">
+          <TabsList className="h-auto w-full flex flex-wrap items-center justify-start gap-1.5 overflow-x-auto rounded-xl border border-slate-200/80 bg-white p-2 shadow-xs">
+            {items.map(({ value: v, label, icon: Icon, badge }) => (
+              <TabsTrigger
+                key={v}
+                value={v}
+                className="h-10 flex-none inline-flex items-center gap-2 px-3.5 rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 data-[state=active]:bg-[#0072bc] data-[state=active]:text-white data-[state=active]:shadow-xs transition-all cursor-pointer"
+              >
+                <Icon className="h-4 w-4" />
+                <span>{label}</span>
+                {badge != null && <span className="ml-1.5">{badge}</span>}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </nav>
+      )}
 
-      <div className="min-w-0 flex-1 space-y-6">{children}</div>
+      <div className="w-full min-w-0 space-y-6">{children}</div>
     </Tabs>
   );
 }

@@ -30,7 +30,7 @@ function getConnectionString(): string {
   const port = process.env.PGPORT
   const database = process.env.PGDATABASE
   const user = process.env.PGUSER
-  const password = process.env.PGPASSWORD
+  const password = process.env.PGPSSWORD
 
   if (!host || !port || !database || !user || !password) {
     throw new Error(

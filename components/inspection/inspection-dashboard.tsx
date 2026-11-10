@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useTabParam } from "@/hooks/use-tab-param"
 import { TabsContent } from "@/components/ui/tabs"
 import { StaffSidebar } from "@/components/shared/staff-sidebar"
 import { Badge } from "@/components/ui/badge"
@@ -21,7 +22,7 @@ import { supabase } from "@/lib/supabase"
 import { getInspectionStats, getApplicationsForInspection, getCurrentUser } from "@/lib/supabase"
 
 export function InspectionDashboard() {
-  const [activeTab, setActiveTab] = useState("assessments")
+  const [activeTab, setActiveTab] = useTabParam("inspections", ["inspections", "assessments", "applications", "map"])
   const [stats, setStats] = useState({
     pendingAssessmentCount: 0,
     allApplicationsCount: 0

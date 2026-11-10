@@ -33,6 +33,9 @@ import { supabase } from "@/lib/supabase";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
+import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
+import { getResolvedContractTerms } from "@/lib/document-slots";
+import { selectPermitVariant } from "@/lib/permit-variant";
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -334,10 +337,11 @@ export default function ApplicationDetailPage() {
   const profileDependencyKey = `${userProfile?.id ?? ""}|${userProfile?.email ?? ""}|${userProfile?.phone ?? ""}|${userProfile?.company_phone ?? ""}`;
 
   const downloadBlobAsFile = (blob: Blob, filename: string) => {
+    const cleanFilename = filename.replace(/\//g, "-");
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = filename;
+    anchor.download = cleanFilename;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -361,15 +365,36 @@ export default function ApplicationDetailPage() {
     try {
       setIsDownloadingPermit(true);
 
+      const rawPermitNum = issuedPermit?.permitNumber || application.application_number || application.id;
+      const cleanPermitNum = rawPermitNum.replace(/[^a-zA-Z0-9_-]/g, "-");
+
+      // 1. Try downloading pre-generated PDF from storage bucket
       if (issuedPermit?.permitPdfPath) {
-        const blob = await downloadFromDocumentsBucket(issuedPermit.permitPdfPath);
-        if (blob) {
-          downloadBlobAsFile(blob, `permit-${issuedPermit.permitNumber}.pdf`);
-          return;
+        try {
+          const blob = await downloadFromDocumentsBucket(issuedPermit.permitPdfPath);
+          if (blob) {
+            downloadBlobAsFile(blob, `permit-${cleanPermitNum}.pdf`);
+            return;
+          }
+        } catch (bucketErr) {
+          console.warn("⚠️ Could not download permit from bucket, falling back to generator:", bucketErr);
         }
       }
 
+      // 2. Fetch from the official dynamic permit PDF generator API
       if (issuedPermit?.permitNumber) {
+        try {
+          const res = await fetch(`/api/public/permits/pdf/${encodeURIComponent(issuedPermit.permitNumber)}`);
+          if (res.ok) {
+            const blob = await res.blob();
+            downloadBlobAsFile(blob, `permit-${cleanPermitNum}.pdf`);
+            return;
+          }
+        } catch (apiErr) {
+          console.warn("⚠️ Public permit PDF API fetch failed, falling back to window.open:", apiErr);
+        }
+
+        // 3. Fallback: open public permit view page
         window.open(`/permit/view/${encodeURIComponent(issuedPermit.permitNumber)}`, "_blank");
         return;
       }
@@ -389,16 +414,83 @@ export default function ApplicationDetailPage() {
     try {
       setIsDownloadingTerms(true);
 
+      const rawSuffix = issuedPermit?.permitNumber || application.application_number || application.id;
+      const cleanSuffix = rawSuffix.replace(/[^a-zA-Z0-9_-]/g, "-");
+
+      // 1. Try downloading pre-generated PDF from storage bucket
       const termsPdfPath = getAcceptedTermsPdfPath(application);
       if (termsPdfPath) {
-        const blob = await downloadFromDocumentsBucket(termsPdfPath);
-        if (blob) {
-          const suffix = issuedPermit?.permitNumber || application.application_number || application.id;
-          downloadBlobAsFile(blob, `terms-and-conditions-${suffix}.pdf`);
-          return;
+        try {
+          const blob = await downloadFromDocumentsBucket(termsPdfPath);
+          if (blob) {
+            downloadBlobAsFile(blob, `terms-and-conditions-${cleanSuffix}.pdf`);
+            return;
+          }
+        } catch (storageErr) {
+          console.warn("⚠️ Failed to load stored terms PDF, will generate on the fly:", storageErr);
         }
       }
 
+      // 2. Generate Terms & Conditions PDF directly client-side
+      try {
+        const variant = selectPermitVariant(application as any);
+        const resolvedTerms = getResolvedContractTerms({
+          application: application as any,
+          applicationNumber: application.application_number || "",
+          permitNumber: issuedPermit?.permitNumber ?? null,
+          transferPermit,
+          variantOverride: variant,
+        });
+
+        if (resolvedTerms) {
+          const filledSections = resolvedTerms.sections.map((section) => ({
+            title: section.title,
+            paragraphs: section.paragraphs,
+          }));
+
+          const applicantName = (() => {
+            const applicant = application.applicant;
+            if (applicant) {
+              if (applicant.account_type === "individual") {
+                return `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || "N/A";
+              }
+              return applicant.company_name || `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || "N/A";
+            }
+            if (userProfile) {
+              if (userProfile.account_type === "individual") {
+                return `${userProfile.first_name || ""} ${userProfile.last_name || ""}`.trim() || "N/A";
+              }
+              return userProfile.company_name || `${userProfile.first_name || ""} ${userProfile.last_name || ""}`.trim() || "N/A";
+            }
+            return "N/A";
+          })();
+
+          const contractNumber = String(issuedPermit?.permitNumber || "").replace(/^WP-/, "") || "N/A";
+          const postAcceptanceNoticeBody =
+            "You have already acknowledged these terms. You confirm that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.";
+
+          const blob = await generateTermsConditionsPdfBlob({
+            applicationNumber: application.application_number || "N/A",
+            projectTitle: application.project_title || "N/A",
+            applicantName,
+            contractNumber,
+            termsHeading: resolvedTerms.heading,
+            termsSections: filledSections,
+            importantNotice: resolvedTerms.importantNotice
+              ? { ...resolvedTerms.importantNotice, body: postAcceptanceNoticeBody }
+              : null,
+          });
+
+          if (blob) {
+            downloadBlobAsFile(blob, `terms-and-conditions-${cleanSuffix}.pdf`);
+            return;
+          }
+        }
+      } catch (genErr) {
+        console.warn("⚠️ Client-side terms PDF generation failed, falling back to hosted page:", genErr);
+      }
+
+      // 3. Fallback: navigate or open hosted terms page
       if (issuedPermit?.permitNumber) {
         window.open(`/contract/terms/${encodeURIComponent(issuedPermit.permitNumber)}`, "_blank");
         return;

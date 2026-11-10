@@ -426,15 +426,15 @@ function AssessmentDashboardContent() {
             items={staffNavItems("assessment")}
           >
 
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
             <div>
-              <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">
                 {topTab === "assessment" ? "Application Assessment Dashboard"
                   : topTab === "inspections" ? "Inspections"
                   : topTab === "water-reports" ? "Water Use Reports"
                   : "Permit Registry"}
               </h1>
-              <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
+              <p className="text-sm text-muted-foreground mt-1">
                 {topTab === "assessment" ? "Assess and review water permit applications for technical compliance and field verification"
                   : topTab === "inspections" ? "Manage and track field inspections"
                   : topTab === "water-reports" ? "Monitor and review water usage reports"

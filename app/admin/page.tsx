@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatsCard } from "@/components/ui/stats-card";
 import { TabsContent } from "@/components/ui/tabs";
 import { StaffSidebar, type StaffNavItem } from "@/components/shared/staff-sidebar";
 import { UserManagement } from "@/components/admin/user-management";
@@ -17,15 +17,13 @@ import { RoleDelegationManagement } from "@/components/admin/role-delegation-man
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { ProtectedRoute } from "@/components/auth/protected-route";
+import { useTabParam } from "@/hooks/use-tab-param";
 
 import { getAdminDashboardStats } from "@/lib/supabase";
 import {
   Users,
   FileText,
-  TrendingUp,
   AlertTriangle,
-  CheckCircle,
-  Clock,
   Loader2,
   UserCheck,
   KeyRound,
@@ -37,17 +35,32 @@ import {
   BarChart3
 } from "lucide-react";
 
+const ADMIN_VALID_TABS = [
+  "overview",
+  "reports",
+  "logs",
+  "applications",
+  "water-reports",
+  "map",
+  "users",
+  "delegations",
+  "api-access",
+  "content",
+] as const;
+
+type AdminTab = (typeof ADMIN_VALID_TABS)[number];
+
 const ADMIN_NAV: StaffNavItem[] = [
   { value: "overview", label: "Overview", icon: LayoutDashboard, group: "General" },
-  { value: "reports", label: "Reports", icon: BarChart3, group: "General" },
-  { value: "logs", label: "Activity Logs", icon: ScrollText, group: "General" },
-  { value: "applications", label: "Applications", icon: FileText, group: "Operations" },
+  { value: "users", label: "User Management", icon: Users, group: "Access" },
+  { value: "applications", label: "Applications Oversight", icon: FileText, group: "Operations" },
   { value: "water-reports", label: "Water Use Reports", icon: Droplets, group: "Operations" },
   { value: "map", label: "Consolidated Map", icon: Map, group: "Operations" },
-  { value: "users", label: "User Management", icon: Users, group: "Access" },
+  { value: "logs", label: "Activity Logs", icon: ScrollText, group: "General" },
   { value: "delegations", label: "Delegations", icon: UserCheck, group: "Access" },
   { value: "api-access", label: "API Access", icon: KeyRound, group: "Access" },
-  { value: "content", label: "Content", icon: PenSquare, group: "Website" },
+  { value: "content", label: "Website Content", icon: PenSquare, group: "Website" },
+  { value: "reports", label: "Reports", icon: BarChart3, group: "General" },
 ];
 
 interface AdminDashboardStats {
@@ -59,8 +72,8 @@ interface AdminDashboardStats {
   activeInspections: number;
 }
 
-export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState("overview");
+function AdminDashboardContent() {
+  const [activeTab, setActiveTab] = useTabParam<AdminTab>("overview", ADMIN_VALID_TABS);
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +101,7 @@ export default function AdminDashboard() {
         <DashboardLayout wide>
           <div className="mx-auto w-full px-4 py-6">
             <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-8 w-8 animate-spin" />
+              <Loader2 className="h-8 w-8 animate-spin text-[#0072bc]" />
             </div>
           </div>
         </DashboardLayout>
@@ -115,149 +128,156 @@ export default function AdminDashboard() {
   return (
     <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
       <DashboardLayout wide>
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="mx-auto w-full px-4 py-6"
-          >
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="mx-auto w-full px-4 py-6"
+        >
           <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <h3 className="scroll-m-20 text-2xl font-semibold tracking-tight">System Administration</h3>
-              <p className="text-muted-foreground">
-                Manage users, monitor system performance, and oversee all water permit operations
-              </p>
+            {/* Executive Header Banner */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-xs">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+                  System Administration
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                  Manage users, monitor system performance, and oversee all water permit operations
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse" />
+                  Status: System Operational
+                </span>
+              </div>
             </div>
-          </div>
 
-          {/* Quick Stats */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats?.totalUsers || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Registered users
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Applications</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats?.totalApplications || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Total processed
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Reviews</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats?.pendingReviews || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Require attention
-                </p>
-              </CardContent>
-            </Card>
+            {/* Quick Stats Grid */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <StatsCard
+                data={{
+                  title: "Total Users",
+                  value: stats?.totalUsers || 0,
+                  iconName: "Users",
+                  color: "blue",
+                  description: "Registered users",
+                }}
+              />
+              <StatsCard
+                data={{
+                  title: "Applications",
+                  value: stats?.totalApplications || 0,
+                  iconName: "FileText",
+                  color: "green",
+                  description: "Total processed",
+                }}
+              />
+              <StatsCard
+                data={{
+                  title: "Pending Reviews",
+                  value: stats?.pendingReviews || 0,
+                  iconName: "Clock",
+                  color: "amber",
+                  description: "Require attention",
+                }}
+              />
+              <StatsCard
+                data={{
+                  title: "Active Inspections",
+                  value: stats?.activeInspections || 0,
+                  iconName: "CheckCircle",
+                  color: "purple",
+                  description: "In progress",
+                }}
+              />
+              <StatsCard
+                data={{
+                  title: "Pending Assessments",
+                  value: stats?.pendingAssessments || 0,
+                  iconName: "FileSpreadsheet",
+                  color: "indigo",
+                  description: "Awaiting assessment",
+                }}
+              />
+              <StatsCard
+                data={{
+                  title: "Pending Approvals",
+                  value: stats?.pendingApprovals || 0,
+                  iconName: "CheckCircle2",
+                  color: "blue",
+                  description: "Awaiting DG sign-off",
+                }}
+              />
+            </div>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Inspections</CardTitle>
-                <CheckCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats?.activeInspections || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  In progress
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Assessments</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats?.pendingAssessments || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Awaiting assessment
-                </p>
-              </CardContent>
-            </Card>
+            {/* Main Full-Width Horizontal Workbench Sections */}
+            <StaffSidebar
+              value={activeTab}
+              onValueChange={(val) => {
+                if (ADMIN_VALID_TABS.includes(val as AdminTab)) {
+                  setActiveTab(val as AdminTab);
+                }
+              }}
+              items={ADMIN_NAV}
+            >
+              <TabsContent value="overview" className="space-y-4 focus-visible:outline-none">
+                <SystemOverview />
+              </TabsContent>
+              
+              <TabsContent value="users" className="space-y-4 focus-visible:outline-none">
+                <UserManagement />
+              </TabsContent>
+              
+              <TabsContent value="delegations" className="space-y-4 focus-visible:outline-none">
+                <RoleDelegationManagement />
+              </TabsContent>
+              
+              <TabsContent value="applications" className="space-y-4 focus-visible:outline-none">
+                <ApplicationOversight />
+              </TabsContent>
+              
+              <TabsContent value="water-reports" className="space-y-4 focus-visible:outline-none">
+                <WaterUseReportsList roleContext="admin" />
+              </TabsContent>
+              
+              <TabsContent value="map" className="space-y-4 focus-visible:outline-none">
+                <WaterConcessionMap />
+              </TabsContent>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Approvals</CardTitle>
-                <CheckCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats?.pendingApprovals || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Awaiting final approval
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+              <TabsContent value="api-access" className="space-y-4 focus-visible:outline-none">
+                <ApiAccessManagement />
+              </TabsContent>
+              
+              <TabsContent value="content" className="space-y-4 focus-visible:outline-none">
+                <SiteContentManagement />
+              </TabsContent>
 
-          {/* Main Content */}
-          <StaffSidebar value={activeTab} onValueChange={setActiveTab} items={ADMIN_NAV}>
-            <TabsContent value="overview" className="space-y-4">
-              <SystemOverview />
-            </TabsContent>
-            
-            <TabsContent value="users" className="space-y-4">
-              <UserManagement />
-            </TabsContent>
-            
-            <TabsContent value="delegations" className="space-y-4">
-              <RoleDelegationManagement />
-            </TabsContent>
-            
-            <TabsContent value="applications" className="space-y-4">
-              <ApplicationOversight />
-            </TabsContent>
-            
-            <TabsContent value="water-reports" className="space-y-4">
-              <WaterUseReportsList roleContext="admin" />
-            </TabsContent>
-            
-            <TabsContent value="map" className="space-y-4">
-              <WaterConcessionMap />
-            </TabsContent>
-
-            <TabsContent value="api-access" className="space-y-4">
-              <ApiAccessManagement />
-            </TabsContent>
-            
-            <TabsContent value="content" className="space-y-4">
-              <SiteContentManagement />
-            </TabsContent>
-
-            <TabsContent value="logs" className="space-y-4">
-              <ActivityLogs />
-            </TabsContent>
-            
-            <TabsContent value="reports" className="space-y-4">
-              <AdminReports />
-            </TabsContent>
-          </StaffSidebar>
+              <TabsContent value="logs" className="space-y-4 focus-visible:outline-none">
+                <ActivityLogs />
+              </TabsContent>
+              
+              <TabsContent value="reports" className="space-y-4 focus-visible:outline-none">
+                <AdminReports />
+              </TabsContent>
+            </StaffSidebar>
           </div>
         </motion.div>
       </DashboardLayout>
     </ProtectedRoute>
   );
-} 
+}
+
+export default function AdminDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#f3f5fa] flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-[#0072bc]" />
+        </div>
+      }
+    >
+      <AdminDashboardContent />
+    </Suspense>
+  );
+}

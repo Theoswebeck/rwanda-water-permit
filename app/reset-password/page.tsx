@@ -2,11 +2,12 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Loader2, ArrowLeft } from "lucide-react";
 import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
 import { PasswordStrength } from "@/components/auth/password-strength";
@@ -90,7 +91,7 @@ function ResetPasswordContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#4a9fd8] flex items-center justify-center p-4 sm:p-6 font-sans">
       <div className="max-w-md w-full">
         <Card>
           <CardHeader className="text-center">
@@ -177,7 +178,7 @@ function ResetPasswordContent() {
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 flex flex-col items-center gap-2 text-center">
               <Button
                 variant="link"
                 onClick={() => router.push("/login")}
@@ -185,6 +186,13 @@ function ResetPasswordContent() {
               >
                 {tx("Back to Login")}
               </Button>
+              <Link
+                href="/"
+                className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-[#0072bc] font-semibold transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>{tx("Back to Home Portal")}</span>
+              </Link>
             </div>
           </CardContent>
         </Card>

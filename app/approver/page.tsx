@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { motion } from "framer-motion";
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -76,11 +77,13 @@ function ApproverDashboardContent() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-[96rem] px-6 py-8">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin" />
+      <DashboardLayout wide>
+        <div className="mx-auto w-full max-w-[96rem] px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-[#0072bc]" />
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
@@ -88,94 +91,96 @@ function ApproverDashboardContent() {
 
   return (
     <ProtectedRoute allowedRoles={['approver', 'admin']} requireProfile={true}>
-      <div className="mx-auto w-full max-w-[96rem] px-6 py-8 space-y-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-        <StaffSidebar
-          value={topTab}
-          onValueChange={(v) => {
-            if (isTopTab(v)) setTopTab(v);
-          }}
-          items={staffNavItems("approval")}
-        >
+      <DashboardLayout wide>
+        <div className="mx-auto w-full max-w-[96rem] px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <StaffSidebar
+              value={topTab}
+              onValueChange={(v) => {
+                if (isTopTab(v)) setTopTab(v);
+              }}
+              items={staffNavItems("approval")}
+            >
 
-        <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-6">
-          <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
-              {topTab === "approval" ? "Executive Approver Dashboard"
-                : topTab === "inspections" ? "Inspections"
-                : topTab === "water-reports" ? "Water Use Reports"
-                : "Permit Registry"}
-            </h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
-              {topTab === "approval" ? "Strategic oversight and final decision-making for water permit applications"
-                : topTab === "inspections" ? "Manage and track field inspections"
-                : topTab === "water-reports" ? "Monitor and review water usage reports"
-                : "View and manage issued permits"}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/management">
-              <Button variant="outline">Management Dashboard</Button>
-            </Link>
-          </div>
+            <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-6">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">
+                  {topTab === "approval" ? "Executive Approver Dashboard"
+                    : topTab === "inspections" ? "Inspections"
+                    : topTab === "water-reports" ? "Water Use Reports"
+                    : "Permit Registry"}
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {topTab === "approval" ? "Strategic oversight and final decision-making for water permit applications"
+                    : topTab === "inspections" ? "Manage and track field inspections"
+                    : topTab === "water-reports" ? "Monitor and review water usage reports"
+                    : "View and manage issued permits"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link href="/management">
+                  <Button variant="outline">Management Dashboard</Button>
+                </Link>
+              </div>
+            </div>
+
+            {topTab === "approval" ? (
+              <>
+              <StatusFilterChips
+                chips={APPROVER_CHIPS}
+                activeChipId={activeChipId}
+                onChipChange={setActiveChipId}
+                applications={allApplications}
+                className="mb-6"
+              />
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileCheck className="h-5 w-5" />
+                    Approval Management
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Tabs value={activeApprovalTab} onValueChange={setActiveApprovalTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="all_applications">Applications</TabsTrigger>
+                      <TabsTrigger value="map" className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Consolidated Map
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="all_applications" className="space-y-4 mt-4">
+                      <AllApplicationsList
+                        externalStatusFilter={activeStatuses}
+                        title={activeChipLabel}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="map" className="space-y-4 mt-4">
+                      <WaterConcessionMap />
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+              </>
+            ) : topTab === "inspections" ? (
+              <div className="space-y-6">
+                <InspectionsWorkbench roleContext="approver" />
+              </div>
+            ) : topTab === "water-reports" ? (
+              <WaterUseReportsList roleContext="approver" />
+            ) : (
+              <PermitRegistryList />
+            )}
+            </StaffSidebar>
+          </motion.div>
         </div>
-
-        {topTab === "approval" ? (
-          <>
-          <StatusFilterChips
-            chips={APPROVER_CHIPS}
-            activeChipId={activeChipId}
-            onChipChange={setActiveChipId}
-            applications={allApplications}
-            className="mb-6"
-          />
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2">
-                <FileCheck className="h-5 w-5" />
-                Approval Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={activeApprovalTab} onValueChange={setActiveApprovalTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="all_applications">Applications</TabsTrigger>
-                  <TabsTrigger value="map" className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Consolidated Map
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="all_applications" className="space-y-4 mt-4">
-                  <AllApplicationsList
-                    externalStatusFilter={activeStatuses}
-                    title={activeChipLabel}
-                  />
-                </TabsContent>
-
-                <TabsContent value="map" className="space-y-4 mt-4">
-                  <WaterConcessionMap />
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-          </>
-        ) : topTab === "inspections" ? (
-          <div className="space-y-6">
-            <InspectionsWorkbench roleContext="approver" />
-          </div>
-        ) : topTab === "water-reports" ? (
-          <WaterUseReportsList roleContext="approver" />
-        ) : (
-          <PermitRegistryList />
-        )}
-        </StaffSidebar>
-        </motion.div>
-      </div>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }
@@ -184,9 +189,11 @@ export default function ApproverDashboard() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
+        <DashboardLayout wide>
+          <div className="flex items-center justify-center py-24">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          </div>
+        </DashboardLayout>
       }
     >
       <ApproverDashboardContent />

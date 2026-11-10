@@ -679,7 +679,19 @@ export default function EditApplicationPage() {
 
           // Check if application is editable (draft, unpaid pending_payment or revision_required), unless expired (view-only)
           if (!expiration.isExpired && app.status !== 'draft' && app.status !== 'pending_payment' && app.status !== 'revision_required') {
-            setError('Only draft applications and applications returned for revision can be edited');
+            if (
+              app.status === 'returned_to_assessment' ||
+              app.status === 'returned_to_review' ||
+              app.status === 'returned_to_verification' ||
+              app.status === 'under_review' ||
+              app.status === 'pending_assessment' ||
+              app.status === 'pending_review' ||
+              app.status === 'pending_verification'
+            ) {
+              setError('This application is currently being reviewed internally by RWB staff. No action is required from you at this time.');
+            } else {
+              setError('Only draft applications and applications returned for revision can be edited');
+            }
             return;
           }
           
@@ -1163,6 +1175,7 @@ export default function EditApplicationPage() {
               mode={isExpired ? "view" : "edit"}
               readOnly={isExpired}
               currentApplication={application}
+              isModification={Boolean((application as any)?.is_modification)}
               excludeApplicationIds={[(application as any)?.modified_from_application_id].filter(Boolean)}
             />
           )}

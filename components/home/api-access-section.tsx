@@ -2,18 +2,14 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
 import { KeyRound, BookOpen, ShieldCheck, Search, BarChart3 } from "lucide-react";
 
 /**
- * Landing-page band pointing government institutions to the API access
- * program (request form + docs). Mirrors the CTASection visual language:
- * water photography under a dark overlay, secondary accent bar, glow
- * circles, pill buttons, staggered motion.
+ * 100% full-width Landing-page section for Government Institutions API access.
+ * Clean white background with official RWB brand colors focused on the action buttons and badge accents.
  */
 export function ApiAccessSection() {
   const [language, setLanguage] = useState<AppLanguage>("en");
@@ -26,108 +22,104 @@ export function ApiAccessSection() {
   const tx = (value: string) => translateText(value, language);
 
   const capabilities = [
-    { icon: <ShieldCheck className="h-5 w-5" />, label: tx("Real-time permit verification") },
-    { icon: <Search className="h-5 w-5" />, label: tx("Public permit registry search") },
-    { icon: <BarChart3 className="h-5 w-5" />, label: tx("Water use statistics") },
+    { icon: <ShieldCheck className="h-5 w-5 text-[#0072bc]" />, label: tx("Real-time permit verification") },
+    { icon: <Search className="h-5 w-5 text-[#0072bc]" />, label: tx("Public permit registry search") },
+    { icon: <BarChart3 className="h-5 w-5 text-[#0072bc]" />, label: tx("Water use statistics") },
   ];
 
   return (
-    <section className="py-20">
-      <div className="container mx-auto px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="relative mx-auto max-w-5xl overflow-hidden rounded-[2rem] p-8 md:p-12"
-        >
-          {/* Background image */}
-          <div className="absolute inset-0 z-0">
-            <Image
-              src="/assets/serrah-galos-zDFIlyeGeP4-unsplash.jpg"
-              alt="Water surface"
-              fill
-              style={{ objectFit: "cover" }}
-            />
-            <div className="absolute inset-0 z-10 bg-black/60" />
-          </div>
-
-          {/* Decorative elements */}
-          <div className="absolute top-0 left-0 right-0 z-20 h-2 bg-[#47d198]" />
-          <div className="absolute -top-20 -right-20 z-10 h-40 w-40 rounded-full bg-[#47d198]/20 blur-2xl" />
-          <div className="absolute -bottom-20 -left-20 z-10 h-40 w-40 rounded-full bg-[#47d198]/20 blur-2xl" />
-
-          <div className="relative z-20 flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
-            <div className="max-w-2xl">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-medium tracking-wide text-white backdrop-blur-sm"
-              >
-                <KeyRound className="h-3.5 w-3.5" /> {tx("FOR GOVERNMENT INSTITUTIONS")}
-              </motion.div>
-              <motion.h2
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-                className="mt-4 text-3xl font-bold text-white md:text-4xl"
-              >
-                {tx("Water Permit Data API")}
-              </motion.h2>
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-                className="mt-3 text-white/90"
-              >
-                {tx(
-                  "Integrate your systems with the national water permit registry through a secure, scoped API — access is granted per institution for a fixed period after review."
-                )}
-              </motion.p>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: 0.5 }}
-                className="mt-5 flex flex-wrap gap-x-6 gap-y-2"
-              >
-                {capabilities.map((c) => (
-                  <span key={c.label} className="flex items-center gap-2 text-sm font-medium text-white/90">
-                    <span className="text-[#47d198]">{c.icon}</span>
-                    {c.label}
-                  </span>
-                ))}
-              </motion.div>
-            </div>
-
+    <section className="relative overflow-hidden py-20 bg-white text-gray-900 w-full border-t border-gray-100">
+      {/* 100% aligned content container matching other sections */}
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-8">
+        <div className="flex flex-col items-start justify-between gap-10 lg:flex-row lg:items-center">
+          <div className="max-w-2xl">
+            {/* Government Badge */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-              className="flex shrink-0 flex-col gap-3"
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center gap-2 rounded-full bg-blue-50 border border-blue-200/80 px-4 py-1.5 text-xs font-bold tracking-wide text-[#0072bc]"
             >
-              <Link href="/api-access">
-                <Button size="lg" className="h-12 w-full rounded-full bg-white px-8 font-medium text-primary hover:bg-white/90 md:w-auto">
-                  <KeyRound className="mr-2 h-4 w-4" /> {tx("Request API access")}
-                </Button>
-              </Link>
-              <Link href="/api-access/docs">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="h-12 w-full rounded-full border-white/40 bg-transparent px-8 font-medium text-white hover:bg-white/10 hover:text-white md:w-auto"
+              <KeyRound className="h-3.5 w-3.5 text-[#0072bc]" />
+              <span>{tx("FOR GOVERNMENT INSTITUTIONS")}</span>
+            </motion.div>
+
+            {/* Title */}
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="mt-4 text-3xl font-extrabold text-gray-900 sm:text-4xl lg:text-5xl tracking-tight"
+            >
+              {tx("Water Permit Data API")}
+            </motion.h2>
+
+            {/* Description */}
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="mt-4 text-base sm:text-lg text-gray-600 leading-relaxed font-normal"
+            >
+              {tx(
+                "Integrate your systems with the national water permit registry through a secure, scoped API — access is granted per institution for a fixed period after review."
+              )}
+            </motion.p>
+
+            {/* Capability Badges */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="mt-6 flex flex-wrap gap-x-6 gap-y-3"
+            >
+              {capabilities.map((c) => (
+                <span
+                  key={c.label}
+                  className="flex items-center gap-2 text-sm font-semibold text-gray-700 bg-gray-50 px-3.5 py-1.5 rounded-lg border border-gray-200/80"
                 >
-                  <BookOpen className="mr-2 h-4 w-4" /> {tx("API documentation")}
-                </Button>
-              </Link>
+                  {c.icon}
+                  <span>{c.label}</span>
+                </span>
+              ))}
             </motion.div>
           </div>
-        </motion.div>
+
+          {/* Action Buttons with RWB Brand Colors */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="flex w-full shrink-0 flex-col sm:flex-row lg:flex-col gap-4 sm:w-auto"
+          >
+            {/* Primary Action Button (RWB Royal Blue) */}
+            <Link href="/api-access" className="w-full sm:w-auto">
+              <button
+                type="button"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-13 px-8 py-3.5 rounded-xl bg-[#0072bc] hover:bg-[#005a96] text-white font-bold text-sm shadow-md hover:shadow-xl hover:scale-105 transition-all cursor-pointer"
+              >
+                <KeyRound className="h-4 w-4 text-white" />
+                <span>{tx("Request API access")}</span>
+              </button>
+            </Link>
+
+            {/* Secondary Action Button (Outlined RWB Blue) */}
+            <Link href="/api-access/docs" className="w-full sm:w-auto">
+              <button
+                type="button"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-13 px-8 py-3.5 rounded-xl border-2 border-[#0072bc] bg-white text-[#0072bc] hover:bg-blue-50 font-bold text-sm shadow-sm hover:shadow-md transition-all cursor-pointer"
+              >
+                <BookOpen className="h-4 w-4 text-[#0072bc]" />
+                <span>{tx("API documentation")}</span>
+              </button>
+            </Link>
+          </motion.div>
+        </div>
       </div>
     </section>
   );

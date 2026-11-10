@@ -106,11 +106,7 @@ export function ApplicationsList({
       raw === "pending_payment" ||
       raw === "terminated"
     ) return raw;
-    if (
-      raw === "returned_to_assessment" ||
-      raw === "returned_to_review" ||
-      raw === "returned_to_verification"
-    ) return "revision_required";
+    // Internal staff routing statuses are kept as 'under_review' for applicants.
     return "under_review";
   };
 

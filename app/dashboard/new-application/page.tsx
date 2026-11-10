@@ -1711,10 +1711,25 @@ function NewApplicationContent() {
       // Prefer permit details entered by user (manual permits) over permit object
       const pd = formData.permitDetails;
 
+      // If this renewal was returned for revision by an assessor, route it back
+      // directly to that assessor (bypass reviewer/verifier).
+      const wasReturnedByAssessor =
+        currentRenewalApplication?.status === 'revision_required' &&
+        (currentRenewalApplication as any)?.assigned_assessor_id;
+      const submissionStatus = wasReturnedByAssessor ? 'pending_assessment' : 'submitted';
+      if (wasReturnedByAssessor) {
+        console.log('🔄 Renewal resubmission after assessor return — routing back to assessor:', (currentRenewalApplication as any).assigned_assessor_id);
+      }
+
       const corePayload: Record<string, unknown> = {
         applicant_id: userProfile?.id,
-        status: 'submitted',
-        submitted_at: new Date().toISOString(),
+        status: submissionStatus,
+        // Only stamp submitted_at on the first submission. Resubmissions keep the
+        // original stamp (the statutory 6-month expiration anchor) and use
+        // resubmitted_at instead.
+        ...(wasReturnedByAssessor
+          ? { resubmitted_at: new Date().toISOString() }
+          : { submitted_at: new Date().toISOString() }),
         application_type: pickNonTransferAppType(
           (selectedPermitForRenewal?.application as any)?.application_type,
           pd?.intendedActivity ||
@@ -1854,7 +1869,9 @@ function NewApplicationContent() {
 
       const corePayload: Record<string, unknown> = {
         applicant_id: userProfile?.id,
-        status: 'draft',
+        // Preserve revision_required status on draft saves so returned applications
+        // don't get demoted to draft or locked in payment requirements.
+        status: currentRenewalApplication?.status === 'revision_required' ? 'revision_required' : 'draft',
         application_type: pickNonTransferAppType(
           (selectedPermitForRenewal?.application as any)?.application_type,
           pd?.intendedActivity ||
@@ -2031,10 +2048,26 @@ function NewApplicationContent() {
           normalizedPermitNumber: selectedPermitForModification?.permit_number || "",
           lookupStatus: "found" as const,
         };
+
+      // If this modification was returned for revision by an assessor, route it back
+      // directly to that assessor (bypass reviewer/verifier).
+      const wasReturnedByAssessor =
+        currentModificationApplication?.status === 'revision_required' &&
+        (currentModificationApplication as any)?.assigned_assessor_id;
+      const submissionStatus = wasReturnedByAssessor ? 'pending_assessment' : 'submitted';
+      if (wasReturnedByAssessor) {
+        console.log('🔄 Modification resubmission after assessor return — routing back to assessor:', (currentModificationApplication as any).assigned_assessor_id);
+      }
+
       const modificationApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
-        status: 'submitted',
-        submitted_at: new Date().toISOString(),
+        status: submissionStatus,
+        // Only stamp submitted_at on the first submission. Resubmissions keep the
+        // original stamp (the statutory 6-month expiration anchor) and use
+        // resubmitted_at instead.
+        ...(wasReturnedByAssessor
+          ? { resubmitted_at: new Date().toISOString() }
+          : { submitted_at: new Date().toISOString() }),
         application_type: pickNonTransferAppType(
           selectedPermitForModification?.application?.application_type,
           primaryActivity ||
@@ -2188,7 +2221,9 @@ function NewApplicationContent() {
         };
       const modificationApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
-        status: 'draft',
+        // Preserve revision_required status on draft saves so returned applications
+        // don't get demoted to draft.
+        status: currentModificationApplication?.status === 'revision_required' ? 'revision_required' : 'draft',
         application_type: pickNonTransferAppType(
           selectedPermitForModification?.application?.application_type,
           primaryActivity ||

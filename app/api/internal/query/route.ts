@@ -26,6 +26,7 @@ const ALLOWED_TABLES: ReadonlyArray<string> = [
   'users',
   'documents',
   'inspections',
+  'assessments',
   'reviews',
   'permits',
   'workflow_history',
@@ -114,6 +115,7 @@ const JSONB_COLUMNS_BY_TABLE: Record<string, Set<string>> = {
     'inspection_documents',
     'locked_field_overrides',
   ]),
+  assessments: new Set(['gps_data']),
   payment_transactions: new Set(['provider_response']),
   payments: new Set(['gateway_response', 'gateway_metadata']),
   permits: new Set(['conditions']),
@@ -330,12 +332,12 @@ function parseOrExpression(orExpr: string, alias: string, params: unknown[], sta
     const ph = `$${idx++}`
     const opSql =
       op === 'eq' ? '=' :
-      op === 'neq' ? '!=' :
-      op === 'ilike' ? 'ilike' :
-      op === 'gt' ? '>' :
-      op === 'lt' ? '<' :
-      op === 'gte' ? '>=' :
-      op === 'lte' ? '<=' : '='
+        op === 'neq' ? '!=' :
+          op === 'ilike' ? 'ilike' :
+            op === 'gt' ? '>' :
+              op === 'lt' ? '<' :
+                op === 'gte' ? '>=' :
+                  op === 'lte' ? '<=' : '='
     sqlParts.push(`${colExpr} ${opSql} ${ph}`)
   }
   return { sql: sqlParts.length ? `(${sqlParts.join(' or ')})` : '', nextIdx: idx }

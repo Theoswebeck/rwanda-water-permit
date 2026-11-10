@@ -33,43 +33,46 @@ export function StatsPanel() {
     const fetchInspectionStats = async () => {
       try {
         setLoading(true)
-        
-        // Query for total applications
-        const { count: totalCount, error: totalError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-        
-        if (totalError) throw totalError
+        setError(null)
 
-        // Query for applications pending assessment
-        const { count: pendingCount, error: pendingError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending_assessment')
-        
-        if (pendingError) throw pendingError
+        // Query application counts in parallel for optimal performance
+        const [
+          totalRes,
+          pendingRes,
+          underReviewRes,
+          revisionRes
+        ] = await Promise.all([
+          // Query for total applications
+          supabase
+            .from('applications')
+            .select('*', { count: 'exact', head: true }),
+          // Query for applications pending assessment
+          supabase
+            .from('applications')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'pending_assessment'),
+          // Query for applications currently under assessment (under_review)
+          supabase
+            .from('applications')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'under_review'),
+          // Query for applications returned for revision
+          supabase
+            .from('applications')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'revision_required')
+        ])
 
-        // Query for assessments currently in progress
-        const { count: underAssessmentCount, error: underAssessmentError } = await supabase
-          .from('assessments')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'in_progress')
-        
-        if (underAssessmentError) throw underAssessmentError
-
-        // Query for applications returned for revision
-        const { count: revisionCount, error: revisionError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'revision_required')
-        
-        if (revisionError) throw revisionError
+        if (totalRes.error) console.warn('Warning fetching total count:', totalRes.error)
+        if (pendingRes.error) console.warn('Warning fetching pending count:', pendingRes.error)
+        if (underReviewRes.error) console.warn('Warning fetching under review count:', underReviewRes.error)
+        if (revisionRes.error) console.warn('Warning fetching revision count:', revisionRes.error)
 
         const statsData: InspectionStatsData = {
-          totalApplications: totalCount || 0,
-          pendingAssessment: pendingCount || 0,
-          underAssessment: underAssessmentCount || 0,
-          returnedForRevision: revisionCount || 0
+          totalApplications: totalRes.count || 0,
+          pendingAssessment: pendingRes.count || 0,
+          underAssessment: underReviewRes.count || 0,
+          returnedForRevision: revisionRes.count || 0
         }
 
         setStats(statsData)

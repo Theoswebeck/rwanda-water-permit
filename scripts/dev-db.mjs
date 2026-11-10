@@ -114,7 +114,13 @@ async function ensureWindowsPostgres() {
 
 async function pgBin() {
   if (process.env.PG_BIN) return process.env.PG_BIN
-  if (IS_WIN) return ensureWindowsPostgres()
+  if (IS_WIN) {
+    for (const v of ['18', '17', '16', '15', '14']) {
+      const p = `C:\\Program Files\\PostgreSQL\\${v}\\bin`
+      if (existsSync(join(p, 'psql.exe'))) return p
+    }
+    return ensureWindowsPostgres()
+  }
   const mac = '/Applications/Postgres.app/Contents/Versions/14/bin'
   if (existsSync(join(mac, 'pg_ctl'))) return mac
   fail('PostgreSQL 14 not found. macOS: install Postgres.app. Linux: set PG_BIN to a PostgreSQL 14 bin folder (with PostGIS).')
