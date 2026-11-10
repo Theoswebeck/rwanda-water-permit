@@ -126,7 +126,9 @@ export default function RegisterPage() {
         userId: result.userId
       });
 
-      setStep(smsSkipped ? "email" : "phone");
+      // Always go directly to email verification — phone OTP is skipped intentionally
+      // (Pindo SMS sender name "RWB" pending approval; email is the primary verification channel)
+      setStep("email");
 
     } catch (err) {
       console.error("Registration error:", err);
@@ -224,7 +226,7 @@ export default function RegisterPage() {
           <EmailVerificationStep
             email={userData.email}
             isLoading={isLoading}
-            onBack={() => setStep("phone")}
+            onBack={() => setStep("signup")}
             onContinue={() => {
               setError("");
               router.push("/dashboard");
