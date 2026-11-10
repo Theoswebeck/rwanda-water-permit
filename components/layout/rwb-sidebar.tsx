@@ -109,7 +109,7 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
           iconClass: "fa fa-globe",
           subItems: [
             { title: "Applicant Portal", href: "/dashboard", iconClass: "fa fa-home" },
-            { title: "Submit New Permit", href: "/apply", iconClass: "fa fa-plus-circle" },
+            { title: "New Application", href: "/new-application?mode=new", iconClass: "fa fa-plus-circle" },
             { title: "Public Water Dashboard", href: "/water-use-dashboard", iconClass: "fa fa-chart-line" },
           ],
         },
@@ -126,13 +126,6 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
             { title: "Inspections", href: "/approver?tab=inspections", iconClass: "fa fa-clipboard-check" },
             { title: "Water Use Reports", href: "/approver?tab=water-reports", iconClass: "fa fa-tint" },
             { title: "Permit Registry", href: "/approver?tab=permit-registry", iconClass: "fa fa-book" },
-          ],
-        },
-        {
-          title: "Public Portals",
-          iconClass: "fa fa-globe",
-          subItems: [
-            { title: "Public Water Dashboard", href: "/water-use-dashboard", iconClass: "fa fa-chart-line" },
             { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt" },
           ],
         },
@@ -149,13 +142,6 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
             { title: "Technical Assessment", href: "/inspection?tab=assessments", iconClass: "fa fa-tasks" },
             { title: "All Applications", href: "/inspection?tab=applications", iconClass: "fa fa-files-o" },
             { title: "Consolidated Map", href: "/inspection?tab=map", iconClass: "fa fa-map-marker" },
-          ],
-        },
-        {
-          title: "Public Portals",
-          iconClass: "fa fa-globe",
-          subItems: [
-            { title: "Public Water Dashboard", href: "/water-use-dashboard", iconClass: "fa fa-chart-line" },
             { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt" },
           ],
         },
@@ -172,13 +158,6 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
             { title: "Inspections", href: "/review?tab=inspections", iconClass: "fa fa-clipboard-check" },
             { title: "Water Use Reports", href: "/review?tab=water-reports", iconClass: "fa fa-tint" },
             { title: "Permit Registry", href: "/review?tab=permit-registry", iconClass: "fa fa-book" },
-          ],
-        },
-        {
-          title: "Public Portals",
-          iconClass: "fa fa-globe",
-          subItems: [
-            { title: "Public Water Dashboard", href: "/water-use-dashboard", iconClass: "fa fa-chart-line" },
             { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt" },
           ],
         },
@@ -195,13 +174,6 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
             { title: "Inspections", href: "/assessment?tab=inspections", iconClass: "fa fa-clipboard-check" },
             { title: "Water Use Reports", href: "/assessment?tab=water-reports", iconClass: "fa fa-tint" },
             { title: "Permit Registry", href: "/assessment?tab=permit-registry", iconClass: "fa fa-book" },
-          ],
-        },
-        {
-          title: "Public Portals",
-          iconClass: "fa fa-globe",
-          subItems: [
-            { title: "Public Water Dashboard", href: "/water-use-dashboard", iconClass: "fa fa-chart-line" },
             { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt" },
           ],
         },
@@ -218,13 +190,6 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
             { title: "Inspections", href: "/verification?tab=inspections", iconClass: "fa fa-clipboard-check" },
             { title: "Water Use Reports", href: "/verification?tab=water-reports", iconClass: "fa fa-tint" },
             { title: "Permit Registry", href: "/verification?tab=permit-registry", iconClass: "fa fa-book" },
-          ],
-        },
-        {
-          title: "Public Portals",
-          iconClass: "fa fa-globe",
-          subItems: [
-            { title: "Public Water Dashboard", href: "/water-use-dashboard", iconClass: "fa fa-chart-line" },
             { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt" },
           ],
         },
@@ -238,16 +203,9 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
         iconClass: "fa fa-home",
         subItems: [
           { title: "My Applications", href: "/dashboard", iconClass: "fa fa-list-alt" },
-          { title: "Apply for New Permit", href: "/apply", iconClass: "fa fa-plus-circle" },
+          { title: "New Application", href: "/new-application?mode=new", iconClass: "fa fa-plus-circle" },
           { title: "Issued Permits", href: "/dashboard?tab=permits", iconClass: "fa fa-certificate" },
           { title: "Water Use Reports", href: "/dashboard?tab=reports", iconClass: "fa fa-tint" },
-        ],
-      },
-      {
-        title: "Public Portals",
-        iconClass: "fa fa-globe",
-        subItems: [
-          { title: "Public Water Dashboard", href: "/water-use-dashboard", iconClass: "fa fa-chart-line" },
         ],
       },
     ];

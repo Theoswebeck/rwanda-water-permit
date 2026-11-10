@@ -24,6 +24,7 @@ const PROTECTED_ROUTES = [
   '/technical-assessment',
   '/management',
   '/apply',
+  '/new-application',
 ]
 
 const AUTH_PAGES = ['/login', '/register']
@@ -107,7 +108,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
   reviewer: ['/review', '/dashboard/profile', '/dashboard/settings', '/management'],
   assessor: ['/assessment', '/technical-assessment', '/inspection', '/dashboard/profile', '/dashboard/settings', '/management'],
   verifier: ['/verification', '/verifier', '/dashboard/profile', '/dashboard/settings', '/management'],
-  applicant: ['/dashboard', '/apply'],
+  applicant: ['/dashboard', '/apply', '/new-application'],
 }
 
 const ROLE_DASHBOARDS: Record<string, string> = {
@@ -204,6 +205,25 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/api/')) {
     const blocked = await guardApiRequest(request, pathname)
     return blocked ?? NextResponse.next()
+  }
+
+  // Canonicalize /new-application to /dashboard/new-application
+  if (pathname === '/new-application' || pathname === '/new-application/') {
+    const url = new URL('/dashboard/new-application', request.url)
+    url.search = request.nextUrl.search || '?mode=new'
+    return NextResponse.redirect(url)
+  }
+
+  // Authenticated users visiting /apply are redirected directly to new application form
+  if (pathname === '/apply' || pathname === '/apply/') {
+    const token = request.cookies.get(getAuthCookieName())?.value
+    if (token) {
+      const claims = await verifySessionToken(token)
+      if (claims && claims.status !== 'suspended' && claims.status !== 'inactive') {
+        const url = new URL('/dashboard/new-application?mode=new', request.url)
+        return NextResponse.redirect(url)
+      }
+    }
   }
 
   const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))

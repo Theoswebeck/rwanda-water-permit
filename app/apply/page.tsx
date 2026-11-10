@@ -40,12 +40,12 @@ export default function ApplyPage() {
     return v;
   };
 
-  // Redirect authenticated applicants to dashboard, but avoid redirecting mid-signup flow.
+  // Redirect authenticated users directly to new-application form, but avoid redirecting mid-signup flow.
   useEffect(() => {
     if (loading) return;
     if (step !== "signup") return;
-    if (isAuthenticated && isApplicant) router.push("/dashboard");
-  }, [loading, isAuthenticated, isApplicant, step, router]);
+    if (isAuthenticated) router.push("/dashboard/new-application?mode=new");
+  }, [loading, isAuthenticated, step, router]);
 
   // Show loading or redirect early to prevent flash
   if (loading) {
@@ -58,14 +58,14 @@ export default function ApplyPage() {
     );
   }
 
-  // If authenticated applicant, show loading while redirecting
-  if (isAuthenticated && isApplicant) {
+  // If authenticated, show loading while redirecting
+  if (isAuthenticated) {
     return (
       <AuthLayout>
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Redirecting to dashboard...</p>
+            <p className="text-muted-foreground">Redirecting to application form...</p>
           </div>
         </div>
       </AuthLayout>

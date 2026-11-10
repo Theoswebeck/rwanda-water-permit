@@ -2381,7 +2381,7 @@ function NewApplicationContent() {
   
   if (loadingDraft && !initialFormData) {
     return (
-      <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+      <ProtectedRoute allowedRoles={['applicant', 'admin']} requireProfile={true}>
         <DashboardLayout>
           <div className="container mx-auto px-4 py-6">
             {/* ⚡ PERFORMANCE: Optimized loading skeleton */}
@@ -2407,7 +2407,7 @@ function NewApplicationContent() {
 
   if (submitSuccess) {
     return (
-      <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+      <ProtectedRoute allowedRoles={['applicant', 'admin']} requireProfile={true}>
         <DashboardLayout>
           <div className="container mx-auto px-4 py-6">
             <motion.div
@@ -2744,7 +2744,7 @@ function NewApplicationContent() {
   };
 
   return (
-    <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+    <ProtectedRoute allowedRoles={['applicant', 'admin']} requireProfile={true}>
       <DashboardLayout>
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center mb-6">
@@ -2788,7 +2788,7 @@ function NewApplicationContent() {
 // Loading fallback for Suspense
 function NewApplicationLoading() {
   return (
-    <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+    <ProtectedRoute allowedRoles={['applicant', 'admin']} requireProfile={true}>
       <DashboardLayout>
         <div className="container mx-auto px-4 py-6">
           <div className="space-y-6">
