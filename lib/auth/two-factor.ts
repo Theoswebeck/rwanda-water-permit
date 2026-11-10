@@ -29,10 +29,12 @@ function staffEmailDomains(): string[] {
 /** An RWB mailbox — the account belongs to the institution. */
 export function isRwbStaffEmail(email: string | null | undefined): boolean {
   const normalized = String(email ?? '').trim().toLowerCase()
+  const domains = staffEmailDomains()
+  if (domains.includes('*') || domains.includes('all')) return true
   const at = normalized.lastIndexOf('@')
   if (at < 0) return false
   const domain = normalized.slice(at + 1)
-  return staffEmailDomains().some((d) => domain === d || domain.endsWith(`.${d}`))
+  return domains.some((d) => domain === d || domain.endsWith(`.${d}`))
 }
 
 /**
