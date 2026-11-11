@@ -20,6 +20,7 @@ interface MenuItem {
   href?: string;
   iconClass: string;
   badge?: string;
+  sectionLabel?: string; // renders a non-clickable section header above this item
   subItems?: { title: string; href: string; iconClass?: string }[];
 }
 
@@ -120,86 +121,56 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
 
     if (role === "approver") {
       return [
-        {
-          title: "Approver Control Center",
-          iconClass: "fa fa-check-double",
-          subItems: [
-            { title: "Permitting", href: "/approver?tab=approval", iconClass: "fa fa-file-text" },
-            { title: "Inspections", href: "/approver?tab=inspections", iconClass: "fa fa-clipboard-check" },
-            { title: "Water Use Reports", href: "/approver?tab=water-reports", iconClass: "fa fa-tint" },
-            { title: "Permit Registry", href: "/approver?tab=permit-registry", iconClass: "fa fa-book" },
-            { title: "Inspection Registry", href: "/approver?tab=inspection-registry", iconClass: "fa fa-list-alt" },
-            { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt" },
-          ],
-        },
+        { title: "Permitting", href: "/approver?tab=approval", iconClass: "fa fa-file-text", sectionLabel: "WORKFLOW" },
+        { title: "Inspections", href: "/approver?tab=inspections", iconClass: "fa fa-clipboard-check" },
+        { title: "Water Use Reports", href: "/approver?tab=water-reports", iconClass: "fa fa-tint" },
+        { title: "Permit Registry", href: "/approver?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
+        { title: "Inspection Registry", href: "/approver?tab=inspection-registry", iconClass: "fa fa-list-alt" },
+        { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt", sectionLabel: "OTHER TOOLS" },
       ];
     }
 
     if (role === "inspector") {
       return [
-        {
-          title: "Inspection Control Center",
-          iconClass: "fa fa-clipboard-check",
-          subItems: [
-            { title: "Field Inspections", href: "/inspection?tab=inspections", iconClass: "fa fa-clipboard-check" },
-            { title: "Technical Assessment", href: "/inspection?tab=assessments", iconClass: "fa fa-tasks" },
-            { title: "All Applications", href: "/inspection?tab=applications", iconClass: "fa fa-files-o" },
-            { title: "Consolidated Map", href: "/inspection?tab=map", iconClass: "fa fa-map-marker" },
-            { title: "Inspection Registry", href: "/inspection?tab=inspection-registry", iconClass: "fa fa-list-alt" },
-            { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt" },
-          ],
-        },
+        { title: "Field Inspections", href: "/inspection?tab=inspections", iconClass: "fa fa-clipboard-check", sectionLabel: "WORKFLOW" },
+        { title: "Technical Assessment", href: "/inspection?tab=assessments", iconClass: "fa fa-tasks" },
+        { title: "All Applications", href: "/inspection?tab=applications", iconClass: "fa fa-files-o" },
+        { title: "Consolidated Map", href: "/inspection?tab=map", iconClass: "fa fa-map-marker" },
+        { title: "Inspection Registry", href: "/inspection?tab=inspection-registry", iconClass: "fa fa-list-alt", sectionLabel: "REGISTRIES" },
+        { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt", sectionLabel: "OTHER TOOLS" },
       ];
     }
 
     if (role === "reviewer") {
       return [
-        {
-          title: "Reviewer Control Center",
-          iconClass: "fa fa-search",
-          subItems: [
-            { title: "Permitting", href: "/review?tab=review", iconClass: "fa fa-file-text" },
-            { title: "Inspections", href: "/review?tab=inspections", iconClass: "fa fa-clipboard-check" },
-            { title: "Water Use Reports", href: "/review?tab=water-reports", iconClass: "fa fa-tint" },
-            { title: "Permit Registry", href: "/review?tab=permit-registry", iconClass: "fa fa-book" },
-            { title: "Inspection Registry", href: "/review?tab=inspection-registry", iconClass: "fa fa-list-alt" },
-            { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt" },
-          ],
-        },
+        { title: "Permitting", href: "/review?tab=review", iconClass: "fa fa-file-text", sectionLabel: "WORKFLOW" },
+        { title: "Inspections", href: "/review?tab=inspections", iconClass: "fa fa-clipboard-check" },
+        { title: "Water Use Reports", href: "/review?tab=water-reports", iconClass: "fa fa-tint" },
+        { title: "Permit Registry", href: "/review?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
+        { title: "Inspection Registry", href: "/review?tab=inspection-registry", iconClass: "fa fa-list-alt" },
+        { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt", sectionLabel: "OTHER TOOLS" },
       ];
     }
 
     if (role === "assessor") {
       return [
-        {
-          title: "Assessor Control Center",
-          iconClass: "fa fa-drafting-compass",
-          subItems: [
-            { title: "Permitting", href: "/assessment?tab=assessment", iconClass: "fa fa-file-text" },
-            { title: "Inspections", href: "/assessment?tab=inspections", iconClass: "fa fa-clipboard-check" },
-            { title: "Water Use Reports", href: "/assessment?tab=water-reports", iconClass: "fa fa-tint" },
-            { title: "Permit Registry", href: "/assessment?tab=permit-registry", iconClass: "fa fa-book" },
-            { title: "Inspection Registry", href: "/assessment?tab=inspection-registry", iconClass: "fa fa-list-alt" },
-            { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt" },
-          ],
-        },
+        { title: "Permitting", href: "/assessment?tab=assessment", iconClass: "fa fa-file-text", sectionLabel: "WORKFLOW" },
+        { title: "Inspections", href: "/assessment?tab=inspections", iconClass: "fa fa-clipboard-check" },
+        { title: "Water Use Reports", href: "/assessment?tab=water-reports", iconClass: "fa fa-tint" },
+        { title: "Permit Registry", href: "/assessment?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
+        { title: "Inspection Registry", href: "/assessment?tab=inspection-registry", iconClass: "fa fa-list-alt" },
+        { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt", sectionLabel: "OTHER TOOLS" },
       ];
     }
 
     if (role === "verifier") {
       return [
-        {
-          title: "Verification Control Center",
-          iconClass: "fa fa-user-check",
-          subItems: [
-            { title: "Permitting", href: "/verification?tab=verification", iconClass: "fa fa-file-text" },
-            { title: "Inspections", href: "/verification?tab=inspections", iconClass: "fa fa-clipboard-check" },
-            { title: "Water Use Reports", href: "/verification?tab=water-reports", iconClass: "fa fa-tint" },
-            { title: "Permit Registry", href: "/verification?tab=permit-registry", iconClass: "fa fa-book" },
-            { title: "Inspection Registry", href: "/verification?tab=inspection-registry", iconClass: "fa fa-list-alt" },
-            { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt" },
-          ],
-        },
+        { title: "Permitting", href: "/verification?tab=verification", iconClass: "fa fa-file-text", sectionLabel: "WORKFLOW" },
+        { title: "Inspections", href: "/verification?tab=inspections", iconClass: "fa fa-clipboard-check" },
+        { title: "Water Use Reports", href: "/verification?tab=water-reports", iconClass: "fa fa-tint" },
+        { title: "Permit Registry", href: "/verification?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
+        { title: "Inspection Registry", href: "/verification?tab=inspection-registry", iconClass: "fa fa-list-alt" },
+        { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt", sectionLabel: "OTHER TOOLS" },
       ];
     }
 
@@ -366,6 +337,12 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
 
               return (
                 <li key={`${item.title}-${idx}`}>
+                  {/* Section label header (e.g. WORKFLOW, REGISTRIES) */}
+                  {item.sectionLabel && !isDesktopMini && (
+                    <p className="px-3.5 pt-4 pb-1 text-[10px] font-bold tracking-widest text-slate-400 uppercase select-none">
+                      {item.sectionLabel}
+                    </p>
+                  )}
                   <Link
                     href={item.href || "#"}
                     title={isDesktopMini ? item.title : undefined}
@@ -376,10 +353,10 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
                       "flex items-center transition-colors",
                       isDesktopMini
                         ? "px-3.5 py-2.5 text-sm lg:h-[48px] lg:px-0 lg:justify-center hover:bg-[#f3f5fa] rounded-sm"
-                        : "gap-3 px-3.5 py-2.5 text-sm font-semibold text-[#212b36] hover:bg-slate-100/80 rounded-sm",
+                        : "gap-3 px-3.5 py-2 text-sm text-[#212b36] hover:bg-slate-100/80 rounded-sm",
                       isActive &&
                         (!isDesktopMini
-                          ? "text-[#0072bc] bg-blue-50/60"
+                          ? "text-[#0072bc] bg-blue-50/60 font-semibold"
                           : "bg-blue-50/70 text-[#0072bc]")
                     )}
                   >
@@ -395,8 +372,9 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
                     />
                     <span
                       className={cn(
-                        "truncate text-sm font-semibold text-[#212b36]",
-                        isDesktopMini ? "block lg:hidden" : "block"
+                        "truncate text-sm text-[#212b36]",
+                        isDesktopMini ? "block lg:hidden" : "block",
+                        isActive && "font-semibold text-[#0072bc]"
                       )}
                     >
                       {item.title}
