@@ -13,8 +13,6 @@ export const RwbFooter: React.FC = () => {
       </p>
       <div className="hidden sm:flex items-center gap-4 text-[11px] text-white/90">
         <span>{rwbConfig.institution.country}</span>
-        <span>&bull;</span>
-        <span>{rwbConfig.institution.ministry}</span>
       </div>
     </footer>
   );
