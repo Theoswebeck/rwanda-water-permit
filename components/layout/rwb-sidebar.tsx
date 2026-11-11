@@ -78,44 +78,29 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
   const getMenuItems = (): MenuItem[] => {
     if (role === "admin") {
       return [
-        {
-          title: "Admin Control Center",
-          iconClass: "fa fa-cogs",
-          subItems: [
-            { title: "System Overview", href: "/admin?tab=overview", iconClass: "fa fa-dashboard" },
-            { title: "User Management", href: "/admin?tab=users", iconClass: "fa fa-users" },
-            { title: "Applications Oversight", href: "/admin?tab=applications", iconClass: "fa fa-file-text" },
-            { title: "Water Use Reports", href: "/admin?tab=water-reports", iconClass: "fa fa-tint" },
-            { title: "Consolidated Map", href: "/admin?tab=map", iconClass: "fa fa-map" },
-            { title: "Activity Logs", href: "/admin?tab=logs", iconClass: "fa fa-history" },
-            { title: "Role Delegations", href: "/admin?tab=delegations", iconClass: "fa fa-user-shield" },
-            { title: "API Key Access", href: "/admin?tab=api-access", iconClass: "fa fa-key" },
-            { title: "Website Content", href: "/admin?tab=content", iconClass: "fa fa-edit" },
-            { title: "Institutional Reports", href: "/admin?tab=reports", iconClass: "fa fa-chart-bar" },
-            { title: "Permit Registry", href: "/approver?tab=permit-registry", iconClass: "fa fa-book" },
-            { title: "Inspection Registry", href: "/approver?tab=inspection-registry", iconClass: "fa fa-list-alt" },
-          ],
-        },
-        {
-          title: "Staff Workbenches",
-          iconClass: "fa fa-briefcase",
-          subItems: [
-            { title: "Approver Workbench", href: "/approver", iconClass: "fa fa-check-double" },
-            { title: "Field Inspections", href: "/inspection", iconClass: "fa fa-clipboard-check" },
-            { title: "Legal Review", href: "/review", iconClass: "fa fa-search" },
-            { title: "Technical Assessment", href: "/assessment", iconClass: "fa fa-drafting-compass" },
-            { title: "Verification Queue", href: "/verification", iconClass: "fa fa-user-check" },
-          ],
-        },
-        {
-          title: "Public Portals",
-          iconClass: "fa fa-globe",
-          subItems: [
-            { title: "Applicant Portal", href: "/dashboard", iconClass: "fa fa-home" },
-            { title: "New Application", href: "/new-application?mode=new", iconClass: "fa fa-plus-circle" },
-            { title: "Public Water Dashboard", href: "/water-use-dashboard", iconClass: "fa fa-chart-line" },
-          ],
-        },
+        { title: "System Overview", href: "/admin?tab=overview", iconClass: "fa fa-dashboard", sectionLabel: "ADMIN CONTROL CENTER" },
+        { title: "User Management", href: "/admin?tab=users", iconClass: "fa fa-users" },
+        { title: "Applications Oversight", href: "/admin?tab=applications", iconClass: "fa fa-file-text" },
+        { title: "Water Use Reports", href: "/admin?tab=water-reports", iconClass: "fa fa-tint" },
+        { title: "Consolidated Map", href: "/admin?tab=map", iconClass: "fa fa-map" },
+        { title: "Activity Logs", href: "/admin?tab=logs", iconClass: "fa fa-history" },
+        { title: "Role Delegations", href: "/admin?tab=delegations", iconClass: "fa fa-user-shield" },
+        { title: "API Key Access", href: "/admin?tab=api-access", iconClass: "fa fa-key" },
+        { title: "Website Content", href: "/admin?tab=content", iconClass: "fa fa-edit" },
+        { title: "Institutional Reports", href: "/admin?tab=reports", iconClass: "fa fa-chart-bar" },
+
+        { title: "Permit Registry", href: "/approver?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
+        { title: "Inspection Registry", href: "/approver?tab=inspection-registry", iconClass: "fa fa-list-alt" },
+
+        { title: "Approver Workbench", href: "/approver", iconClass: "fa fa-check-double", sectionLabel: "STAFF WORKBENCHES" },
+        { title: "Field Inspections", href: "/inspection", iconClass: "fa fa-clipboard-check" },
+        { title: "Legal Review", href: "/review", iconClass: "fa fa-search" },
+        { title: "Technical Assessment", href: "/assessment", iconClass: "fa fa-drafting-compass" },
+        { title: "Verification Queue", href: "/verification", iconClass: "fa fa-user-check" },
+
+        { title: "Applicant Portal", href: "/dashboard", iconClass: "fa fa-home", sectionLabel: "PUBLIC PORTALS" },
+        { title: "New Application", href: "/new-application?mode=new", iconClass: "fa fa-plus-circle" },
+        { title: "Public Water Dashboard", href: "/water-use-dashboard", iconClass: "fa fa-chart-line" },
       ];
     }
 
@@ -225,9 +210,18 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
 
               const checkUrlActive = (href?: string) => {
                 if (!href) return false;
-                if (href.includes("?tab=")) {
-                  const [path, query] = href.split("?tab=");
-                  return pathname === path && currentTab === query;
+                if (href.includes("?")) {
+                  const [path, query] = href.split("?");
+                  if (pathname !== path) return false;
+                  if (query.startsWith("tab=")) {
+                    const tabVal = query.replace("tab=", "");
+                    return currentTab === tabVal;
+                  }
+                  const urlParams = new URLSearchParams(query);
+                  for (const [key, val] of urlParams.entries()) {
+                    if (searchParams.get(key) !== val) return false;
+                  }
+                  return true;
                 }
                 if (pathname === href) {
                   const currentQueryTab = searchParams.get("tab");
@@ -244,6 +238,11 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
               if (hasSub) {
                 return (
                   <li key={`${item.title}-${idx}`}>
+                    {item.sectionLabel && !isDesktopMini && (
+                      <p className="px-3.5 pt-4 pb-1 text-[10px] font-bold tracking-widest text-slate-400 uppercase select-none">
+                        {item.sectionLabel}
+                      </p>
+                    )}
                     <button
                       type="button"
                       onClick={() => toggleSubmenu(item.title)}
