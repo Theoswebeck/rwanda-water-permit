@@ -19,6 +19,7 @@ import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
+import { InspectionList } from "@/components/inspection/inspection-list";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import type { Application } from "@/types/database";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -34,12 +35,12 @@ const APPROVER_CHIPS: StatusChipDef[] = [
 ];
 
 function ApproverDashboardContent() {
-  const isTopTab = (v: string): v is "approval" | "inspections" | "water-reports" | "permit-registry" =>
-    v === "approval" || v === "inspections" || v === "water-reports" || v === "permit-registry";
+  const isTopTab = (v: string): v is "approval" | "inspections" | "water-reports" | "permit-registry" | "inspection-registry" =>
+    v === "approval" || v === "inspections" || v === "water-reports" || v === "permit-registry" || v === "inspection-registry";
   const [loading, setLoading] = useState(true);
-  const [topTab, setTopTab] = useTabParam<"approval" | "inspections" | "water-reports" | "permit-registry">(
+  const [topTab, setTopTab] = useTabParam<"approval" | "inspections" | "water-reports" | "permit-registry" | "inspection-registry">(
     "approval",
-    ["approval", "inspections", "water-reports", "permit-registry"]
+    ["approval", "inspections", "water-reports", "permit-registry", "inspection-registry"]
   );
   const [activeChipId, setActiveChipId] = useState("pending_approval");
   const [activeApprovalTab, setActiveApprovalTab] = useState("all_applications");
@@ -174,8 +175,10 @@ function ApproverDashboardContent() {
               </div>
             ) : topTab === "water-reports" ? (
               <WaterUseReportsList roleContext="approver" />
-            ) : (
+            ) : topTab === "permit-registry" ? (
               <PermitRegistryList />
+            ) : (
+              <InspectionList />
             )}
             </StaffSidebar>
           </motion.div>

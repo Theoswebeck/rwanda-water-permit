@@ -10,19 +10,21 @@ import { ApplicationsTab } from "./applications-tab"
 import { AssessmentTab } from "./assessment-tab"
 import { InspectionsTab } from "./inspections-tab"
 import { AllApplicationsTab } from "./all-applications-tab"
+import { InspectionList } from "@/components/inspection/inspection-list"
 import { WaterConcessionMap } from "@/components/shared/water-concession-map"
 import { 
   ClipboardList, 
   FileCheck,
   Files,
   Loader2,
-  MapPin
+  MapPin,
+  ClipboardCheck,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getInspectionStats, getApplicationsForInspection, getCurrentUser } from "@/lib/supabase"
 
 export function InspectionDashboard() {
-  const [activeTab, setActiveTab] = useTabParam("inspections", ["inspections", "assessments", "applications", "map"])
+  const [activeTab, setActiveTab] = useTabParam("inspections", ["inspections", "assessments", "applications", "map", "inspection-registry"])
   const [stats, setStats] = useState({
     pendingAssessmentCount: 0,
     allApplicationsCount: 0
@@ -119,6 +121,7 @@ export function InspectionDashboard() {
           { value: "inspections", label: "Post-Permit Inspections", icon: FileCheck, badge: countBadge(stats.allApplicationsCount) },
           { value: "applications", label: "All Applications", icon: Files },
           { value: "map", label: "Consolidated Map", icon: MapPin },
+          { value: "inspection-registry", label: "Inspection Registry", icon: ClipboardCheck },
         ]}
       >
         <TabsContent value="assessments" className="mt-0">
@@ -132,6 +135,9 @@ export function InspectionDashboard() {
         </TabsContent>
         <TabsContent value="map" className="mt-0">
           <WaterConcessionMap />
+        </TabsContent>
+        <TabsContent value="inspection-registry" className="mt-0">
+          <InspectionList />
         </TabsContent>
       </StaffSidebar>
     </div>

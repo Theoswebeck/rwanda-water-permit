@@ -30,6 +30,7 @@ import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
+import { InspectionList } from "@/components/inspection/inspection-list";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
 import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
@@ -67,9 +68,9 @@ function AssessmentDashboardContent() {
   const [allApplications, setAllApplications] = useState<AssessmentApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [topTab, setTopTab] = useTabParam<"assessment" | "inspections" | "water-reports" | "permit-registry">(
+  const [topTab, setTopTab] = useTabParam<"assessment" | "inspections" | "water-reports" | "permit-registry" | "inspection-registry">(
     "assessment",
-    ["assessment", "inspections", "water-reports", "permit-registry"]
+    ["assessment", "inspections", "water-reports", "permit-registry", "inspection-registry"]
   );
   const [activeChipId, setActiveChipId] = useState("pending_assessment");
   // "my_assignments" = applications assigned to me (actionable queue).
@@ -529,8 +530,10 @@ function AssessmentDashboardContent() {
             </div>
           ) : topTab === "water-reports" ? (
             <WaterUseReportsList roleContext="assessor" />
-          ) : (
+          ) : topTab === "permit-registry" ? (
             <PermitRegistryList />
+          ) : (
+            <InspectionList />
           )}
         </StaffSidebar>
       </motion.div>

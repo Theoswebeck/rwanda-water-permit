@@ -53,6 +53,7 @@ import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
+import { InspectionList } from "@/components/inspection/inspection-list";
 import { sortBySubmissionDateDescending, getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
@@ -115,9 +116,9 @@ const REVIEWER_CHIPS: StatusChipDef[] = [
 
 function ReviewerDashboardContent() {
   const router = useRouter();
-  const [topTab, setTopTab] = useTabParam<"review" | "inspections" | "water-reports" | "permit-registry">(
+  const [topTab, setTopTab] = useTabParam<"review" | "inspections" | "water-reports" | "permit-registry" | "inspection-registry">(
     "review",
-    ["review", "inspections", "water-reports", "permit-registry"]
+    ["review", "inspections", "water-reports", "permit-registry", "inspection-registry"]
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
@@ -757,8 +758,10 @@ function ReviewerDashboardContent() {
             </div>
           ) : topTab === "water-reports" ? (
             <WaterUseReportsList roleContext="reviewer" />
-          ) : (
+          ) : topTab === "permit-registry" ? (
             <PermitRegistryList />
+          ) : (
+            <InspectionList />
           )}
         </StaffSidebar>
       </motion.div>

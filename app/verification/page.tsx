@@ -21,6 +21,7 @@ import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
+import { InspectionList } from "@/components/inspection/inspection-list";
 import { sortBySubmissionDateDescending, getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
@@ -53,9 +54,9 @@ function VerificationDashboardContent() {
   const [applications, setApplications] = useState<VerificationApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [topTab, setTopTab] = useTabParam<"verification" | "inspections" | "water-reports" | "permit-registry">(
+  const [topTab, setTopTab] = useTabParam<"verification" | "inspections" | "water-reports" | "permit-registry" | "inspection-registry">(
     "verification",
-    ["verification", "inspections", "water-reports", "permit-registry"]
+    ["verification", "inspections", "water-reports", "permit-registry", "inspection-registry"]
   );
   const [activeChipId, setActiveChipId] = useState("pending_verification");
   const [activeInnerTab, setActiveInnerTab] = useState<string>("all_applications");
@@ -417,8 +418,10 @@ function VerificationDashboardContent() {
               </div>
             ) : topTab === "water-reports" ? (
               <WaterUseReportsList roleContext="verifier" />
-            ) : (
+            ) : topTab === "permit-registry" ? (
               <PermitRegistryList />
+            ) : (
+              <InspectionList />
             )}
           </StaffSidebar>
         </motion.div>
