@@ -1636,8 +1636,14 @@ export function ApplicationForm({
         defaults.telephoneContactOffice = userProfile.company_phone || "";
       }
       
+      const profilePhone =
+        userProfile.phone ||
+        (userProfile as any)?.mobile_phone ||
+        userProfile.company_phone ||
+        (userProfile as any)?.landline_phone ||
+        "";
       defaults.emailAddress = userProfile.email || "";
-      defaults.telephoneContact = userProfile.phone || userProfile.company_phone || "";
+      defaults.telephoneContact = profilePhone;
       
       // Set ID information (national ID or TIN, for both individuals and companies)
       if (userProfile.id_number) {
@@ -1699,6 +1705,20 @@ export function ApplicationForm({
       if (!String(form.getValues("fullNameApplicant") ?? "").trim() && userProfile.company_name) {
         form.setValue("fullNameApplicant", userProfile.company_name, { shouldValidate: false });
       }
+    }
+
+    // Auto-populate contact info once profile is available if fields are currently empty
+    const profilePhone =
+      userProfile.phone ||
+      (userProfile as any)?.mobile_phone ||
+      userProfile.company_phone ||
+      (userProfile as any)?.landline_phone ||
+      "";
+    if (profilePhone && !String(form.getValues("telephoneContact") ?? "").trim()) {
+      form.setValue("telephoneContact", profilePhone, { shouldValidate: false });
+    }
+    if (userProfile.email && !String(form.getValues("emailAddress") ?? "").trim()) {
+      form.setValue("emailAddress", userProfile.email, { shouldValidate: false });
     }
   }, [userProfile, readOnly, isApplicant, form]);
 
@@ -4308,26 +4328,54 @@ export function ApplicationForm({
                       <FormField
                         control={form.control}
                         name="telephoneContact"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{tx("Telephone Contact *")}</FormLabel>
-                            <FormControl>
-                              <Input {...field} disabled className="bg-gray-100 border-gray-300 cursor-not-allowed" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                        render={({ field }) => {
+                          const profilePhone =
+                            userProfile?.phone ||
+                            (userProfile as any)?.mobile_phone ||
+                            userProfile?.company_phone ||
+                            (userProfile as any)?.landline_phone ||
+                            "";
+                          const isLocked = Boolean(readOnly || (profilePhone && field.value));
+                          return (
+                            <FormItem>
+                              <FormLabel>{tx("Telephone Contact *")}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="tel"
+                                  placeholder={tx("e.g. 0788123456")}
+                                  disabled={isLocked}
+                                  className={isLocked ? "bg-gray-100 border-gray-300 cursor-not-allowed" : ""}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          );
+                        }}
                       />
                       
                       <FormField
                         control={form.control}
                         name="emailAddress"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{tx("Email Address *")}</FormLabel>
-                            <FormControl>
-                              <Input {...field} type="email" disabled className="bg-gray-100 border-gray-300 cursor-not-allowed" />
-                            </FormControl>
+                        render={({ field }) => {
+                          const isLocked = Boolean(readOnly || (userProfile?.email && field.value));
+                          return (
+                            <FormItem>
+                              <FormLabel>{tx("Email Address *")}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="email"
+                                  placeholder={tx("e.g. name@example.com")}
+                                  disabled={isLocked}
+                                  className={isLocked ? "bg-gray-100 border-gray-300 cursor-not-allowed" : ""}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          );
+                        }}
+                      />
                             <FormMessage />
                           </FormItem>
                         )}

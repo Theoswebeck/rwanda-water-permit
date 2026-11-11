@@ -858,7 +858,7 @@ function NewApplicationContent() {
     return {
       email: userProfile.email || "",
       name: `${userProfile.first_name || ''} ${userProfile.last_name || ''}`.trim() || userProfile.company_name || "",
-      phone: userProfile.phone || userProfile.company_phone || "",
+      phone: userProfile.phone || (userProfile as any)?.mobile_phone || userProfile.company_phone || (userProfile as any)?.landline_phone || "",
       address: userProfile.company_address || "",
       idNumber: userProfile.id_number || "",
       account_type: userProfile.account_type || 'individual' as const,
