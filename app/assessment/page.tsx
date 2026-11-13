@@ -433,13 +433,15 @@ function AssessmentDashboardContent() {
                 {topTab === "assessment" ? "Application Assessment Dashboard"
                   : topTab === "inspections" ? "Inspections"
                   : topTab === "water-reports" ? "Water Use Reports"
-                  : "Permit Registry"}
+                  : topTab === "permit-registry" ? "Permit Registry"
+                  : "Inspection Registry"}
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
                 {topTab === "assessment" ? "Assess and review water permit applications for technical compliance and field verification"
                   : topTab === "inspections" ? "Manage and track field inspections"
                   : topTab === "water-reports" ? "Monitor and review water usage reports"
-                  : "View and manage issued permits"}
+                  : topTab === "permit-registry" ? "View and manage issued permits"
+                  : "View and track water user inspections"}
               </p>
             </div>
             <div className="flex items-center gap-2">

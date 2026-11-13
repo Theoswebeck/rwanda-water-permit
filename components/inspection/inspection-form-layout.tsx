@@ -787,10 +787,10 @@ export function InspectionFormLayout({
           <div className="sticky top-2 z-20">
             <TabsList className="grid w-full grid-cols-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 border border-slate-200 dark:border-slate-800 shadow-sm">
             <TabsTrigger value="identification">Identification</TabsTrigger>
-            <TabsTrigger value="specifics">Permit specifics</TabsTrigger>
+            <TabsTrigger value="specifics">Findings</TabsTrigger>
             <TabsTrigger value="social">Social & OHS</TabsTrigger>
             <TabsTrigger value="fees">Fees & Reports</TabsTrigger>
-            <TabsTrigger value="findings">Findings</TabsTrigger>
+            <TabsTrigger value="findings">General observations</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
             </TabsList>
           </div>
@@ -824,7 +824,7 @@ export function InspectionFormLayout({
               </>
             )}
 
-            <SectionShell title="2.1 Project Location" description="Where the activity actually takes place. The project site can sit far from the water source.">
+            <SectionShell title={manualInspection ? "1. Project Location" : "2.1 Project Location"} description="Where the activity actually takes place. The project site can sit far from the water source.">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <EditableLockedField label="Province / City of Kigali" lockedValue={locked.permitLocationProvince} overrideKey="permitLocationProvince" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="District" lockedValue={locked.permitLocationDistrict} overrideKey="permitLocationDistrict" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
@@ -848,7 +848,7 @@ export function InspectionFormLayout({
               </div>
             </SectionShell>
 
-            <SectionShell title="2.2 Water Source & Purpose">
+            <SectionShell title={manualInspection ? "2. Water Source & Purpose" : "2.2 Water Source & Purpose"}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <EditableLockedField label="Water Source Type" lockedValue={locked.waterSourceType} overrideKey="waterSourceType" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="Water Source Name" lockedValue={locked.waterSourceName} overrideKey="waterSourceName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
@@ -874,7 +874,7 @@ export function InspectionFormLayout({
             </SectionShell>
 
             {template === "concession" ? (
-              <SectionShell title="2.3 Concession Area">
+              <SectionShell title={manualInspection ? "3. Concession Area" : "2.3 Concession Area"}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <EditableLockedField label="Concession Area (Ha)" lockedValue={locked.concessionAreaHa !== undefined ? String(locked.concessionAreaHa) : undefined} overrideKey="concessionAreaHa" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                   <EditableLockedField label="Boundary Points" lockedValue={locked.concessionBoundaries && locked.concessionBoundaries.length > 0 ? `${locked.concessionBoundaries.length} points defined` : undefined} overrideKey="concessionBoundaryPoints" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
@@ -886,7 +886,7 @@ export function InspectionFormLayout({
           <TabsContent value="specifics" className="pt-6 space-y-6">
             {template === "authorization" ? (
               <SectionShell
-                title="3. Permit specifics (permitted vs actual)"
+                title="3. Findings (permitted vs actual)"
                 description="Compare what the permit authorizes with what was observed on site."
               >
                 <div className="space-y-4">
@@ -982,7 +982,7 @@ export function InspectionFormLayout({
               </SectionShell>
             ) : (
               <SectionShell
-                title="3. Permit specifics (permitted vs actual)"
+                title="3. Findings (permitted vs actual)"
                 description="Compare what the permit authorizes with what was observed on site."
               >
                 <div className="space-y-4">
@@ -1308,7 +1308,7 @@ export function InspectionFormLayout({
 
           <TabsContent value="findings" className="pt-6 space-y-6">
             <SectionShell
-              title="8. General observations — Wastewater management system"
+              title="8. Wastewater Management System"
               description="Observed on site, independent of what the permit specifies."
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

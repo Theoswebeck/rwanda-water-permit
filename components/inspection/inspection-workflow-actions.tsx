@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { normalizeInspectionRecommendation } from "@/lib/inspection-recommendations";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -295,6 +296,46 @@ export function InspectionWorkflowActions({
 
         if (historyError) {
           console.error("❌ Failed to log workflow history:", historyError);
+        }
+
+        // RWB feedback (Sep 2026): when an approved inspection report recommends
+        // cancelling or suspending the permit, apply it to the permit record.
+        if (transition.action === "approve") {
+          try {
+            const { data: inspRow } = await supabase
+              .from("inspections")
+              .select("application_id, recommendations")
+              .eq("id", inspectionId)
+              .maybeSingle();
+            // Exact-match the canonical option: a substring test would also
+            // fire on text like "no cancellation required" and wrongly revoke
+            // a live permit.
+            const recommendation = normalizeInspectionRecommendation(inspRow?.recommendations);
+            const nextStatus =
+              recommendation === "Permit Cancellation"
+                ? "revoked"
+                : recommendation === "Permit Suspension"
+                  ? "suspended"
+                  : null;
+            if (inspRow?.application_id && nextStatus) {
+              const { data: permRow } = await supabase
+                .from("permits")
+                .select("id, status")
+                .eq("application_id", inspRow.application_id)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (permRow && permRow.status !== nextStatus) {
+                const { error: permitUpdErr } = await supabase
+                  .from("permits")
+                  .update({ status: nextStatus, updated_at: new Date().toISOString() })
+                  .eq("id", permRow.id);
+                if (permitUpdErr) throw permitUpdErr;
+              }
+            }
+          } catch (permitErr) {
+            console.error("❌ Failed to apply inspection recommendation to permit:", permitErr);
+          }
         }
 
         const inspEventMap: Record<string, string> = {

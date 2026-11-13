@@ -24,7 +24,7 @@ import { FieldReportUpload, FieldReportFile } from "@/components/inspection/fiel
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
 import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
 import { determineReportType, mergeAssessmentReportData, normalizeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
-import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
+import { AssessorRecommendations, assessorVolumeUnit } from "@/components/inspection/assessor-recommendations";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
@@ -1080,8 +1080,9 @@ export default function VerificationApplicationPage() {
                       <AssessorRecommendations
                         requestedDurationYears={requestedDurationYears}
                         requestedVolumeM3={requestedVolumeM3}
-                        recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : recommendedDurationYears}
+                        recommendedDurationYears={recommendedDurationYears ?? ((application as any).is_renewal ? renewalRecommendedDurationYears : undefined)}
                         recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : recommendedVolumeM3}
+                        recommendedVolumeUnit={assessorVolumeUnit((application as any)?.internal_notes)}
                         readOnly={true}
                         isConcession={reportType === "concession"}
                         isBulk={!!(application as any)?.is_bulk}

@@ -21,7 +21,7 @@ import { FieldReportUpload, FieldReportFile } from "@/components/inspection/fiel
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
 import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
 import { determineReportType, mergeAssessmentReportData, normalizeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
-import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
+import { AssessorRecommendations, assessorVolumeUnit } from "@/components/inspection/assessor-recommendations";
 import type { RecommendationData } from "@/components/inspection/verification-summary";
 import { cn } from "@/lib/utils";
 import { 
@@ -216,7 +216,6 @@ export default function ReviewApplicationPage() {
   const [showSendToVerificationDialog, setShowSendToVerificationDialog] = useState(false);
   // Terminate (exempted water use) — terminal action, distinct from return-for-revision
   const [showTerminateDialog, setShowTerminateDialog] = useState(false);
-  const [terminationReason, setTerminationReason] = useState("");
   const [terminateLoading, setTerminateLoading] = useState(false);
   const [sendToVerificationLoading, setSendToVerificationLoading] = useState(false);
   
@@ -1030,18 +1029,14 @@ export default function ReviewApplicationPage() {
       }
 
       setShowTerminateDialog(false);
-      setTerminationReason("");
-      const done = outcome === 'rejected'
-        ? "Application rejected."
-        : "Application terminated: the water use is exempted and no permit is required.";
       // Only claim the applicant was notified when the server confirms delivery.
       persistBanner({
         scope: params.id as string,
         kind: payload?.emailSent ? "success" : "info",
         title: outcome === 'rejected' ? "Application rejected" : "Application terminated",
         description: payload?.emailSent
-          ? `${done} The applicant has been notified by email.`
-          : `${done} ${
+          ? `${outcome === 'rejected' ? "The application was rejected." : "The water use is exempted — no permit is required."} The applicant has been notified by email.`
+          : `${outcome === 'rejected' ? "The application was rejected." : "The water use is exempted — no permit is required."} ${
               payload?.warning ||
               "The confirmation email to the applicant could not be delivered — please follow up with them directly."
             }`,
@@ -1052,7 +1047,7 @@ export default function ReviewApplicationPage() {
       const msg =
         err && typeof err === "object" && "message" in err && typeof (err as any).message === "string"
           ? (err as any).message
-          : "Failed to close application. Please try again.";
+          : "Failed to terminate application. Please try again.";
       setBanner({ kind: "error", title: "Action failed", description: msg });
     } finally {
       setTerminateLoading(false);
@@ -1362,10 +1357,10 @@ export default function ReviewApplicationPage() {
                   size="sm"
                   className="gap-2 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
                   onClick={() => setShowTerminateDialog(true)}
-                  title="Close this application as rejected or exempted."
+                  title="Reject this application, or close it as an exempted water use (no permit required)."
                 >
                   <Ban className="h-4 w-4" />
-                  Close Application
+                  Reject / Close
                 </Button>
               </div>
 
@@ -1559,8 +1554,9 @@ export default function ReviewApplicationPage() {
                     <AssessorRecommendations
                       requestedDurationYears={requestedDurationYears}
                       requestedVolumeM3={requestedVolumeM3}
-                      recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : recommendedDurationYears}
+                      recommendedDurationYears={recommendedDurationYears ?? ((application as any).is_renewal ? renewalRecommendedDurationYears : undefined)}
                       recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : recommendedVolumeM3}
+                      recommendedVolumeUnit={assessorVolumeUnit((application as any)?.internal_notes)}
                       readOnly={true}
                       isConcession={reportType === "concession"}
                       isBulk={!!(application as any)?.is_bulk}

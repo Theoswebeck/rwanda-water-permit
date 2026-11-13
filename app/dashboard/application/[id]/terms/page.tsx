@@ -45,6 +45,7 @@ import type { AppLanguage } from "@/lib/i18n/language";
 import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
 import { BackToDashboardButton } from "@/components/ui/back-button";
+import { assessorPermitLengthYears } from "@/lib/permit/resolve-render-dates-from-notes";
 
 function renderInlineBold(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
@@ -67,6 +68,9 @@ function parseInternalNotes(input: unknown): Record<string, any> | null {
     return null;
   }
 }
+
+// Renewals inherit the old permit's term unless the assessor set one on the renewal itself.
+const ownAssessorDuration = assessorPermitLengthYears;
 
 function resolveDurationFromAssessor(
   applicationData: any,
@@ -191,6 +195,7 @@ export default function TermsConditionsPage() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [rating, setRating] = useState<number>(0);
   const [feedback, setFeedback] = useState<string>("");
@@ -448,7 +453,7 @@ export default function TermsConditionsPage() {
               const sourceApp = renewalPermit?.application;
               const sourceNotes = parseInternalNotes(sourceApp?.internal_notes);
               const sourceIsConcession = isConcessionApplication(sourceApp || data);
-              const sourceDuration = resolveDurationFromAssessor(sourceApp, sourceNotes);
+              const sourceDuration = ownAssessorDuration(parsedNotes) ?? resolveDurationFromAssessor(sourceApp, sourceNotes);
               const sourceVolumeOrArea = resolveVolumeOrAreaFromAssessor(sourceApp, sourceNotes, sourceIsConcession);
 
               const mergedNotes = {
@@ -595,6 +600,7 @@ export default function TermsConditionsPage() {
     }
 
     setIsProcessing(true);
+    setAcceptError(null);
     try {
       console.log('🚀 Starting terms acceptance process...');
       const acceptedAt = new Date();
@@ -762,7 +768,7 @@ export default function TermsConditionsPage() {
             if (sourceApp) {
               const sourceNotes = parseInternalNotes(sourceApp.internal_notes);
               const sourceIsConcession = isConcessionApplication(sourceApp || applicationData);
-              const sourceDuration = resolveDurationFromAssessor(sourceApp, sourceNotes);
+              const sourceDuration = ownAssessorDuration(parsedNotes) ?? resolveDurationFromAssessor(sourceApp, sourceNotes);
               const sourceVolumeOrArea = resolveVolumeOrAreaFromAssessor(sourceApp, sourceNotes, sourceIsConcession);
 
               const mergedNotes = {
@@ -1396,11 +1402,16 @@ export default function TermsConditionsPage() {
         const newIssuedDate = issuanceBaseDateOnly;
         const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
 
+        const VALID_WATER_SOURCES = ['borehole', 'surface_water', 'river', 'groundwater', 'lake', 'spring', 'other', 'dam', 'stream', 'swamp', 'reservoir', 'wetland', 'hydropower_source'];
+        const VALID_WATER_PURPOSES = ['domestic', 'irrigation', 'industrial', 'livestock', 'fish_farming_lakes', 'fish_farming_ponds', 'recreation_activities', 'recreation', 'electricity_generation', 'mining', 'municipal_supply', 'other'];
+        const resolvedWaterSource = VALID_WATER_SOURCES.includes(applicationData.water_source) ? applicationData.water_source : 'other';
+        const resolvedWaterPurpose = VALID_WATER_PURPOSES.includes(applicationData.water_purpose) ? applicationData.water_purpose : 'other';
+
         const permitData_insert = {
           application_id: applicationId,
           status: 'active',
-          water_source: applicationData.water_source,
-          purpose: applicationData.water_purpose,
+          water_source: resolvedWaterSource,
+          purpose: resolvedWaterPurpose,
           water_allowance: resolvedVolumeM3,
           allowance_unit: resolvedAllowanceUnit || 'm³',
           issuing_authority: 'Rwanda Water Resources Board',
@@ -1448,6 +1459,25 @@ export default function TermsConditionsPage() {
         
         permitData = newPermit;
         console.log('✅ Permit created successfully:', permitData.permit_number);
+
+        // Forward-sync new permit to permit_registry (non-blocking)
+        if (permitData?.permit_number) {
+          syncRegistryViaApi(permitData.permit_number, {
+            status: 'active',
+            water_source: applicationData.water_source || undefined,
+            authorized_activity: applicationData.water_purpose || undefined,
+            volume_or_area: resolvedVolumeM3 > 0 ? String(resolvedVolumeM3) : undefined,
+            issuance_date: newIssuedDate,
+            expiration_date: newExpiryDate || undefined,
+            location: registrySyncLocation,
+            permit_holder: permitHolder,
+            latitude: _registryLat,
+            longitude: _registryLng,
+            duration: `${resolvedDurationYearsGlobal} years`,
+            contact: registrySyncContact,
+            method_of_water_taking: applicationData.water_taking_method || undefined,
+          }).catch(err => console.warn('⚠️ registry-sync (new permit) failed:', err));
+        }
 
         // Bulk water supply: create child permit records for each network
         if (applicationData.is_bulk && permitData?.id && permitData?.permit_number) {
@@ -1623,21 +1653,24 @@ export default function TermsConditionsPage() {
     } catch (error) {
       console.error('❌ Error accepting terms:', error);
       
-      let errorMessage = "❌ Failed to accept terms. Please try again.";
+      let errorMessage = "Failed to accept terms. Please try again.";
       if (error instanceof Error) {
         if (error.message.includes('expired')) {
-          errorMessage = "❌ This application has expired (6 months since submission) and can no longer proceed.";
-        } else
-        if (error.message.includes('Authentication')) {
-          errorMessage = "❌ Please log in again and try accepting the terms.";
+          errorMessage = "This application has expired (6 months since submission) and can no longer proceed. Please contact support.";
+        } else if (error.message.includes('Authentication')) {
+          errorMessage = "Session expired. Please log in again and try accepting the terms.";
         } else if (error.message.includes('not found')) {
-          errorMessage = "❌ Application not found. Please refresh the page.";
-        } else if (error.message.includes('permission')) {
-          errorMessage = "❌ Permission denied. Please contact support.";
+          errorMessage = "Application not found. Please refresh the page.";
+        } else if (error.message.includes('permission') || error.message.includes('Permission')) {
+          errorMessage = "Permission denied. Please contact support.";
+        } else if (error.message.includes('violates not-null') || error.message.includes('null value')) {
+          errorMessage = "Some required fields are missing from this application. Please contact support to resolve this before the permit can be issued.";
+        } else if (error.message.includes('invalid input value') || error.message.includes('invalid_text_representation')) {
+          errorMessage = "This application has an invalid field value that prevents permit issuance. Please contact support.";
         }
       }
-      
-      console.log(errorMessage);
+
+      setAcceptError(errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -2097,6 +2130,14 @@ export default function TermsConditionsPage() {
           {/* Sticky footer */}
           {!showFeedback && (
             <div className="sticky bottom-0 border-t bg-background px-4 py-4 sm:px-6 lg:px-8">
+              {acceptError && (
+                <div className="mx-auto mb-3 max-w-4xl rounded-md border border-red-200 bg-red-50 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                    <p className="text-sm text-red-700">{acceptError}</p>
+                  </div>
+                </div>
+              )}
               <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
                 <Button
                   variant="outline"

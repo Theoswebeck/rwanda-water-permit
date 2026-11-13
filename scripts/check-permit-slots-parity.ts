@@ -563,6 +563,57 @@ group("abstraction_organization (bilingual)", () => {
      "rw.para_4");
 });
 
+// Fixture: District Water Supply (is_bulk) — para_2/para_4 carry the
+// network count and annex pointer the renderer used to hardcode.
+const fxBulk: PermitApplication = {
+  ...fxAbsOrg,
+  id: "fx-bulk",
+  is_bulk: true,
+  intended_activities: ["district_water_supply"],
+  bulk_networks: [
+    { network_name: "Net A", capacity_m3_day: 500 },
+    { network_name: "Net B", capacity_m3_day: 800 },
+  ],
+} as PermitApplication;
+
+group("bulk_water_supply (bilingual)", () => {
+  const ctx = buildPermitCtx(fxBulk);
+  const orgName = resolveApplicantName(fxBulk);
+  const rep = resolveOrgRep(fxBulk);
+  const district = resolveAdminLocation(fxBulk).district;
+
+  eq(resolveSlotText("permit.bulk_water_supply.en.para_1", ctx),
+     resolveSlotText("permit.abstraction_organization.en.para_1", ctx), "en.para_1");
+  eq(resolveSlotText("permit.bulk_water_supply.en.para_2", ctx),
+     `"**${orgName}**" with its registered office address as follows: ${resolveOrgAddress(fxBulk)}; represented by ${rep.name} "**${rep.title}**", is authorized to abstract water from **2 water supply networks** located in ${district} District as specified in the attached annex. Water abstracted will be used for **water supply**.`,
+     "en.para_2");
+  eq(resolveSlotText("permit.bulk_water_supply.en.para_4", ctx),
+     "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in the attached contract. The list of authorized distribution networks is provided in the Annex.",
+     "en.para_4");
+  eq(resolveSlotText("permit.bulk_water_supply.rw.para_2", ctx),
+     `"**${orgName}**" ifite ibiro biherereye mu ${resolveOrgAddressKinyarwanda(fxBulk)}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe gukoresha amazi y'imiyoboro **2** iherereye mu Akarere ka ${district} nkuko bigaragara ku mugereka. Aya mazi yemerewe gukoreshwa mu bikorwa byo **gukwirakwiza amazi**.`,
+     "rw.para_2");
+  // RWB 2026-10: old text said "amashyamba" (forests) — must say "imiyoboro".
+  eq(resolveSlotText("permit.bulk_water_supply.rw.para_4", ctx),
+     "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka. Urutonde rw'imiyoboro y'amazi yemerewe ruri ku mugereka.",
+     "rw.para_4");
+
+  const noNet = buildPermitCtx({ ...fxBulk, bulk_networks: [] } as PermitApplication);
+  eq(resolveSlotText("permit.bulk_water_supply.en.para_4", noNet),
+     "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in the attached contract.",
+     "en.para_4 (no networks)");
+
+  // Assessor overrides now win (they were silently ignored before).
+  const edited = buildPermitCtx({
+    ...fxBulk,
+    internal_notes: JSON.stringify({
+      ...JSON.parse(fxBulk.internal_notes as string),
+      document_text_overrides: { version: 1, values: { "permit.bulk_water_supply.en.para_2": { text: "EDITED", editedAt: "2026-10-21T00:00:00Z", editedBy: { id: "u1", name: "Assessor", email: "a@rwb.rw", role: "assessor" } } } },
+    }),
+  } as PermitApplication);
+  eq(resolveSlotText("permit.bulk_water_supply.en.para_2", edited), "EDITED", "en.para_2 override");
+});
+
 // ─── Edge-case fixture coverage ──────────────────────────────────────────────
 //
 // The reviewer (Phase 2 code review) flagged that the four "happy-path"

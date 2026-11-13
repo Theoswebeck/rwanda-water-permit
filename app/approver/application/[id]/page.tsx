@@ -44,7 +44,7 @@ import type { RecommendationData } from "@/components/inspection/verification-su
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
 import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
 import { determineReportType, mergeAssessmentReportData, normalizeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
-import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
+import { AssessorRecommendations, assessorVolumeUnit } from "@/components/inspection/assessor-recommendations";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
@@ -1158,8 +1158,9 @@ export default function ApproverApplicationPage() {
                         <AssessorRecommendations
                           requestedDurationYears={requestedDurationYears}
                           requestedVolumeM3={requestedVolumeM3}
-                          recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : recommendedDurationYears}
+                          recommendedDurationYears={recommendedDurationYears ?? ((application as any).is_renewal ? renewalRecommendedDurationYears : undefined)}
                           recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : recommendedVolumeM3}
+                          recommendedVolumeUnit={assessorVolumeUnit((application as any)?.internal_notes)}
                           readOnly={true}
                           isConcession={rt === "concession"}
                           isBulk={!!(application as any)?.is_bulk}

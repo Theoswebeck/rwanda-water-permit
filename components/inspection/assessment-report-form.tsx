@@ -159,14 +159,19 @@ export function AssessmentReportForm({
     if (!targetDate) return;
     setLocalData((prev) => {
       if (prev.reportDate) return prev;
-      return { ...prev, reportDate: targetDate };
+      if (prev.reportDate === targetDate) return prev;
+      const updated = { ...prev, reportDate: targetDate };
+      onReportDataChange(updated);
+      return updated;
     });
-  }, [assessmentSubmittedDate, inspectionDate]);
+  }, [assessmentSubmittedDate, inspectionDate, onReportDataChange]);
 
   const updateField = <K extends keyof AssessmentReportData>(field: K, value: AssessmentReportData[K]) => {
-    const updated = { ...localData, [field]: value };
-    setLocalData(updated);
-    onReportDataChange(updated);
+    setLocalData((prev) => {
+      const updated = { ...prev, [field]: value };
+      onReportDataChange(updated);
+      return updated;
+    });
   };
 
   const updateResidence = (parts: {
@@ -190,16 +195,18 @@ export function AssessmentReportForm({
     unitField: VolumeRateUnitField,
     unit: VolumeRateUnit,
   ) => {
-    const updated: Partial<AssessmentReportData> = {
-      ...localData,
-      [valueField]: value,
-      [unitField]: unit,
-    };
-    if (valueField === "sourceFlowValue" && unit === "m3/day") {
-      updated.sourceFlowM3Day = value;
-    }
-    setLocalData(updated);
-    onReportDataChange(updated);
+    setLocalData((prev) => {
+      const updated: Partial<AssessmentReportData> = {
+        ...prev,
+        [valueField]: value,
+        [unitField]: unit,
+      };
+      if (valueField === "sourceFlowValue" && unit === "m3/day") {
+        updated.sourceFlowM3Day = value;
+      }
+      onReportDataChange(updated);
+      return updated;
+    });
   };
 
   const renderVolumeRateField = (
@@ -266,9 +273,11 @@ export function AssessmentReportForm({
       latitude: point.latitude,
       longitude: point.longitude,
     }));
-    const updated = { ...localData, sourcePolygonPoints: next, beacons };
-    setLocalData(updated);
-    onReportDataChange(updated);
+    setLocalData((prev) => {
+      const updated = { ...prev, sourcePolygonPoints: next, beacons };
+      onReportDataChange(updated);
+      return updated;
+    });
   };
 
   return (

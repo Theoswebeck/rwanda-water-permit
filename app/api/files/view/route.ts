@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/postgres";
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from "@/lib/auth/session";
 import { isEffectiveStaffUser, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
-import { MISSING_FILE_CODE, MISSING_FILE_MESSAGE } from "@/lib/documents/file-availability";
+import {
+  MISSING_FILE_CODE,
+  MISSING_FILE_MESSAGE,
+  contentDispositionFileName,
+} from "@/lib/documents/file-availability";
 
 export const runtime = "nodejs";
 
@@ -214,16 +218,6 @@ function inferMimeType(filePath: string): string {
     return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   }
   return "application/octet-stream";
-}
-
-function contentDispositionFileName(fileName: string | null | undefined): string {
-  const fallback = "document";
-  const cleaned = String(fileName || fallback)
-    .replace(/[\r\n"]/g, "")
-    .replace(/[^\x20-\x7E]/g, " ")
-    .trim();
-
-  return cleaned || fallback;
 }
 
 export async function GET(req: NextRequest) {

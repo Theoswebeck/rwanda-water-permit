@@ -207,6 +207,15 @@ export async function middleware(request: NextRequest) {
     return blocked ?? NextResponse.next()
   }
 
+  // Links with a raw permit number (/permit/0769/RWB/2024) split into extra
+  // segments and 404 — fold them back into one encoded segment.
+  const splitPermit = pathname.match(/^(\/(?:[\w-]+\/)?inspection\/permit\/)([^/]+\/.+)$/)
+  if (splitPermit) {
+    const url = request.nextUrl.clone()
+    url.pathname = splitPermit[1] + encodeURIComponent(splitPermit[2])
+    return NextResponse.redirect(url)
+  }
+
   // Canonicalize /new-application to /dashboard/new-application
   if (pathname === '/new-application' || pathname === '/new-application/') {
     const url = new URL('/dashboard/new-application', request.url)

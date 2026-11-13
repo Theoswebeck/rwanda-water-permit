@@ -729,29 +729,31 @@ function resolveAbstractionMethodRaw(application: Application): string {
 function resolveSystemType(application: Application): string {
   const raw = resolveAbstractionMethodRaw(application);
   const normalized = raw.toLowerCase();
-  if (!normalized) return "GRAVITY SYSTEM";
-  if (normalized.includes("pump")) return "PUMPING SYSTEM";
-  if (normalized.includes("grav")) return "GRAVITY SYSTEM";
-  if (normalized.includes("diversion") || normalized === "diversion_channel") return "DIVERSION CHANNEL";
-  if (normalized.includes("dam") || normalized.includes("reservoir")) return "DAM/RESERVOIR";
-  if (normalized.includes("borehole")) return "BOREHOLE";
-  if (normalized.includes("spring")) return "SPRING CAPTURE";
-  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "HAND DUG WELL";
-  return raw.replace(/[_-]/g, " ").toUpperCase() || "GRAVITY SYSTEM";
+  // RWB feedback (Sep 2026): lowercase system labels on official documents.
+  if (!normalized) return "gravity system";
+  if (normalized.includes("pump")) return "pumping system";
+  if (normalized.includes("grav")) return "gravity system";
+  if (normalized.includes("diversion") || normalized === "diversion_channel") return "diversion channel";
+  if (normalized.includes("dam") || normalized.includes("reservoir")) return "dam/reservoir";
+  if (normalized.includes("borehole")) return "borehole";
+  if (normalized.includes("spring")) return "spring capture";
+  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "hand dug well";
+  return raw.replace(/[_-]/g, " ").toLowerCase() || "gravity system";
 }
 
 function resolveEnglishSystemTypeLabel(application: Application): string {
   const raw = resolveAbstractionMethodRaw(application);
   const normalized = raw.toLowerCase();
-  if (!normalized) return "GRAVITY system";
-  if (normalized.includes("pump")) return "PUMPING system";
-  if (normalized.includes("grav")) return "GRAVITY system";
-  if (normalized.includes("diversion") || normalized === "diversion_channel") return "Diversion Channel";
-  if (normalized.includes("dam") || normalized.includes("reservoir")) return "Dam/Reservoir";
-  if (normalized.includes("borehole")) return "Borehole";
-  if (normalized.includes("spring")) return "Spring Capture";
-  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "Hand Dug Well";
-  return raw.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "GRAVITY system";
+  // RWB feedback (Sep 2026): lowercase system labels on official documents.
+  if (!normalized) return "gravity system";
+  if (normalized.includes("pump")) return "pumping system";
+  if (normalized.includes("grav")) return "gravity system";
+  if (normalized.includes("diversion") || normalized === "diversion_channel") return "diversion channel";
+  if (normalized.includes("dam") || normalized.includes("reservoir")) return "dam/reservoir";
+  if (normalized.includes("borehole")) return "borehole";
+  if (normalized.includes("spring")) return "spring capture";
+  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "hand dug well";
+  return raw.replace(/[_-]/g, " ").toLowerCase() || "gravity system";
 }
 
 function resolveKinyarwandaSystemTypeLabel(application: Application): string {

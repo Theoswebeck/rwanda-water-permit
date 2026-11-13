@@ -415,7 +415,7 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
 
       {/* Permit specifics */}
       <SectionShell
-        title="Permit specifics (permitted vs actual)"
+        title="Findings (permitted vs actual)"
         description={isConcession ? "Permitted vs actual concession area, plus boundaries" : "Permitted vs actual water abstraction"}
       >
         {isConcession ? (
@@ -621,7 +621,7 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
 
       {/* General observations — wastewater (moved out of Permit specifics) */}
       {(inspection.wastewater_system_type || inspection.wastewater_system_effectiveness) && (
-        <SectionShell title="General observations — Wastewater management system">
+        <SectionShell title="General observations — Wastewater Management System">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ReadonlyField label="Type of the system" value={inspection.wastewater_system_type} />
             <ReadonlyField label="Effectiveness of the system" value={inspection.wastewater_system_effectiveness} />
