@@ -12,7 +12,7 @@ import { useSiteContent } from '@/lib/use-site-content';
 export default function Home() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [modalCategoryId, setModalCategoryId] = useState<string | null>(null);
   const siteContent = useSiteContent();
 
   const userManualUrl = siteContent.user_manual_url || '/assets/User_Manual_Guide_Rwanda_Water_Permit_Application_Portal.pdf';
@@ -81,12 +81,54 @@ export default function Home() {
   ];
 
   const activityCategories = [
-    { id: 'all', label: 'All Activities (17)' },
-    { id: 'agriculture', label: 'Agriculture & Aquaculture' },
-    { id: 'water_supply', label: 'Water Supply' },
-    { id: 'energy_industry', label: 'Energy, Industry & Mining' },
-    { id: 'infrastructure', label: 'Infrastructure & Recreation' },
-    { id: 'other', label: 'Other Activities' },
+    {
+      id: 'agriculture',
+      title: 'Agriculture & Agro-Processing',
+      icon: 'fa-seedling',
+      color: '#16a34a',
+      bg: '#dcfce7',
+      summary: 'Crop irrigation, livestock watering, and coffee washing station water abstraction permits.',
+    },
+    {
+      id: 'aquaculture',
+      title: 'Aquaculture & Fisheries',
+      icon: 'fa-fish',
+      color: '#0284c7',
+      bg: '#e0f2fe',
+      summary: 'Commercial cage fish farming concessions in lakes and inland fish farming ponds.',
+    },
+    {
+      id: 'water_supply',
+      title: 'Water Supply Networks',
+      icon: 'fa-faucet-drip',
+      color: '#0072bc',
+      bg: '#e8f4fc',
+      summary: 'Potable community water supply, institutional supply, and multi-network district water supply.',
+    },
+    {
+      id: 'energy_industry',
+      title: 'Energy, Industry & Mining',
+      icon: 'fa-bolt',
+      color: '#7c3aed',
+      bg: '#f3e8ff',
+      summary: 'Hydropower generation, Lake Kivu gas extraction, industrial manufacturing, and mining operations.',
+    },
+    {
+      id: 'infrastructure',
+      title: 'Dams, Ports & Infrastructure',
+      icon: 'fa-hard-hat',
+      color: '#d97706',
+      bg: '#fef3c7',
+      summary: 'Dam construction, lake port terminals, and civil infrastructure installation in or near water bodies.',
+    },
+    {
+      id: 'recreation_other',
+      title: 'Recreation & Other Permitted Uses',
+      icon: 'fa-umbrella-beach',
+      color: '#0d9488',
+      bg: '#ccfbf1',
+      summary: 'Waterfront recreation, eco-tourism, and specialized water abstraction or concession activities.',
+    },
   ];
 
   const permittedActivities = [
@@ -98,69 +140,6 @@ export default function Home() {
       color: '#b45309',
       bg: '#fef3c7',
       desc: 'Water abstraction for coffee washing stations, wet-mill processing, and seasonal cherry pulping operations.',
-    },
-    {
-      title: 'Construction of a dam',
-      category: 'infrastructure',
-      regime: 'Water Concession',
-      icon: 'fa-water',
-      color: '#0072bc',
-      bg: '#e8f4fc',
-      desc: 'Impoundment, reservoir creation, weir construction, and hydraulic retention structures across watercourses.',
-    },
-    {
-      title: 'Construction or installation of infrastructure',
-      category: 'infrastructure',
-      regime: 'Water Abstraction',
-      icon: 'fa-hard-hat',
-      color: '#475569',
-      bg: '#f1f5f9',
-      desc: 'Civil works, bridges, intakes, pipelines, and water-related infrastructure installation in or near water bodies.',
-    },
-    {
-      title: 'Electricity generation (Hydropower)',
-      category: 'energy_industry',
-      regime: 'Water Concession',
-      icon: 'fa-bolt',
-      color: '#d97706',
-      bg: '#fef9c3',
-      desc: 'Run-of-river and reservoir hydropower plants harnessing river flow or head for clean electricity generation.',
-    },
-    {
-      title: 'Fish farming in lakes',
-      category: 'agriculture',
-      regime: 'Water Concession',
-      icon: 'fa-fish',
-      color: '#0284c7',
-      bg: '#e0f2fe',
-      desc: 'Commercial cage aquaculture and delineated lake surface concession zones for sustainable fish production.',
-    },
-    {
-      title: 'Fish farming in ponds',
-      category: 'agriculture',
-      regime: 'Water Abstraction',
-      icon: 'fa-water',
-      color: '#0d9488',
-      bg: '#ccfbf1',
-      desc: 'Inland aquaculture ponds, hatcheries, and raceways supplied by surface streams, springs, or groundwater.',
-    },
-    {
-      title: 'Gas Extraction',
-      category: 'energy_industry',
-      regime: 'Water Concession',
-      icon: 'fa-fire-flame-simple',
-      color: '#dc2626',
-      bg: '#fee2e2',
-      desc: 'Methane and dissolved gas extraction concessions and associated process water management on Lake Kivu.',
-    },
-    {
-      title: 'Industry',
-      category: 'energy_industry',
-      regime: 'Water Abstraction',
-      icon: 'fa-industry',
-      color: '#7c3aed',
-      bg: '#f3e8ff',
-      desc: 'Manufacturing, agro-processing, beverage production, cooling systems, and commercial industrial water use.',
     },
     {
       title: 'Irrigation',
@@ -181,31 +160,22 @@ export default function Home() {
       desc: 'Water supply for commercial livestock farms, cattle watering troughs, ranching, and dairy operations.',
     },
     {
-      title: 'Mining',
-      category: 'energy_industry',
-      regime: 'Water Abstraction',
-      icon: 'fa-gem',
-      color: '#4f46e5',
-      bg: '#e0e7ff',
-      desc: 'Mineral washing, ore processing, quarry dust suppression, and regulated mining water abstraction.',
-    },
-    {
-      title: 'Port Construction',
-      category: 'infrastructure',
+      title: 'Fish farming in lakes',
+      category: 'aquaculture',
       regime: 'Water Concession',
-      icon: 'fa-anchor',
-      color: '#0369a1',
+      icon: 'fa-fish',
+      color: '#0284c7',
       bg: '#e0f2fe',
-      desc: 'Construction and operation of lake ports, jetties, piers, landing sites, and maritime transport terminals.',
+      desc: 'Commercial cage aquaculture and delineated lake surface concession zones for sustainable fish production.',
     },
     {
-      title: 'Recreational activities',
-      category: 'infrastructure',
+      title: 'Fish farming in ponds',
+      category: 'aquaculture',
       regime: 'Water Abstraction',
-      icon: 'fa-umbrella-beach',
-      color: '#0891b2',
-      bg: '#cffafe',
-      desc: 'Eco-tourism, waterfront hospitality, water sports facilities, and recreational water body developments.',
+      icon: 'fa-water',
+      color: '#0d9488',
+      bg: '#ccfbf1',
+      desc: 'Inland aquaculture ponds, hatcheries, and raceways supplied by surface streams, springs, or groundwater.',
     },
     {
       title: 'Water supply',
@@ -226,8 +196,80 @@ export default function Home() {
       desc: 'Multi-network district-wide rural and urban bulk water supply systems operated across administrative sectors.',
     },
     {
+      title: 'Electricity generation (Hydropower)',
+      category: 'energy_industry',
+      regime: 'Water Concession',
+      icon: 'fa-bolt',
+      color: '#d97706',
+      bg: '#fef9c3',
+      desc: 'Run-of-river and reservoir hydropower plants harnessing river flow or head for clean electricity generation.',
+    },
+    {
+      title: 'Gas Extraction',
+      category: 'energy_industry',
+      regime: 'Water Concession',
+      icon: 'fa-fire-flame-simple',
+      color: '#dc2626',
+      bg: '#fee2e2',
+      desc: 'Methane and dissolved gas extraction concessions and associated process water management on Lake Kivu.',
+    },
+    {
+      title: 'Industry',
+      category: 'energy_industry',
+      regime: 'Water Abstraction',
+      icon: 'fa-industry',
+      color: '#7c3aed',
+      bg: '#f3e8ff',
+      desc: 'Manufacturing, agro-processing, beverage production, cooling systems, and commercial industrial water use.',
+    },
+    {
+      title: 'Mining',
+      category: 'energy_industry',
+      regime: 'Water Abstraction',
+      icon: 'fa-gem',
+      color: '#4f46e5',
+      bg: '#e0e7ff',
+      desc: 'Mineral washing, ore processing, quarry dust suppression, and regulated mining water abstraction.',
+    },
+    {
+      title: 'Construction of a dam',
+      category: 'infrastructure',
+      regime: 'Water Concession',
+      icon: 'fa-water',
+      color: '#0072bc',
+      bg: '#e8f4fc',
+      desc: 'Impoundment, reservoir creation, weir construction, and hydraulic retention structures across watercourses.',
+    },
+    {
+      title: 'Construction or installation of infrastructure',
+      category: 'infrastructure',
+      regime: 'Water Abstraction',
+      icon: 'fa-hard-hat',
+      color: '#475569',
+      bg: '#f1f5f9',
+      desc: 'Civil works, bridges, intakes, pipelines, and water-related infrastructure installation in or near water bodies.',
+    },
+    {
+      title: 'Port Construction',
+      category: 'infrastructure',
+      regime: 'Water Concession',
+      icon: 'fa-anchor',
+      color: '#0369a1',
+      bg: '#e0f2fe',
+      desc: 'Construction and operation of lake ports, jetties, piers, landing sites, and maritime transport terminals.',
+    },
+    {
+      title: 'Recreational activities',
+      category: 'recreation_other',
+      regime: 'Water Abstraction',
+      icon: 'fa-umbrella-beach',
+      color: '#0891b2',
+      bg: '#cffafe',
+      desc: 'Eco-tourism, waterfront hospitality, water sports facilities, and recreational water body developments.',
+    },
+    {
       title: 'Other water abstraction activities (specify)',
-      category: 'other',
+      category: 'recreation_other',
       regime: 'Water Abstraction',
       icon: 'fa-droplet',
       color: '#0f766e',
@@ -236,7 +278,7 @@ export default function Home() {
     },
     {
       title: 'Other water concession activities (specify)',
-      category: 'other',
+      category: 'recreation_other',
       regime: 'Water Concession',
       icon: 'fa-file-contract',
       color: '#6d28d9',
@@ -245,16 +287,28 @@ export default function Home() {
     },
   ];
 
-  const visibleActivities =
-    activeCategory === 'all'
+  const activeModalCategory = activityCategories.find((c) => c.id === modalCategoryId) || null;
+  const modalActivities =
+    modalCategoryId === 'all'
       ? permittedActivities
-      : permittedActivities.filter((item) => item.category === activeCategory);
+      : modalCategoryId
+      ? permittedActivities.filter((item) => item.category === modalCategoryId)
+      : [];
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (!modalCategoryId) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setModalCategoryId(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalCategoryId]);
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -467,87 +521,227 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── PERMITTED ACTIVITIES SECTION ── */}
+      {/* ── PERMITTED ACTIVITIES SECTION (COMPACT CATEGORY CARDS + MODAL) ── */}
       <section id="features" className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8">
-          <div className="text-center mb-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-8">
+          <div className="text-center mb-12">
             <span className="inline-block px-3.5 py-1 rounded-full bg-[#0072bc]/10 text-[#0072bc] text-xs font-extrabold uppercase tracking-widest">
               Permitted Activities
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-3">
-              Regulated Water Use &amp; Concession Activities
+              Regulated Water Use &amp; Concession Categories
             </h2>
             <p className="text-gray-600 mt-3 max-w-2xl mx-auto text-sm sm:text-base">
-              Select the permitted activity that matches your water abstraction, infrastructure, or water body concession project in Rwanda.
+              Click any category below to view its associated permitted activities, regulatory regime, and application requirements.
             </p>
           </div>
 
-          {/* Intuitive Category Filter Pills */}
-          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 mb-10">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             {activityCategories.map((cat) => {
-              const active = activeCategory === cat.id;
+              const items = permittedActivities.filter((a) => a.category === cat.id);
               return (
                 <button
                   key={cat.id}
                   type="button"
-                  onClick={() => setActiveCategory(cat.id)}
-                  className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                    active
-                      ? 'bg-[#0072bc] text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
+                  onClick={() => setModalCategoryId(cat.id)}
+                  className="group text-left rounded-2xl p-6 border border-gray-100 bg-white hover:border-[#0072bc]/40 hover:shadow-xl transition-all hover:-translate-y-1 flex flex-col justify-between cursor-pointer"
                 >
-                  {cat.label}
+                  <div>
+                    <div className="flex items-center justify-between gap-3 mb-5">
+                      <div
+                        className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform"
+                        style={{ backgroundColor: cat.bg }}
+                      >
+                        <i className={`fa ${cat.icon} text-2xl`} style={{ color: cat.color }} />
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-700 group-hover:bg-[#0072bc] group-hover:text-white transition-colors">
+                        {items.length} {items.length === 1 ? 'Activity' : 'Activities'}
+                      </span>
+                    </div>
+
+                    <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-[#0072bc] transition-colors">
+                      {cat.title}
+                    </h3>
+                    <p className="text-gray-500 text-sm leading-relaxed mb-4">
+                      {cat.summary}
+                    </p>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {items.map((act) => (
+                        <span
+                          key={act.title}
+                          className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-slate-50 text-slate-700 border border-slate-200/80"
+                        >
+                          <i className="fa fa-check text-[9px] text-[#0072bc]" />
+                          {act.title}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs font-bold text-[#0072bc]">
+                    <span>View {items.length} Permitted Activities</span>
+                    <i className="fa fa-arrow-right group-hover:translate-x-1 transition-transform" />
+                  </div>
                 </button>
               );
             })}
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
-            {visibleActivities.map((feat) => (
-              <div
-                key={feat.title}
-                className="group rounded-2xl p-5 sm:p-6 border border-gray-100 bg-white hover:border-[#0072bc]/30 hover:shadow-lg transition-all hover:-translate-y-1 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3 mb-4">
-                    <div
-                      className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-xs group-hover:shadow-md transition-shadow"
-                      style={{ backgroundColor: feat.bg }}
-                    >
-                      <i className={`fa ${feat.icon} text-xl`} style={{ color: feat.color }} />
-                    </div>
-                    <span
-                      className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
-                        feat.regime === 'Water Concession'
-                          ? 'bg-amber-50 text-amber-800 border border-amber-200/70'
-                          : 'bg-blue-50 text-[#0072bc] border border-blue-200/70'
-                      }`}
-                    >
-                      {feat.regime}
-                    </span>
-                  </div>
-                  <h3 className="text-base font-bold text-gray-900 mb-2 leading-snug">
-                    {feat.title}
-                  </h3>
-                  <p className="text-gray-500 text-xs sm:text-sm leading-relaxed">
-                    {feat.desc}
-                  </p>
-                </div>
+          <div className="mt-10 text-center">
+            <button
+              type="button"
+              onClick={() => setModalCategoryId('all')}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-[#0072bc] text-[#0072bc] hover:bg-[#0072bc] hover:text-white font-bold text-xs sm:text-sm transition-all cursor-pointer"
+            >
+              <i className="fa fa-list-ul" />
+              <span>View All 17 Permitted Activities in One List</span>
+            </button>
+          </div>
+        </div>
 
-                <div className="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between">
+        {/* ── PERMITTED ACTIVITIES MODAL ── */}
+        {modalCategoryId && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 sm:p-6 animate-in fade-in duration-150"
+            onClick={() => setModalCategoryId(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[88vh] flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="px-6 py-5 bg-gradient-to-r from-[#003d6b] to-[#0072bc] text-white flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-11 h-11 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center shrink-0">
+                    <i
+                      className={`fa ${
+                        activeModalCategory ? activeModalCategory.icon : 'fa-layer-group'
+                      } text-lg text-white`}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-blue-200 block">
+                      RWB Permitted Activities ({modalActivities.length})
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-extrabold truncate">
+                      {activeModalCategory
+                        ? activeModalCategory.title
+                        : 'All 17 Official Permitted Activities'}
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setModalCategoryId(null)}
+                  className="w-9 h-9 rounded-lg bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors shrink-0 cursor-pointer"
+                  aria-label="Close modal"
+                >
+                  <i className="fa fa-times text-base" />
+                </button>
+              </div>
+
+              {/* Category Switcher Bar inside Modal */}
+              <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2 overflow-x-auto">
+                <button
+                  type="button"
+                  onClick={() => setModalCategoryId('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                    modalCategoryId === 'all'
+                      ? 'bg-[#0072bc] text-white'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  All (17)
+                </button>
+                {activityCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setModalCategoryId(cat.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                      modalCategoryId === cat.id
+                        ? 'bg-[#0072bc] text-white'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {cat.title}
+                  </button>
+                ))}
+              </div>
+
+              {/* Modal Body: Associated Permitted Activities */}
+              <div className="p-6 overflow-y-auto grid sm:grid-cols-2 gap-4">
+                {modalActivities.map((feat) => (
+                  <div
+                    key={feat.title}
+                    className="rounded-xl p-5 border border-slate-200 bg-white hover:border-[#0072bc]/40 hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                            style={{ backgroundColor: feat.bg }}
+                          >
+                            <i className={`fa ${feat.icon} text-base`} style={{ color: feat.color }} />
+                          </div>
+                          <h4 className="text-sm sm:text-base font-bold text-slate-900 leading-snug">
+                            {feat.title}
+                          </h4>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap shrink-0 ${
+                            feat.regime === 'Water Concession'
+                              ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                              : 'bg-blue-50 text-[#0072bc] border border-blue-200'
+                          }`}
+                        >
+                          {feat.regime}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
+                        {feat.desc}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <Link
+                        href="/login"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0072bc] hover:text-[#005a96]"
+                      >
+                        <span>Apply for this activity</span>
+                        <i className="fa fa-arrow-right text-[10px]" />
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-slate-600">
+                  Ready to submit your application? Sign in or create an account to begin.
+                </p>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setModalCategoryId(null)}
+                    className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
                   <Link
                     href="/login"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0072bc] hover:text-[#005a96] transition-colors"
+                    className="px-5 py-2 rounded-lg bg-[#0072bc] text-white text-xs font-bold hover:bg-[#005a96] transition-colors"
                   >
-                    <span>Apply for this activity</span>
-                    <i className="fa fa-arrow-right text-[10px]" />
+                    Apply Now
                   </Link>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       {/* ── LIVE WATER USE DASHBOARD SECTION ── */}
