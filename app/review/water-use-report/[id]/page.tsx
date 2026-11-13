@@ -15,10 +15,7 @@ export default function ReviewWaterUseReportPage() {
   return (
     <ProtectedRoute allowedRoles={["reviewer", "admin"]} requireProfile={true}>
       <DashboardLayout>
-        <div className="flex justify-end p-6">
-          <UserProfileButton />
-        </div>
-        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-12 space-y-6">
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-4 pb-12 space-y-6">
           <SmartBackButton fallbackHref={staffListHref("review", "water-reports")} label="Go Back" variant="outline" />
           <WaterUseReportDetailTabs reportId={id} roleContext="reviewer" />
         </div>

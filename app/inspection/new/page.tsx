@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 import { Metadata } from "next"
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { InspectionBuilder } from "@/components/inspection/inspection-builder"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -21,18 +22,20 @@ function InspectionLoading() {
 
 export default function NewInspectionPage() {
   return (
-    <div className="container mx-auto py-6">
-      <div className="mb-4">
-        <Link href="/inspection">
-          <Button variant="ghost" className="gap-1">
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-        </Link>
+    <DashboardLayout>
+      <div className="container mx-auto py-6">
+        <div className="mb-4">
+          <Link href="/inspection">
+            <Button variant="ghost" className="gap-1">
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+          </Link>
+        </div>
+        <Suspense fallback={<InspectionLoading />}>
+          <InspectionBuilder />
+        </Suspense>
       </div>
-      <Suspense fallback={<InspectionLoading />}>
-        <InspectionBuilder />
-      </Suspense>
-    </div>
+    </DashboardLayout>
   )
 } 

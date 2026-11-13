@@ -275,6 +275,31 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
                   const [base] = href.split("?");
                   if (pathname.startsWith(`${base}/`)) return true;
                 }
+                if (href.endsWith("?tab=inspections")) {
+                  const [base] = href.split("?");
+                  if (
+                    pathname.startsWith(`${base}/inspection/`) ||
+                    (base === "/inspection" &&
+                      (pathname.startsWith("/inspection/physical/") ||
+                        pathname.startsWith("/inspection/new") ||
+                        (/^\/inspection\/[^/]+$/.test(pathname) &&
+                          pathname !== "/inspection/applications")))
+                  ) {
+                    return true;
+                  }
+                }
+                if (href === "/inspection?tab=assessments" && pathname.startsWith("/inspection/assessment/")) {
+                  return true;
+                }
+                if (
+                  href === "/inspection?tab=applications" &&
+                  (pathname.startsWith("/inspection/application/") || pathname === "/inspection/applications")
+                ) {
+                  return true;
+                }
+                if (href === "/review?tab=permit-registry" && pathname.startsWith("/review/permit/")) {
+                  return true;
+                }
                 if (
                   (href === "/approver?tab=approval" && pathname.startsWith("/approver/application/")) ||
                   (href === "/review?tab=review" && pathname.startsWith("/review/application/")) ||

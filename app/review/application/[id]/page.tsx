@@ -1188,11 +1188,7 @@ export default function ReviewApplicationPage() {
   return (
     <ProtectedRoute allowedRoles={['reviewer', 'admin']} requireProfile={true}>
       <DashboardLayout>
-        <div className="flex justify-end p-6">
-          <UserProfileButton />
-        </div>
-        
-        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-4">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

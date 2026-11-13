@@ -1,4 +1,5 @@
 import { Metadata } from "next"
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { InspectionDetailTabs } from "@/components/inspection/inspection-detail-tabs"
 import { BackButton } from "@/components/ui/back-button"
@@ -12,27 +13,29 @@ export default async function InspectionDetailPage({ params }: { params: Promise
   const { id } = await params
   
   return (
-    <div className="container mx-auto py-8 space-y-8">
-      <BackButton />
-      
-      <div>
-        <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">Inspection Details</h1>
-        <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
-          View detailed information about this inspection
-        </p>
-      </div>
+    <DashboardLayout>
+      <div className="container mx-auto py-8 space-y-8">
+        <BackButton />
+        
+        <div>
+          <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">Inspection Details</h1>
+          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
+            View detailed information about this inspection
+          </p>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Inspection Report</CardTitle>
-          <CardDescription>
-            Inspection findings and recommendations
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <InspectionDetailTabs inspectionId={id} />
-        </CardContent>
-      </Card>
-    </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Inspection Report</CardTitle>
+            <CardDescription>
+              Inspection findings and recommendations
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <InspectionDetailTabs inspectionId={id} />
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
   )
 } 
