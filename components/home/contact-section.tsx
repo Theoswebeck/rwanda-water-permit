@@ -10,10 +10,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Phone,
-  Mail,
-  MapPin,
-  Clock,
   CheckCircle,
   AlertCircle,
   MessageSquare,
@@ -21,7 +17,6 @@ import {
 } from "lucide-react";
 import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
-import { useSiteContent } from "@/lib/use-site-content";
 
 export function ContactSection() {
   const [isLoading, setIsLoading] = useState(false);
@@ -77,11 +72,9 @@ export function ContactSection() {
     }
   };
 
-  const { office } = useSiteContent();
-
   return (
     <section id="contact" className="py-20 bg-[#f3f5fa] border-t border-gray-200/70">
-      <div className="max-w-6xl mx-auto px-4 sm:px-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-8">
         <div className="text-center mb-12">
           <span className="text-[#0072bc] text-xs font-bold uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
             {tx("Get In Touch")}
@@ -109,10 +102,8 @@ export function ContactSection() {
           </motion.div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Contact Form (2 Cols) */}
-          <div className="lg:col-span-2">
-            <Card className="border border-gray-200 shadow-sm bg-white rounded-2xl overflow-hidden">
+        <div>
+          <Card className="border border-gray-200 shadow-sm bg-white rounded-2xl overflow-hidden">
               <CardHeader className="border-b border-gray-100 pb-5">
                 <CardTitle className="flex items-center gap-2 text-xl text-gray-900 font-bold">
                   <FileText className="h-5 w-5 text-[#0072bc]" />
@@ -262,83 +253,6 @@ export function ContactSection() {
                 </form>
               </CardContent>
             </Card>
-          </div>
-
-          {/* Contact Info & Office Locations (1 Col) */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* General Inquiries Card */}
-            <Card className="border border-blue-200 bg-blue-50/70 rounded-2xl shadow-sm overflow-hidden">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="p-2.5 bg-white rounded-xl shadow-xs">
-                    <MessageSquare className="h-5 w-5 text-[#0072bc]" />
-                  </div>
-                  <CardTitle className="text-base font-bold text-gray-900">{tx("General Inquiries")}</CardTitle>
-                </div>
-                <CardDescription className="text-xs text-gray-600 leading-relaxed">
-                  {tx("Questions about water permits, applications, and general information")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 pt-2 text-sm">
-                  <div className="flex items-center gap-3 text-gray-700">
-                    <Phone className="h-4 w-4 text-[#0072bc] shrink-0" />
-                    <a href={`tel:${office.phone}`} className="font-semibold hover:text-[#0072bc] transition-colors">
-                      {tx("Toll Free Line:")} {office.phone}
-                    </a>
-                  </div>
-                  <div className="flex items-center gap-3 text-gray-700">
-                    <Mail className="h-4 w-4 text-[#0072bc] shrink-0" />
-                    <a href={`mailto:${office.email}`} className="font-medium hover:text-[#0072bc] transition-colors">
-                      {office.email}
-                    </a>
-                  </div>
-                  <div className="flex items-center gap-3 text-gray-600">
-                    <Clock className="h-4 w-4 text-[#0072bc] shrink-0" />
-                    <span>Mon-Fri: 8:00 AM - 5:00 PM</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Office Locations Card */}
-            <Card className="border border-gray-200 bg-white rounded-2xl shadow-sm overflow-hidden">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 shadow-xs">
-                    <MapPin className="h-5 w-5 text-[#0072bc]" />
-                  </div>
-                  <CardTitle className="text-base font-bold text-gray-900">{tx("Office Locations")}</CardTitle>
-                </div>
-                <CardDescription className="text-xs text-gray-500">
-                  {tx("Visit us at our offices across Rwanda")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="pt-2 text-sm">
-                  <h4 className="font-bold text-gray-900 text-sm mb-2">{tx("Main Office - Kigali")}</h4>
-                  <div className="space-y-2.5 text-xs text-gray-600">
-                    <div className="flex items-start gap-2.5">
-                      <MapPin className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
-                      <span>{office.address}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5">
-                      <Phone className="h-4 w-4 text-gray-400 shrink-0" />
-                      <a href={`tel:${office.phone}`} className="hover:text-[#0072bc] font-semibold transition-colors">
-                        {office.phone}
-                      </a>
-                    </div>
-                    <div className="flex items-center gap-2.5">
-                      <Mail className="h-4 w-4 text-gray-400 shrink-0" />
-                      <a href={`mailto:${office.email}`} className="hover:text-[#0072bc] font-medium transition-colors">
-                        {office.email}
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </div>
       </div>
     </section>
