@@ -20100,10 +20100,29 @@ export const formatDropdownOptions = (items: string[]) => {
   }));
 };
 
-// Helper function to get formatted options for specific level
-export const getFormattedProvinceOptions = () => {
-  return formatDropdownOptions(getProvinces());
+/**
+ * Provinces are stored as the short cardinal forms ("East", "North", …) but
+ * RWB feedback (Sep 2026) requires the full names to be displayed
+ * ("Eastern", "Northern", …). Values stay short so existing records match.
+ */
+const PROVINCE_DISPLAY_NAMES: Record<string, string> = {
+  East: "Eastern",
+  West: "Western",
+  North: "Northern",
+  South: "Southern",
+  Kigali: "Kigali City",
 };
+
+export const getProvinceDisplayName = (province: string): string =>
+  PROVINCE_DISPLAY_NAMES[province] ?? province;
+
+export const getFormattedProvinceOptions = () => {
+  return getProvinces().map(province => ({
+    value: province,
+    label: getProvinceDisplayName(province),
+  }));
+};
+
 
 export const getFormattedDistrictOptions = (province: string) => {
   return formatDropdownOptions(getDistricts(province));

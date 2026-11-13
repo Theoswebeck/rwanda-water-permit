@@ -5,7 +5,11 @@
  * This is a TERMINAL status, clearly distinguished from return-for-revision:
  * the applicant is told no permit is required and nothing needs correcting.
  *
- * POST body: { reason: string }  — mandatory staff-provided reason.
+ * POST body: { reason: string, outcome?: 'exempted' | 'rejected' }
+ *   reason  — mandatory staff-provided reason.
+ *   outcome — 'exempted' (default): status 'terminated', no permit required.
+ *             'rejected': status 'rejected' (rejection_reason/rejected_at),
+ *             the applicant is told the application was refused.
  *
  * Mirrors the existing status-change route pattern
  * (app/api/approver/final-decision/route.ts): session-gated, role-checked,
@@ -30,7 +34,7 @@ import { query } from '@/lib/db/postgres'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 import { hasAnyRole, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 import { getInvalidEnumFallbackFromError } from '@/lib/db/application-enum-sanitizer'
-import { notifyOnApplicationTerminated } from '@/lib/notifications/termination'
+import { notifyOnApplicationTerminated, type ClosureOutcome } from '@/lib/notifications/termination'
 
 export const runtime = 'nodejs'
 
@@ -160,9 +164,19 @@ export async function POST(
 
     const body = await req.json().catch(() => ({}))
     const reason = String((body?.reason as string | undefined) || '').trim()
+    const outcome: ClosureOutcome = body?.outcome === 'rejected' ? 'rejected' : 'exempted'
+    if (body?.outcome !== undefined && body.outcome !== 'rejected' && body.outcome !== 'exempted') {
+      return NextResponse.json({ success: false, message: 'Invalid outcome.' }, { status: 400 })
+    }
     if (!isNonEmptyString(reason)) {
       return NextResponse.json(
-        { success: false, message: 'A termination reason is required (why the water use is exempted).' },
+        {
+          success: false,
+          message:
+            outcome === 'rejected'
+              ? 'A rejection reason is required.'
+              : 'A termination reason is required (why the water use is exempted).',
+        },
         { status: 400 }
       )
     }
@@ -238,6 +252,7 @@ export async function POST(
 
     const applicationNumber = application.application_number || application.id
     const previousStatus = application.status
+    const newStatus = outcome === 'rejected' ? 'rejected' : 'terminated'
 
     // ── Migration-order tolerance ────────────────────────────────────────────
     // The whole feature (enum value + both columns) ships in ONE manually
@@ -257,18 +272,31 @@ export async function POST(
     // what to do. The action succeeds on retry the moment the SQL is applied,
     // with no redeploy.
     try {
-      await query(
-        `
-        update public.applications
-        set
-          status = 'terminated',
-          termination_reason = $2,
-          terminated_at = now(),
-          updated_at = now()
-        where id = $1
-        `,
-        [applicationId, reason]
-      )
+      if (outcome === 'rejected') {
+        // 'rejected' + rejection_reason/rejected_at predate this route (approver
+        // final-decision uses them), so no migration-order concern here.
+        await query(
+          `
+          update public.applications
+          set status = 'rejected', rejection_reason = $2, rejected_at = now(), updated_at = now()
+          where id = $1
+          `,
+          [applicationId, reason]
+        )
+      } else {
+        await query(
+          `
+          update public.applications
+          set
+            status = 'terminated',
+            termination_reason = $2,
+            terminated_at = now(),
+            updated_at = now()
+          where id = $1
+          `,
+          [applicationId, reason]
+        )
+      }
     } catch (writeErr) {
       const enumFallback = getInvalidEnumFallbackFromError(writeErr, { status: 'terminated' })
       const missingColumn = isTerminatedMigrationMissingColumn(writeErr)
@@ -295,7 +323,7 @@ export async function POST(
     // Applicant email AFTER the DB mutation (idempotent server-side).
     // The status change is already COMMITTED here, so a notification failure
     // must never fail this request — it is reported back instead.
-    const notifyResult = await notifyOnApplicationTerminated(applicationId).catch((err) => {
+    const notifyResult = await notifyOnApplicationTerminated(applicationId, outcome).catch((err) => {
       console.error('❌ [terminate] termination notification threw:', err)
       return {
         ok: false as const,
@@ -315,14 +343,19 @@ export async function POST(
       `
       insert into public.audit_logs (
         user_id, action, entity_type, table_name, record_id, old_values, new_values, description, severity, status, created_at
-      ) values ($1, 'application.terminated', 'application', 'applications', $2, $3::jsonb, $4::jsonb, $5, 'warning', 'success', now())
+      ) values ($1, $6, 'application', 'applications', $2, $3::jsonb, $4::jsonb, $5, 'warning', 'success', now())
       `,
       [
         actorUserId,
         applicationId,
         JSON.stringify({ status: previousStatus }),
-        JSON.stringify({ status: 'terminated', termination_reason: reason }),
-        `Terminated application ${applicationNumber} — exempted water use. Reason: ${reason}`,
+        JSON.stringify(
+          outcome === 'rejected' ? { status: newStatus, rejection_reason: reason } : { status: newStatus, termination_reason: reason }
+        ),
+        outcome === 'rejected'
+          ? `Rejected application ${applicationNumber}. Reason: ${reason}`
+          : `Terminated application ${applicationNumber} — exempted water use. Reason: ${reason}`,
+        outcome === 'rejected' ? 'application.rejected' : 'application.terminated',
       ]
     ).catch(() => undefined)
 
@@ -330,17 +363,18 @@ export async function POST(
     // claim the applicant was emailed when they were not.
     const emailSent = notifyResult.emailSent
     const notificationRecorded = notifyResult.notificationRecorded
+    const done = outcome === 'rejected' ? 'rejected' : 'terminated'
     return NextResponse.json({
       success: true,
-      status: 'terminated',
+      status: newStatus,
       emailSent,
       applicantNotified: emailSent,
       notificationRecorded,
       warning: emailSent
         ? undefined
         : notificationRecorded
-          ? 'The application was terminated, but the confirmation email to the applicant could not be delivered. They will still see the termination in their portal — follow up manually if needed.'
-          : 'The application was terminated, but the applicant could NOT be notified (no email and no in-portal notification). Please contact them directly.',
+          ? `The application was ${done}, but the email to the applicant could not be delivered. They will still see it in their portal — follow up manually if needed.`
+          : `The application was ${done}, but the applicant could NOT be notified (no email and no in-portal notification). Please contact them directly.`,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Server error'

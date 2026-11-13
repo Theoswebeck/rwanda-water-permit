@@ -1,5 +1,5 @@
 import path from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/postgres";
 import { MISSING_FILE_CODE, MISSING_FILE_MESSAGE } from "@/lib/documents/file-availability";
@@ -186,6 +186,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const diskName = `${Date.now()}-${safeSegment(file.name || `document${ext}`)}`;
     const absFile = path.join(absDir, diskName);
     await writeFile(absFile, bytes);
+
+    // On the on-prem server public/uploads must be the symlink into the
+    // persistent store (/var/data/waterpermit/uploads). If it is missing, the
+    // write above silently lands on ephemeral storage and the document later
+    // 404s as FILE_MISSING — fail loudly at upload time instead.
+    const written = await stat(absFile).catch(() => null);
+    if (!written || written.size !== bytes.length) {
+      return NextResponse.json(
+        { success: false, message: "Upload could not be persisted on the server — contact RWB IT before retrying." },
+        { status: 500 }
+      );
+    }
 
     const relPath = `/${path.join(relDir, diskName).replaceAll(path.sep, "/")}`;
 

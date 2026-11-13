@@ -1,6 +1,7 @@
 import type { Json } from "@/types/database";
 import { polygonsToGeoJSON } from "@/lib/geoUtils";
 import { getEffectiveInternalNotes } from "@/lib/document-overrides";
+import { formatIntaraOrUmujyiWaKigali, fullProvinceName } from "@/lib/permit/permit-text-data";
 import { resolveOriginalPermitNumber } from "@/lib/permit/resolve-preview-permit-number";
 import * as turf from "@turf/turf";
 
@@ -18,12 +19,14 @@ export type ContractPlaceholderContext = {
   officeSector: string;
   officeCell: string;
   officeVillage: string;
-  /** Pre-composed English office address, e.g. "X Sector, Y District, Z Province" with cell/village prepended when set. */
+  /** Pre-composed English office address, always "X Sector, Y District, Z Province". */
   officeAddressEnglish: string;
-  /** Pre-composed Kinyarwanda office address, e.g. "Umurenge wa X, Akarere ka Y, Intara y' Z" with cell/village prepended when set. */
+  /** Pre-composed Kinyarwanda office address, "Umurenge wa X, Akarere ka Y, Intara y'Z". */
   officeAddressKinyarwanda: string;
   waterSourceName: string;
   provinceLabel: string;
+  /** Kinyarwanda water-source province, full form incl. "Intara y'…" / "Umujyi wa Kigali". */
+  provinceLabelRw: string;
   district: string;
   sector: string;
   cell: string;
@@ -34,9 +37,11 @@ export type ContractPlaceholderContext = {
   isGroundwater: boolean; // true when methodOfWaterAbstraction === "groundwater"
   durationYearsLabel: string; // e.g. "5"
   concessionAreaLabel: string; // e.g. "12 Ha"
+  /** Command/irrigated area for the "used solely for" clause; "N/A" when unknown. */
+  commandAreaLabel: string;
   activityLabel: string; // e.g. "Fish farming in lakes"
   activityLabelRw: string; // e.g. "Uburobyi byo mu biyaga"
-  systemTypeEnglish: string; // e.g. "Gravity system" or "Pumping system"
+  systemTypeEnglish: string; // e.g. "gravity system" or "pumping system"
   systemTypeKinyarwanda: string; // e.g. "gravity" or "gupompa"
 };
 
@@ -65,6 +70,7 @@ export type ApplicationForContract = {
   proposed_duration_years?: number | null;
   assessor_recommended_volume_m3?: number | null;
   concession_area?: number | null;
+  irrigation_total_area?: number | null;
   flow_rate_m3_per_second?: number | null;
 
   applicant?: {
@@ -119,7 +125,8 @@ function provinceLabelForContract(provinceRaw: string): string {
   const p = provinceRaw.trim();
   if (!p) return "N/A";
   if (p.toLowerCase() === "kigali") return "City of Kigali";
-  return p; // e.g. Northern/Southern/Eastern/Western
+  // DB stores short forms (East/North/…); documents print "Eastern Province".
+  return `${fullProvinceName(p)} Province`;
 }
 
 function resolveApplicantName(application: ApplicationForContract): string {
@@ -429,35 +436,36 @@ function resolveSystemTypeLabels(application: ApplicationForContract): {
   const normalized = rawMethod.toLowerCase();
   if (!normalized) {
     if (isGroundwaterApplication(application)) {
-      return { english: "Pumping system", kinyarwanda: "gupompa" };
+      return { english: "pumping system", kinyarwanda: "gupompa" };
     }
     return { english: "N/A", kinyarwanda: "N/A" };
   }
 
+  // RWB feedback (Sep 2026): lowercase system labels on official documents.
   if (normalized.includes("pump")) {
-    return { english: "Pumping system", kinyarwanda: "gupompa" };
+    return { english: "pumping system", kinyarwanda: "gupompa" };
   }
   if (normalized.includes("grav")) {
-    return { english: "Gravity system", kinyarwanda: "gravity" };
+    return { english: "gravity system", kinyarwanda: "gravity" };
   }
   if (normalized.includes("diversion") || normalized === "diversion_channel") {
-    return { english: "Diversion Channel", kinyarwanda: "umuyoboro w'amazi" };
+    return { english: "diversion channel", kinyarwanda: "umuyoboro w'amazi" };
   }
   if (normalized.includes("dam") || normalized.includes("reservoir")) {
-    return { english: "Dam/Reservoir", kinyarwanda: "ikidendezi/reservoir" };
+    return { english: "dam/reservoir", kinyarwanda: "ikidendezi/reservoir" };
   }
   if (normalized.includes("borehole")) {
-    return { english: "Borehole", kinyarwanda: "iriba ryatobowe" };
+    return { english: "borehole", kinyarwanda: "iriba ryatobowe" };
   }
   if (normalized.includes("spring")) {
-    return { english: "Spring Capture", kinyarwanda: "gufata amazi y'isoko" };
+    return { english: "spring capture", kinyarwanda: "gufata amazi y'isoko" };
   }
   if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) {
-    return { english: "Hand Dug Well", kinyarwanda: "iriba ryacukuwe n'intoki" };
+    return { english: "hand dug well", kinyarwanda: "iriba ryacukuwe n'intoki" };
   }
 
-  const capitalizedMethod = rawMethod.trim().replace(/[_-]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
-  return { english: capitalizedMethod, kinyarwanda: capitalizedMethod };
+  const method = rawMethod.trim().replace(/[_-]/g, " ").toLowerCase();
+  return { english: method, kinyarwanda: method };
 }
 
 function hasActivity(application: ApplicationForContract, activity: string): boolean {
@@ -694,6 +702,23 @@ function resolveConcessionAreaLabel(
   return "N/A";
 }
 
+/**
+ * Command area for the "used solely for …" clause: the declared irrigation
+ * area when present (RWB wants hectares stated for irrigation), otherwise the
+ * concession-area chain.
+ */
+function resolveCommandAreaLabel(
+  application: ApplicationForContract,
+  originalPermit?: TransferPermitContext | null,
+): string {
+  const notes = getInternalNotes(application);
+  const irrigationHa =
+    parsePositiveNumber(notes?.irrigationTotalArea) ??
+    parsePositiveNumber(application.irrigation_total_area);
+  if (irrigationHa) return `${formatNumber(irrigationHa)} Ha`;
+  return resolveConcessionAreaLabel(application, originalPermit);
+}
+
 function isTransferApplication(application: ApplicationForContract): boolean {
   const appType = application.application_type;
   if (typeof appType === "string" && appType.toLowerCase() === "transfer") return true;
@@ -713,13 +738,8 @@ function composeOfficeAddressEnglish(loc: {
   cell: string;
   village: string;
 }, provinceLabel: string): string {
-  const parts: string[] = [];
-  if (loc.village && loc.village !== "N/A") parts.push(`${loc.village} Village`);
-  if (loc.cell && loc.cell !== "N/A") parts.push(`${loc.cell} Cell`);
-  parts.push(`${loc.sector} Sector`);
-  parts.push(`${loc.district} District`);
-  parts.push(provinceLabel);
-  return parts.join(", ");
+  // RWB feedback (Sep 2026): office address is Sector, District, Province only.
+  return [`${loc.sector} Sector`, `${loc.district} District`, provinceLabel].join(", ");
 }
 
 /** Kinyarwanda counterpart to {@link composeOfficeAddressEnglish}. */
@@ -729,14 +749,12 @@ function composeOfficeAddressKinyarwanda(loc: {
   sector: string;
   cell: string;
   village: string;
-}, provinceLabel: string): string {
-  const parts: string[] = [];
-  if (loc.village && loc.village !== "N/A") parts.push(`Umudugudu wa ${loc.village}`);
-  if (loc.cell && loc.cell !== "N/A") parts.push(`Akagari ka ${loc.cell}`);
-  parts.push(`Umurenge wa ${loc.sector}`);
-  parts.push(`Akarere ka ${loc.district}`);
-  parts.push(`Intara y' ${provinceLabel}`);
-  return parts.join(", ");
+}): string {
+  return [
+    `Umurenge wa ${loc.sector}`,
+    `Akarere ka ${loc.district}`,
+    formatIntaraOrUmujyiWaKigali(loc.province),
+  ].join(", ");
 }
 
 function applyTransferOverlay(
@@ -787,16 +805,13 @@ function applyTransferOverlay(
       },
       transfereeProvince ? provinceLabelForContract(transfereeProvince) : "N/A",
     ),
-    officeAddressKinyarwanda: composeOfficeAddressKinyarwanda(
-      {
-        province: transfereeProvince || "N/A",
-        district: transfereeDistrict || "N/A",
-        sector: transfereeSector || "N/A",
-        cell: "N/A",
-        village: "N/A",
-      },
-      transfereeProvince ? provinceLabelForContract(transfereeProvince) : "N/A",
-    ),
+    officeAddressKinyarwanda: composeOfficeAddressKinyarwanda({
+      province: transfereeProvince || "N/A",
+      district: transfereeDistrict || "N/A",
+      sector: transfereeSector || "N/A",
+      cell: "N/A",
+      village: "N/A",
+    }),
   };
 }
 
@@ -879,12 +894,10 @@ export function buildContractPlaceholderContext(
       officeLocation,
       provinceLabelForContract(officeLocation.province),
     ),
-    officeAddressKinyarwanda: composeOfficeAddressKinyarwanda(
-      officeLocation,
-      provinceLabelForContract(officeLocation.province),
-    ),
+    officeAddressKinyarwanda: composeOfficeAddressKinyarwanda(officeLocation),
     waterSourceName: resolveWaterSourceName(application),
     provinceLabel: provinceLabelForContract(waterSourceLocation.province),
+    provinceLabelRw: formatIntaraOrUmujyiWaKigali(waterSourceLocation.province),
     district: waterSourceLocation.district,
     sector: waterSourceLocation.sector,
     cell: waterSourceLocation.cell,
@@ -895,6 +908,7 @@ export function buildContractPlaceholderContext(
     isGroundwater: isGroundwaterApplication(application),
     durationYearsLabel: resolveDurationYears(application, transferPermit),
     concessionAreaLabel: resolveConcessionAreaLabel(application, transferPermit),
+    commandAreaLabel: resolveCommandAreaLabel(application, transferPermit),
     activityLabel: resolveActivityLabel(application),
     activityLabelRw: resolveActivityLabelRw(application),
     systemTypeEnglish: systemType.english,
@@ -926,6 +940,10 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   s = s.replaceAll("{{OFFICE_ADDRESS_EN}}", ctx.officeAddressEnglish);
   s = s.replaceAll("{{OFFICE_ADDRESS_RW}}", ctx.officeAddressKinyarwanda);
   s = s.replaceAll("{{WATER_SOURCE_NAME}}", ctx.waterSourceName);
+  // Kinyarwanda templates wrap the token in "Intara y'" — swap the whole phrase
+  // for the full RW province form before the bare token substitution runs.
+  s = s.replaceAll("Intara y' {{PROVINCE_LABEL}}", ctx.provinceLabelRw);
+  s = s.replaceAll("Intara y’ {{PROVINCE_LABEL}}", ctx.provinceLabelRw);
   s = s.replaceAll("{{PROVINCE_LABEL}}", ctx.provinceLabel);
   s = s.replaceAll("{{DISTRICT}}", ctx.district);
   s = s.replaceAll("{{SECTOR}}", ctx.sector);
@@ -936,6 +954,14 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   s = s.replaceAll("{{VOLUME_LABEL}}", ctx.volumeLabel);
   s = s.replaceAll("{{DURATION_YEARS}}", ctx.durationYearsLabel);
   s = s.replaceAll("{{CONCESSION_AREA}}", ctx.concessionAreaLabel);
+  // Command area: drop the whole phrase when unknown rather than printing N/A.
+  if (ctx.commandAreaLabel && ctx.commandAreaLabel !== "N/A") {
+    s = s.replaceAll("{{COMMAND_AREA}}", ctx.commandAreaLabel);
+  } else {
+    s = s.replaceAll(", on a command area of {{COMMAND_AREA}}", "");
+    s = s.replaceAll(", ku buso bwa {{COMMAND_AREA}}", "");
+    s = s.replaceAll("{{COMMAND_AREA}}", "N/A");
+  }
   s = s.replaceAll("{{ACTIVITY_LABEL}}", ctx.activityLabel);
   s = s.replaceAll("{{SYSTEM_TYPE_EN}}", ctx.systemTypeEnglish);
   s = s.replaceAll("{{SYSTEM_TYPE_RW}}", ctx.systemTypeKinyarwanda);
@@ -1016,8 +1042,8 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   s = s.replaceAll("XXXX Sector", `${ctx.sector}`);
 
   // Location placeholders (Kinyarwanda)
-  s = s.replaceAll("Intara y' XXX", `Intara y' ${ctx.provinceLabel}`);
-  s = s.replaceAll("Intara y’ XXX", `Intara y’ ${ctx.provinceLabel}`);
+  s = s.replaceAll("Intara y' XXX", ctx.provinceLabelRw);
+  s = s.replaceAll("Intara y’ XXX", ctx.provinceLabelRw);
   s = s.replaceAll("Akarere ka XXX", `Akarere ka ${ctx.district}`);
   s = s.replaceAll("Umurenge wa XXX", `Umurenge wa ${ctx.sector}`);
   s = s.replaceAll("Umurenge wa XXXX", `Umurenge wa ${ctx.sector}`);
@@ -1052,8 +1078,16 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
     // Groundwater is abstracted from a borehole — "abstract water" → "abstract ground water".
     s = s.replace(/abstract water from/gi, "abstract ground water from");
   }
-  s = s.replace(/angana na m3\s+XXX\s+ku mwaka/gi, `angana na ${ctx.volumeLabel.replaceAll("m³", "m3")} ku mwaka`);
-  s = s.replace(/angana na\s+m³?\s+XXX\s+ku munsi/gi, `angana na ${ctx.volumeLabel.replaceAll("m³", "m3")} ku munsi`);
+  // Kinyarwanda amount reads "<N> m3 ku mwaka|ku munsi" — number first, and
+  // the period comes from the actual volume unit, not the template's default.
+  {
+    const rwVolume = ctx.volumeLabel
+      .replaceAll("m³", "m3")
+      .replace(/m3\s*\/\s*(year|yr|annum)/i, "m3 ku mwaka")
+      .replace(/m3\s*\/\s*(day|d)\b/i, "m3 ku munsi");
+    s = s.replace(/angana na m3\s+XXX\s+ku mwaka/gi, `angana na ${rwVolume}`);
+    s = s.replace(/angana na\s+m³?\s+XXX\s+ku munsi/gi, `angana na ${rwVolume}`);
+  }
 
   // Duration
   s = s.replace(/period of\s+XXX\s+\(Number\)\s+years/gi, `period of ${ctx.durationYearsLabel} years`);
@@ -1142,18 +1176,18 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
         .trim() || raw.trim();
 
     // VALUE (abstraction_individual legacy template):
-    // After line ~1030 the string reads "angana na 19 m3/day ku mwaka"
-    // → "angana na m3 19 ku munsi"  (unit before number, ku munsi)
+    // Normalize any leftover "19 m3/day ku mwaka" to "19 m3 ku munsi"
+    // (RWB feedback Sep 2026: number first, correct period).
     s = s.replace(
       /\bangana na ([\d,.]+)\s+m3\/day\s+ku mwaka/gi,
-      (_, n) => `angana na m3 ${n} ku munsi`,
+      (_, n) => `angana na ${n} m3 ku munsi`,
     );
     // VALUE (abstraction_organization modern template):
     // After {{VOLUME_LABEL}} substitution the string reads "ku gipimo cya 19 m³/day"
-    // → "ku gipimo cya m3 19 ku munsi"
+    // → "ku gipimo cya 19 m3 ku munsi"
     s = s.replace(
       /ku gipimo cya ([\d,.]+)\s+m[³3]\/day/gi,
-      (_, n) => `ku gipimo cya m3 ${n} ku munsi`,
+      (_, n) => `ku gipimo cya ${n} m3 ku munsi`,
     );
     // LOCATION (abstraction_individual legacy):
     // "ava mu <source> gaherereye mu" → "ava muri Nayikondo ya <source> iherereye mu"

@@ -32,10 +32,13 @@ interface AssessorRecommendationsProps {
   // Assessor recommended values (editable)
   recommendedDurationYears?: number | null;
   recommendedVolumeM3?: number | null;
+  /** Unit the assessor last entered the volume in. The value itself is always m³/year. */
+  recommendedVolumeUnit?: VolumeUnit | null;
 
   // Callbacks for saving changes
   onDurationChange?: (years: number) => Promise<void>;
-  onVolumeChange?: (volume: number) => Promise<void>;
+  /** `volume` is always m³/year; `unit` is what the assessor typed it in. */
+  onVolumeChange?: (volume: number, unit: VolumeUnit) => Promise<void>;
 
   // State flags
   readOnly?: boolean;
@@ -56,10 +59,21 @@ interface AssessorRecommendationsProps {
   pumpingRateSaving?: boolean;
 }
 
+export type VolumeUnit = "m3/year" | "m3/day";
+
+/** Read the saved volume unit from an application's `internal_notes`. */
+export function assessorVolumeUnit(internalNotes: unknown): VolumeUnit {
+  let notes: any = internalNotes;
+  if (typeof notes === "string") {
+    try { notes = JSON.parse(notes); } catch { notes = null; }
+  }
+  return notes?._assessorAdjustments?.recommendedVolumeUnit === "m3/day" ? "m3/day" : "m3/year";
+}
+
 type ConfirmState =
   | { kind: "none" }
   | { kind: "duration"; nextYears: number }
-  | { kind: "volume"; nextVolume: number }
+  | { kind: "volume"; nextVolume: number; nextUnit: VolumeUnit }
   | { kind: "pumpingRate"; nextRate: number };
 
 export function AssessorRecommendations({
@@ -67,6 +81,7 @@ export function AssessorRecommendations({
   requestedVolumeM3,
   recommendedDurationYears,
   recommendedVolumeM3,
+  recommendedVolumeUnit,
   onDurationChange,
   onVolumeChange,
   readOnly = false,
@@ -82,11 +97,15 @@ export function AssessorRecommendations({
 }: AssessorRecommendationsProps) {
   // Draft state — what the user has typed/picked but not yet saved.
   const savedDurationStr = recommendedDurationYears != null ? String(recommendedDurationYears) : "";
-  const savedVolumeStr = recommendedVolumeM3 != null ? String(recommendedVolumeM3) : "";
+  const savedUnit: VolumeUnit = !isConcession && recommendedVolumeUnit === "m3/day" ? "m3/day" : "m3/year";
+  const toUnit = (yearly: number, unit: VolumeUnit) =>
+    unit === "m3/day" ? Math.round((yearly / 365) * 100) / 100 : yearly;
+  const savedVolumeStr = recommendedVolumeM3 != null ? String(toUnit(recommendedVolumeM3, savedUnit)) : "";
   const savedPumpingRateStr = recommendedPumpingRateM3Day != null ? String(recommendedPumpingRateM3Day) : "";
 
   const [draftDuration, setDraftDuration] = useState<string>(savedDurationStr);
   const [draftVolume, setDraftVolume] = useState<string>(savedVolumeStr);
+  const [draftUnit, setDraftUnit] = useState<VolumeUnit>(savedUnit);
   const [draftPumpingRate, setDraftPumpingRate] = useState<string>(savedPumpingRateStr);
   const [confirm, setConfirm] = useState<ConfirmState>({ kind: "none" });
 
@@ -97,15 +116,17 @@ export function AssessorRecommendations({
   }, [savedDurationStr]);
   useEffect(() => {
     setDraftVolume(savedVolumeStr);
-  }, [savedVolumeStr]);
+    setDraftUnit(savedUnit);
+  }, [savedVolumeStr, savedUnit]);
   useEffect(() => {
     setDraftPumpingRate(savedPumpingRateStr);
   }, [savedPumpingRateStr]);
 
-  const formatVolume = (vol: number | null | undefined): string => {
+  const formatVolume = (vol: number | null | undefined, unit: VolumeUnit = "m3/year"): string => {
     if (vol == null) return "Not specified";
-    return isConcession
-      ? `${vol.toLocaleString()} ha`
+    if (isConcession) return `${vol.toLocaleString()} ha`;
+    return unit === "m3/day"
+      ? `${toUnit(vol, unit).toLocaleString()} m³/day`
       : `${vol.toLocaleString()} m³/year`;
   };
 
@@ -123,9 +144,11 @@ export function AssessorRecommendations({
     const n = parseInt(draftDuration, 10);
     return Number.isFinite(n) && n > 0 ? n : null;
   })();
+  // Always m³/year — a daily entry is multiplied by 365.
   const parsedDraftVolume = (() => {
     const n = parseFloat(draftVolume);
-    return Number.isFinite(n) && n > 0 ? n : null;
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return draftUnit === "m3/day" ? Math.round(n * 365 * 100) / 100 : n;
   })();
 
   const parsedDraftPumpingRate = (() => {
@@ -136,7 +159,8 @@ export function AssessorRecommendations({
   const durationDirty =
     parsedDraftDuration != null && parsedDraftDuration !== (recommendedDurationYears ?? null);
   const volumeDirty =
-    parsedDraftVolume != null && parsedDraftVolume !== (recommendedVolumeM3 ?? null);
+    parsedDraftVolume != null &&
+    (draftVolume !== savedVolumeStr || draftUnit !== savedUnit);
   const pumpingRateDirty =
     parsedDraftPumpingRate != null && parsedDraftPumpingRate !== (recommendedPumpingRateM3Day ?? null);
 
@@ -147,7 +171,7 @@ export function AssessorRecommendations({
 
   const requestSaveVolume = () => {
     if (parsedDraftVolume == null || !volumeDirty) return;
-    setConfirm({ kind: "volume", nextVolume: parsedDraftVolume });
+    setConfirm({ kind: "volume", nextVolume: parsedDraftVolume, nextUnit: draftUnit });
   };
 
   const requestSavePumpingRate = () => {
@@ -164,14 +188,13 @@ export function AssessorRecommendations({
     if (confirm.kind === "duration") {
       await onDurationChange?.(confirm.nextYears);
     } else if (confirm.kind === "volume") {
-      await onVolumeChange?.(confirm.nextVolume);
+      await onVolumeChange?.(confirm.nextVolume, confirm.nextUnit);
     } else if (confirm.kind === "pumpingRate") {
       await onPumpingRateSave?.(confirm.nextRate);
     }
     setConfirm({ kind: "none" });
   };
 
-  const volumeUnitLabel = isConcession ? "ha" : "m³/year";
   const volumeFieldLabel = isConcession ? "Surface Concession Area" : "Water Output Volume";
 
   return (
@@ -211,7 +234,7 @@ export function AssessorRecommendations({
               </span>
             </div>
             <div className="px-4 py-4 flex items-center justify-center border-l gap-2 flex-wrap">
-              {readOnly ? (
+              {readOnly || !onDurationChange ? (
                 <span className="text-sm font-medium">
                   {formatDuration(recommendedDurationYears)}
                 </span>
@@ -262,13 +285,13 @@ export function AssessorRecommendations({
             </div>
             <div className="px-4 py-4 flex items-center justify-center border-l bg-muted/20">
               <span className="text-sm text-muted-foreground">
-                {formatVolume(requestedVolumeM3)}
+                {formatVolume(requestedVolumeM3, savedUnit)}
               </span>
             </div>
             <div className="px-4 py-4 flex items-center justify-center border-l gap-2 flex-wrap">
-              {readOnly ? (
+              {readOnly || !onVolumeChange ? (
                 <span className="text-sm font-medium">
-                  {formatVolume(recommendedVolumeM3)}
+                  {formatVolume(recommendedVolumeM3, savedUnit)}
                 </span>
               ) : (
                 <>
@@ -289,7 +312,31 @@ export function AssessorRecommendations({
                       className="w-32 bg-white"
                       disabled={volumeSaving}
                     />
-                    <span className="text-sm text-muted-foreground">{volumeUnitLabel}</span>
+                    {isConcession ? (
+                      <span className="text-sm text-muted-foreground">ha</span>
+                    ) : (
+                      <Select
+                        value={draftUnit}
+                        onValueChange={(u) => {
+                          // Convert what is typed so switching unit keeps the same volume.
+                          const n = parseFloat(draftVolume);
+                          if (Number.isFinite(n) && n > 0) {
+                            const yearly = draftUnit === "m3/day" ? n * 365 : n;
+                            setDraftVolume(String(toUnit(yearly, u as VolumeUnit)));
+                          }
+                          setDraftUnit(u as VolumeUnit);
+                        }}
+                        disabled={volumeSaving}
+                      >
+                        <SelectTrigger className="w-28 bg-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="m3/year">m³/year</SelectItem>
+                          <SelectItem value="m3/day">m³/day</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                   <Button
                     type="button"
@@ -325,7 +372,7 @@ export function AssessorRecommendations({
               </span>
             </div>
             <div className="px-4 py-4 flex items-center justify-center border-l gap-2 flex-wrap">
-              {readOnly ? (
+              {readOnly || !onPumpingRateSave ? (
                 <span className="text-sm font-medium">
                   {formatPumpingRate(recommendedPumpingRateM3Day)}
                 </span>
@@ -414,9 +461,9 @@ export function AssessorRecommendations({
               ) : confirm.kind === "volume" ? (
                 <p>
                   <span className="text-muted-foreground line-through mr-2">
-                    {formatVolume(recommendedVolumeM3)}
+                    {formatVolume(recommendedVolumeM3, savedUnit)}
                   </span>
-                  <span className="font-medium">→ {formatVolume(confirm.nextVolume)}</span>
+                  <span className="font-medium">→ {formatVolume(confirm.nextVolume, confirm.nextUnit)}</span>
                 </p>
               ) : (
                 <p>

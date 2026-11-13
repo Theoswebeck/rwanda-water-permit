@@ -14,6 +14,7 @@ import {
   type ValiditySource,
 } from "@/lib/permit/resolve-modification-validity";
 import { resolvePreviewPermitNumber } from "@/lib/permit/resolve-preview-permit-number";
+import { assessorPermitLengthYears } from "@/lib/permit/resolve-render-dates-from-notes";
 
 export const runtime = "nodejs";
 
@@ -342,6 +343,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       const resolved = resolveModificationValidity(sources);
       if (resolved.expiryDate) exactExpiryDate = resolved.expiryDate;
       if (resolved.issuedDate) exactIssuedDate = resolved.issuedDate;
+    } else if (isRenewal && assessorPermitLengthYears(notes)) {
+      // Assessor-set duration wins over the inherited original term; the
+      // renderer computes issuedDate + resolvePermitDuration() (assessor first),
+      // exactly as the terms page does when the permit is actually issued.
     } else if (isRenewal || isTransfer) {
       // Step 1: try transferFormData (registry/manual permits + any transfer where
       // the applicant entered the original permit's dates in the form).

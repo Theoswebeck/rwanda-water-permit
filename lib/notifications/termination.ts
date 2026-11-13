@@ -5,7 +5,16 @@ import { getPortalUrl } from '@/lib/notifications/portal-url'
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
-const NOTIFICATION_TITLE = 'Application Terminated — Exempted Water Use'
+/**
+ * How staff closed the application: 'exempted' = no permit required
+ * (status 'terminated'); 'rejected' = refused on the merits (status 'rejected').
+ */
+export type ClosureOutcome = 'exempted' | 'rejected'
+
+const OUTCOMES = {
+  exempted: { status: 'terminated', reasonColumn: 'termination_reason', title: 'Application Terminated — Exempted Water Use' },
+  rejected: { status: 'rejected', reasonColumn: 'rejection_reason', title: 'Application Rejected' },
+} as const
 
 type TerminationNotifyResult =
   | {
@@ -31,6 +40,7 @@ type TerminationNotifyResult =
     }
 
 function buildTerminationCopy(params: {
+  outcome: ClosureOutcome
   applicantName: string
   applicationId: string
   applicationNumber?: string | null
@@ -41,6 +51,29 @@ function buildTerminationCopy(params: {
   const orgName = process.env.ORG_NAME || 'Rwanda Water Resources Board'
   const ref = params.applicationNumber ? `${params.applicationNumber} (ID: ${params.applicationId})` : params.applicationId
   const reason = String(params.terminationReason || '').trim()
+  const title = OUTCOMES[params.outcome].title
+
+  if (params.outcome === 'rejected') {
+    const subject = `Application rejected — ${params.applicationNumber || params.applicationId}`
+    const text = [
+      `Dear ${params.applicantName},`,
+      ``,
+      `We regret to inform you that, after review, Rwanda Water Resources Board has rejected your water use permit application. The application is now closed.`,
+      ``,
+      `Reference: ${ref}`,
+      ``,
+      `Reason:`,
+      reason || '(not specified)',
+      ``,
+      `If you are able to address the reason above, you may submit a new application through the portal.`,
+      ``,
+      `Portal: ${portalUrl}`,
+      `Support: ${supportEmail}`,
+      ``,
+      `${orgName}`,
+    ].join('\n')
+    return { email: { subject, title, text } }
+  }
 
   const subject = `Application closed — no permit required — ${params.applicationNumber || params.applicationId}`
   const text = [
@@ -63,7 +96,7 @@ function buildTerminationCopy(params: {
     `${orgName}`,
   ].join('\n')
 
-  return { email: { subject, title: NOTIFICATION_TITLE, text } }
+  return { email: { subject, title, text } }
 }
 
 /**
@@ -72,14 +105,19 @@ function buildTerminationCopy(params: {
  * water use, and support must be reachable since no email arrived.
  */
 function buildFailedDeliveryMessage(
+  outcome: ClosureOutcome,
   applicationNumber: string | null,
   terminationReason: string | null,
   failure: string
 ) {
   const supportEmail = process.env.SUPPORT_EMAIL || 'info@rwb.rw'
   const reason = String(terminationReason || '').trim()
+  const summary =
+    outcome === 'rejected'
+      ? `Your application${applicationNumber ? ` ${applicationNumber}` : ''} has been rejected by Rwanda Water Resources Board and is now closed. You may submit a new application if you can address the reason below.`
+      : `Your application${applicationNumber ? ` ${applicationNumber}` : ''} has been closed: the water use it describes falls under an EXEMPTED water use category, so a water use permit is NOT required. This is not a rejection and no resubmission is needed.`
   return [
-    `Your application${applicationNumber ? ` ${applicationNumber}` : ''} has been closed: the water use it describes falls under an EXEMPTED water use category, so a water use permit is NOT required. This is not a rejection and no resubmission is needed.`,
+    summary,
     reason ? `\nReason: ${reason}` : '',
     `\nWe could not deliver the confirmation email to you (${failure}). Please contact ${supportEmail} if you need a copy in writing.`,
   ]
@@ -88,12 +126,16 @@ function buildFailedDeliveryMessage(
 }
 
 /**
- * Email-only notification to the applicant when their application is
- * terminated because the water use is exempted (no permit required).
- * Termination is terminal, so idempotency is simple title-existence:
+ * Email-only notification to the applicant when staff close their application,
+ * either as an exempted water use (no permit required) or as a rejection.
+ * Both are terminal, so idempotency is simple title-existence:
  * one notification per application. Mirrors lib/notifications/revision.ts.
  */
-export async function notifyOnApplicationTerminated(applicationId: string): Promise<TerminationNotifyResult> {
+export async function notifyOnApplicationTerminated(
+  applicationId: string,
+  outcome: ClosureOutcome = 'exempted'
+): Promise<TerminationNotifyResult> {
+  const { status: expectedStatus, reasonColumn, title: NOTIFICATION_TITLE } = OUTCOMES[outcome]
   if (!isNonEmptyString(applicationId)) {
     return {
       ok: false,
@@ -113,7 +155,7 @@ export async function notifyOnApplicationTerminated(applicationId: string): Prom
     termination_reason: string | null
   }>(
     `
-    select id, application_number, status, applicant_id, termination_reason
+    select id, application_number, status, applicant_id, ${reasonColumn} as termination_reason
     from public.applications
     where id = $1
     limit 1
@@ -131,7 +173,7 @@ export async function notifyOnApplicationTerminated(applicationId: string): Prom
       notificationRecorded: false,
     }
   }
-  if (String(app.status) !== 'terminated') {
+  if (String(app.status) !== expectedStatus) {
     return { ok: true, status: 'skipped_not_terminated', applicationId, emailSent: false, notificationRecorded: false }
   }
 
@@ -192,6 +234,7 @@ export async function notifyOnApplicationTerminated(applicationId: string): Prom
     if (!isNonEmptyString(applicantEmail)) throw new Error('Applicant email not found')
 
     const copy = buildTerminationCopy({
+      outcome,
       applicantName: getApplicantName(applicant),
       applicationId,
       applicationNumber: app.application_number,
@@ -241,7 +284,7 @@ export async function notifyOnApplicationTerminated(applicationId: string): Prom
       set message = $2, email_sent = false, updated_at = now()
       where id = $1
       `,
-      [lockId, buildFailedDeliveryMessage(app.application_number, app.termination_reason, message)]
+      [lockId, buildFailedDeliveryMessage(outcome, app.application_number, app.termination_reason, message)]
     )
       .then(() => true)
       .catch(() => false)

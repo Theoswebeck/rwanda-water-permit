@@ -65,6 +65,10 @@ export async function GET(req: NextRequest) {
         a.catchment_name_level_2
       from public.permits p
       left join public.applications a on a.id = p.application_id
+      -- Public registry excludes deactivated permits (suspended/revoked, e.g. a
+      -- disabled test permit). Expired/expiring permits remain listed. See
+      -- docs/superpowers/specs/2026-06-10-disable-test-permit-0925-design.md
+      where p.status not in ('suspended', 'revoked')
       order by p.issued_date desc nulls last, p.created_at desc nulls last
       offset $1 limit $2
       `,

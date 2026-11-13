@@ -56,7 +56,13 @@ export async function findPublicPermitByNumber(
       p.permit_number,
       p.parent_permit_id,
       p.network_sequence_index,
-      p.status::text as status,
+      -- A permit past its expiry date must never verify as active on the
+      -- public QR page. Suspended/revoked stay terminal.
+      case
+        when p.status in ('suspended', 'revoked') then p.status::text
+        when p.expiry_date is not null and p.expiry_date::date < current_date then 'expired'
+        else p.status::text
+      end as status,
       p.water_source::text as water_source,
       p.purpose::text as purpose,
       p.water_allowance,
@@ -70,6 +76,19 @@ export async function findPublicPermitByNumber(
       p.is_transfer,
       p.modification_count,
       row_to_json(a) as application,
+      -- The concession map must show the boundary the assessor recorded in the
+      -- field assessment report, not the applicant's submitted polygon
+      -- (RWB feedback, Sep 2026). Read-only: it is NOT copied into
+      -- _assessorAdjustments, so the contract's concession-area resolution is
+      -- deliberately left untouched.
+      (
+        select ta.assessment_report_data -> 'sourcePolygonPoints'
+        from public.technical_assessments ta
+        where ta.application_id = a.id
+          and ta.assessment_report_data ? 'sourcePolygonPoints'
+        order by ta.updated_at desc nulls last, ta.created_at desc nulls last
+        limit 1
+      ) as report_polygon_points,
       st_asgeojson(a.coordinates)::json as application_coordinates_geojson,
       row_to_json(u) as applicant,
       coalesce(
@@ -185,7 +204,14 @@ export async function findPublicPermitByNumber(
     select
       pr.id as registry_id,
       pr.permit_number,
-      coalesce(pr.status, 'active')::text as status,
+      case
+        when upper(coalesce(pr.status, '')) like '%CANCEL%'
+          or upper(coalesce(pr.status, '')) like '%SUSPEND%'
+          or upper(coalesce(pr.status, '')) like '%REVOK%'
+          then coalesce(pr.status, 'active')::text
+        when pr.expiration_date is not null and pr.expiration_date::date < current_date then 'expired'
+        else coalesce(pr.status, 'active')::text
+      end as status,
       pr.water_source::text as water_source,
       pr.authorized_activity::text as purpose,
       pr.volume_or_area::text as water_allowance,

@@ -35,6 +35,17 @@ export type NotesBasedRenderDates = {
   signingDate: Date;
 };
 
+/**
+ * Duration the assessor set on THIS application (1–15 years), if any.
+ * Renewals inherit the original permit's term only when this is absent —
+ * RWB routinely grants e.g. 15 years on renewal of a 3-year permit, and the
+ * issued permit (terms page) already honours it, so previews must too.
+ */
+export function assessorPermitLengthYears(notes: Record<string, any> | null | undefined): number | undefined {
+  const years = notes?._assessorAdjustments?.permitLengthYears;
+  return typeof years === "number" && Number.isFinite(years) && years >= 1 && years <= 15 ? years : undefined;
+}
+
 export function resolvePermitRenderDatesFromNotes(opts: {
   notes: Record<string, any> | null;
   approvedAt?: string | Date | null;
@@ -67,6 +78,9 @@ export function resolvePermitRenderDatesFromNotes(opts: {
     const resolved = resolveModificationValidity(sources);
     if (resolved.issuedDate) issueDate = resolved.issuedDate;
     if (resolved.expiryDate) expiryDate = resolved.expiryDate;
+  } else if (isRenewal && assessorPermitLengthYears(notes)) {
+    // Assessor-set duration wins: leave expiry undefined so the renderer
+    // computes issueDate + resolvePermitDuration() (assessor value first).
   } else if (isRenewal || isTransfer) {
     const expiryFromNotes = parsePermitDate(notes?.transferFormData?.expirationDate);
     const issueFromNotes = parsePermitDate(notes?.transferFormData?.effectiveDate);

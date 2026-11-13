@@ -262,8 +262,45 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       'pending_assessment',
     ])
     const APPLICANT_EDITABLE_CURRENT_STATUSES = ['draft', 'pending_payment', 'revision_required']
+    // 'draft' is refused on a returned application: the renewal form's
+    // save-as-draft sent it and RWB-2026-000258 (paid, returned by the assessor)
+    // fell back to 'draft', invisible to staff.
     const editableCurrentStatusesFor = (next: unknown) =>
-      String(next) === 'pending_assessment' ? ['revision_required'] : APPLICANT_EDITABLE_CURRENT_STATUSES
+      String(next) === 'pending_assessment'
+        ? ['revision_required']
+        : String(next) === 'draft'
+          ? ['draft', 'pending_payment']
+          : APPLICANT_EDITABLE_CURRENT_STATUSES
+    // Applicant forms rebuild internal_notes from their own form state, so a
+    // save would silently erase staff-owned keys ("_"-prefixed, e.g.
+    // _assessorAdjustments / _originalRequestedValues). A returned renewal
+    // resubmitted this way lost the assessor's recommended duration. Carry any
+    // staff-owned key the incoming notes omit over from the stored row.
+    if (typeof updatePayload.internal_notes === 'string') {
+      try {
+        const incoming = JSON.parse(updatePayload.internal_notes)
+        if (incoming && typeof incoming === 'object' && !Array.isArray(incoming)) {
+          const existingRes = await query<{ internal_notes: string | null }>(
+            `select internal_notes from public.applications where id = $1 and applicant_id = $2 limit 1`,
+            [id, userId]
+          )
+          const existing = JSON.parse(existingRes.rows[0]?.internal_notes || 'null')
+          if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+            let carried = false
+            for (const [key, value] of Object.entries(existing)) {
+              if (key.startsWith('_') && !(key in incoming)) {
+                incoming[key] = value
+                carried = true
+              }
+            }
+            if (carried) updatePayload.internal_notes = JSON.stringify(incoming)
+          }
+        }
+      } catch {
+        // Non-JSON notes on either side: leave the write exactly as sent.
+      }
+    }
+
     let statusDroppedReason: string | null = null
     if ('status' in updatePayload && !APPLICANT_SETTABLE_STATUSES.has(String(updatePayload.status))) {
       statusDroppedReason = `requested status "${String(updatePayload.status)}" is not applicant-settable`

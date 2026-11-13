@@ -86,6 +86,11 @@ export async function GET(req: NextRequest) {
       from public.permits p
       join public.applications a on a.id = p.application_id
       where a.coordinates is not null
+        -- Deactivated permits (suspended/revoked, e.g. a disabled test permit)
+        -- are never exposed on this public map, regardless of the caller's
+        -- ?status= param. See
+        -- docs/superpowers/specs/2026-06-10-disable-test-permit-0925-design.md
+        and p.status not in ('suspended', 'revoked')
       `
     );
 

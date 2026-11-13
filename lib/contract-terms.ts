@@ -116,7 +116,8 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
       {
         title: "PART II: RIGHTS AND OBLIGATIONS OF THE WATER USER — Article 4: Right to abstract and use water",
         paragraphs: [
-          "1. The Water User is allowed to abstract water from XXXX (NAME OF WATER SOURCE) located in XXX Province, XXX District, XXX Sector, XXX Cell, XXX Village at Latitude: -1.960354°, Longitude: 30.488364°, by Gravity or pumping system with a flow rate of XXX m3/year OR m3/day.",
+          "1. The Water User is allowed to abstract water from {{WATER_SOURCE_NAME}} located in {{PROVINCE_LABEL}}, {{DISTRICT}} District, {{SECTOR}} Sector, {{CELL}} Cell, {{VILLAGE}} Village at Latitude: {{LAT}}°, Longitude: {{LNG}}°, by {{SYSTEM_TYPE_EN}} with a flow rate of {{VOLUME_LABEL}}.",
+          "2. The water abstracted shall be used solely for the {{ACTIVITY_LABEL}} project located in {{SECTOR}} Sector, {{DISTRICT}} District, on a command area of {{COMMAND_AREA}}, in accordance with the Project Documentation which constitutes an integral part of this Contract.",
           "3. The Water User understands and acknowledges that the water from XXXX (NAME OF WATER SOURCE) is multi-purpose water resource and may be subject to other plans as long as that will not affect the use to which water will be put.",
           "4. The Director General makes no guarantee as to the availability, suitability, purity, portability, or fitness of the water to meet Water User’s activities.",
         ],
@@ -268,6 +269,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
         title: "IGICE CYA II: UBURENGANZIRA N’INSHINGANO BY’UKORESHA MAZI — Ingingo ya 4: Uburenganzira bwo gufata amazi no kuyakoresha",
         paragraphs: [
           "1. Ukoresha amazi yemerewe gukoresha amazi angana na m3 XXX ku mwaka, ava mu XXXXXX (IZINA RY’ISOKO Y’AMAZI) gaherereye mu Intara y' XXX, Akarere ka XXX, Umurenge wa XXX, Akagari ka XXX, Umudugudu w’ XXX kuri Latitide (Latitude): -1.960354°, Lonjitide (Longitude): 30.488364°.",
+          "2. Amazi yafashwe azakoreshwa gusa mu bikorwa (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) biherereye mu Murenge wa {{SECTOR}}, Akarere ka {{DISTRICT}}, ku buso bwa {{COMMAND_AREA}}, nk’uko bigaragazwa n’inyandiko z’umushinga zigize kandi igice cy’aya masezerano.",
           "3. Ukoresha amazi yemera ko amazi ava mu XXXXXX (IZINA RY’ISOKO Y’AMAZI) akoreshwa mu buryo rusange kandi ko ashobora gusaranganywa mu gihe cyose bitagize uwo bibangamira.",
           "4. Umuyobozi Mukuru ntiyishingira ingano n’ ubuziranenge by’ amazi bikenewe n’ ukoresha amazi mu mirimo ye.",
         ],
@@ -425,7 +427,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
         title: "PART II: RIGHTS AND OBLIGATIONS OF THE WATER USER — Article 4: Right to abstract and use water",
         paragraphs: [
           "1. The Water User is allowed to abstract water from {{WATER_SOURCE_NAME}} on its part located in {{PROVINCE_LABEL}}, {{DISTRICT}} District, {{SECTOR}} Sector, {{CELL}} Cell, {{VILLAGE}} Village at Latitude: {{LAT}}°, Longitude: {{LNG}}°, by {{SYSTEM_TYPE_EN}} with a flow rate of {{VOLUME_LABEL}}.",
-          "2. The water abstracted shall be used solely for XXXXX (NAME OF ACTIVITIES APPLIED FOR) in accordance with the Project Documentation which constitutes an integral part of this Contract.",
+          "2. The water abstracted shall be used solely for the {{ACTIVITY_LABEL}} project located in {{SECTOR}} Sector, {{DISTRICT}} District, on a command area of {{COMMAND_AREA}}, in accordance with the Project Documentation which constitutes an integral part of this Contract.",
           "3. The Water User understands and acknowledges that the water from {{WATER_SOURCE_NAME}} is a multi-purpose water resource and may be subject to other plans as long as that will not affect the use to which water will be put.",
           "4. The Director General makes no guarantee as to the availability, suitability, purity, portability, or fitness of the water to meet Water User’s activities.",
         ],
@@ -583,7 +585,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
         title: "IGICE CYA II: UBURENGANZIRA N’INSHINGANO BY’UKORESHA MAZI — Ingingo ya 4: Uburenganzira bwo gufata amazi no kuyakoresha",
         paragraphs: [
           "1. Ukoresha amazi yemerewe gukoresha amazi ava mu {{WATER_SOURCE_NAME}} mu gice cyacyo giherereye mu Intara y' {{PROVINCE_LABEL}}, Akarere ka {{DISTRICT}}, Umurenge wa {{SECTOR}}, Akagari ka {{CELL}}, Umudugudu wa {{VILLAGE}} kuri Latitide (Latitude): {{LAT}}°, Lonjitide (Longitude): {{LNG}}°, hakoreshejwe uburyo bwa {{SYSTEM_TYPE_RW}} ku gipimo cya {{VOLUME_LABEL}}.",
-          "2. Amazi yafashwe azakoreshwa gusa mu bikorwa (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) nk’uko bigaragazwa n’inyandiko z’umushinga zigize kandi igice cy’aya masezerano.",
+          "2. Amazi yafashwe azakoreshwa gusa mu bikorwa (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) biherereye mu Murenge wa {{SECTOR}}, Akarere ka {{DISTRICT}}, ku buso bwa {{COMMAND_AREA}}, nk’uko bigaragazwa n’inyandiko z’umushinga zigize kandi igice cy’aya masezerano.",
           "3. Ukoresha amazi yemera ko amazi ava mu {{WATER_SOURCE_NAME}} akoreshwa mu buryo rusange kandi ko ashobora gusaranganywa mu gihe cyose bitagize uwo bibangamira.",
           "4. Umuyobozi Mukuru ntiyishingira ingano n’ ubuziranenge by’ amazi bikenewe n’ ukoresha amazi mu mirimo ye.",
         ],

@@ -349,12 +349,24 @@ export function prefillAssessmentReportFromApplication(
   const activityLabel = getActivityLabel(primaryActivity);
   
   // Extract applicant information
+  const applicantFromJoin = (application as unknown as { applicant?: any }).applicant;
+  // Renewals/transfers/modifications carry no fullNameApplicant and their
+  // project_title is "Renewal: <permit no>", which surfaced as the applicant's
+  // name. Prefer the account holder before falling back to a real title.
+  const joinedName =
+    applicantFromJoin?.account_type === "individual"
+      ? `${applicantFromJoin?.first_name ?? ""} ${applicantFromJoin?.last_name ?? ""}`.trim()
+      : String(applicantFromJoin?.company_name ?? "").trim() ||
+        `${applicantFromJoin?.first_name ?? ""} ${applicantFromJoin?.last_name ?? ""}`.trim();
+  const titleName = /^(Renewal|Transfer|Modification)\b/i.test(application.project_title ?? "")
+    ? ""
+    : application.project_title?.replace(' Water Permit Application', '');
   const applicantName =
     getString(formData, 'fullNameApplicant') ||
-    application.project_title?.replace(' Water Permit Application', '') ||
+    joinedName ||
+    titleName ||
     'Not specified';
   
-  const applicantFromJoin = (application as unknown as { applicant?: any }).applicant;
   const applicantCategory = pickFirstString(
     getString(formData, "categoryApplicant"),
     typeof applicantFromJoin?.account_type === "string" ? applicantFromJoin.account_type : undefined

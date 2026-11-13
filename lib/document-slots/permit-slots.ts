@@ -36,19 +36,23 @@
  */
 
 import {
+  assessorChoseDaily,
   fmtDMY,
   fmtNum,
   formatIntaraOrUmujyiWaKigali,
+  formatProvinceOrCityOfKigali,
   fmtProvince,
   resolveActivities,
   resolveActivitiesKinyarwanda,
   resolveAdminLocation,
   resolveApplicantName,
   resolveArea,
+  resolveBulkNetworks,
   resolveEnglishSystemLabel,
   resolveFlowRate,
   resolveFlowRateKinyarwanda,
   resolveIdNumber,
+  resolveIrrigationAreaHa,
   resolveIsGroundwater,
   resolveKinyarwandaSystemType,
   resolvePumpingRateM3Day,
@@ -356,15 +360,21 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
       const { lat, lng } = resolveLatLng(app);
       const sysType = resolveSystemType(app);
       const vols = resolveVolumes(app);
-      const yearlyStr = vols.yearly != null ? `${fmtNum(vols.yearly)} m³/year` : "N/A m³/year";
+      const yearlyStr = vols.yearly == null
+        ? "N/A m³/year"
+        : assessorChoseDaily(app)
+          ? `${fmtNum(vols.yearly / 365)} m³/day`
+          : `${fmtNum(vols.yearly)} m³/year`;
       const acts = resolveActivities(app);
       const isGw = resolveIsGroundwater(app);
       const prGw = isGw ? resolvePumpingRateM3Day(app) : undefined;
       const rateWord = isGw ? "pumping rate" : "flow rate";
       const rateStr = isGw && prGw != null ? `${fmtNum(prGw)} m³/day` : yearlyStr;
+      const irrHa = resolveIrrigationAreaHa(app);
+      const areaSuffix = irrHa != null ? ` on a command area of **${fmtNum(irrHa)} hectares**` : "";
       // Template emphasis applied automatically: name, water source, rate,
       // activities (same convention as abstraction_organization).
-      return `\u201C**${name}**\u201D, with ID Number: ${idNum}, is authorized to abstract ${isGw ? "ground water" : "water"} from **${wsName}** located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a ${rateWord} of **${rateStr}**. Water abstracted will be used for **${acts}**.`;
+      return `\u201C**${name}**\u201D, with ID Number: ${idNum}, is authorized to abstract ${isGw ? "ground water" : "water"} from **${wsName}** located in ${formatProvinceOrCityOfKigali(loc.province)}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a ${rateWord} of **${rateStr}**. Water abstracted will be used for **${acts}**${areaSuffix}.`;
     },
   },
   {
@@ -436,7 +446,9 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
       const rwValueSuffix = isGw ? `` : `, ku gipimo cya **${yearlyStr}**`;
       // Groundwater uses "gukoresha" (to use) rather than the pumping-system verb.
       const rwVerb = isGw ? "gukoresha" : systemTypeRw;
-      return `"**${name}**", ufite Indangamuntu nimero: ${idNum}, yemerewe ${rwVerb} amazi ${rwValuePrefix}${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}${rwValueSuffix}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;
+      const irrHa = resolveIrrigationAreaHa(app);
+      const rwAreaSuffix = irrHa != null ? ` ku buso bwa **hegitari ${fmtNum(irrHa)}**` : "";
+      return `"**${name}**", ufite Indangamuntu nimero: ${idNum}, yemerewe ${rwVerb} amazi ${rwValuePrefix}${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}${rwValueSuffix}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**${rwAreaSuffix}.`;
     },
   },
   {
@@ -478,11 +490,7 @@ function concessionOrgWaterSourceLocation(ctx: SlotResolverContext): string {
   return [
     hasLocPart(loc.sector) ? `${loc.sector} Sector` : null,
     hasLocPart(loc.district) ? `${loc.district} District` : null,
-    hasLocPart(loc.province)
-      ? loc.province.toLowerCase() === "kigali"
-        ? "City OF Kigali"
-        : `${loc.province} Province`
-      : null,
+    hasLocPart(loc.province) ? formatProvinceOrCityOfKigali(loc.province) : null,
   ]
     .filter(Boolean)
     .join(", ") || "N/A";
@@ -664,14 +672,15 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       const sysLabel = resolveEnglishSystemLabel(app);
       const flowRate = resolveFlowRate(app);
       const acts = resolveActivities(app);
-      const provLabel =
-        loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
+      const provLabel = formatProvinceOrCityOfKigali(loc.province);
       const isGw = resolveIsGroundwater(app);
       // Dynamic values are wrapped in `**…**` so the renderer emits them
       // bold inline (matches the official RWB sample). The office address
       // itself is intentionally NOT bold — only org name, rep title, water
       // source, flow rate, and activities are emphasised.
-      return `\u201C**${orgName}**\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract ${isGw ? "ground water" : "water"} from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a ${isGw ? "pumping rate" : "flow rate"} of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
+      const irrHa = resolveIrrigationAreaHa(app);
+      const areaSuffix = irrHa != null ? ` on a command area of **${fmtNum(irrHa)} hectares**` : "";
+      return `\u201C**${orgName}**\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract ${isGw ? "ground water" : "water"} from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a ${isGw ? "pumping rate" : "flow rate"} of **${flowRate}**. Water abstracted will be used for **${acts}**${areaSuffix}.`;
     },
   },
   {
@@ -745,10 +754,12 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
         : `ava ku **${wsName}** iherereye mu`;
       // Groundwater uses "gukoresha" (to use) rather than the pumping-system verb.
       const rwVerb = isGw ? "gukoresha" : systemTypeRw;
+      const irrHa = resolveIrrigationAreaHa(app);
+      const rwAreaSuffix = irrHa != null ? ` ku buso bwa **hegitari ${fmtNum(irrHa)}**` : "";
       return `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${rwVerb} amazi angana na **${flowRate}**, ` +
         `${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
         `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
-        `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;
+        `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**${rwAreaSuffix}.`;
     },
   },
   {
@@ -779,6 +790,80 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
   },
 ];
 
+// ─── bulk_water_supply (District Water Supply, bilingual) ────────────────────
+// Title, legal basis and validity read exactly like abstraction_organization;
+// para_2 counts the authorized networks and para_4 points at the annex.
+
+function bulkClone(id: string): DocumentTextSlot {
+  const src = abstractionOrganizationSlots.find(
+    (s) => s.id === `permit.abstraction_organization.${id}`,
+  )!;
+  return { ...src, id: `permit.bulk_water_supply.${id}`, variant: "bulk_water_supply" };
+}
+
+function bulkNetworkCount(ctx: SlotResolverContext): number {
+  return resolveBulkNetworks(appOf(ctx)).length;
+}
+
+const bulkWaterSupplySlots: DocumentTextSlot[] = [
+  bulkClone("title.en"),
+  bulkClone("en.para_1"),
+  {
+    id: "permit.bulk_water_supply.en.para_2",
+    documentKind: "permit",
+    variant: "bulk_water_supply",
+    language: "en",
+    group: GROUP.AUTH_EN,
+    label: "Paragraph 2 — Authorization (English, snapshot of dynamic values)",
+    defaultResolver: (ctx) => {
+      const app = appOf(ctx);
+      const rep = resolveOrgRep(app);
+      const n = bulkNetworkCount(ctx);
+      return `"**${resolveApplicantName(app)}**" with its registered office address as follows: ${resolveOrgAddress(app)}; represented by ${rep.name} "**${rep.title}**", is authorized to abstract water from **${n} water supply network${n !== 1 ? "s" : ""}** located in ${resolveAdminLocation(app).district} District as specified in the attached annex. Water abstracted will be used for **water supply**.`;
+    },
+  },
+  bulkClone("en.para_3"),
+  {
+    id: "permit.bulk_water_supply.en.para_4",
+    documentKind: "permit",
+    variant: "bulk_water_supply",
+    language: "en",
+    group: GROUP.AUTH_EN,
+    label: "Paragraph 4 — Contract reference (English)",
+    softMaxLength: 400,
+    defaultResolver: (ctx) =>
+      "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in the attached contract." +
+      (bulkNetworkCount(ctx) > 0 ? " The list of authorized distribution networks is provided in the Annex." : ""),
+  },
+  bulkClone("rw.para_1"),
+  {
+    id: "permit.bulk_water_supply.rw.para_2",
+    documentKind: "permit",
+    variant: "bulk_water_supply",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 2 — Authorization (Kinyarwanda, snapshot of dynamic values)",
+    defaultResolver: (ctx) => {
+      const app = appOf(ctx);
+      const rep = resolveOrgRep(app);
+      return `"**${resolveApplicantName(app)}**" ifite ibiro biherereye mu ${resolveOrgAddressKinyarwanda(app)}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe gukoresha amazi y'imiyoboro **${bulkNetworkCount(ctx)}** iherereye mu Akarere ka ${resolveAdminLocation(app).district} nkuko bigaragara ku mugereka. Aya mazi yemerewe gukoreshwa mu bikorwa byo **gukwirakwiza amazi**.`;
+    },
+  },
+  bulkClone("rw.para_3"),
+  {
+    id: "permit.bulk_water_supply.rw.para_4",
+    documentKind: "permit",
+    variant: "bulk_water_supply",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 4 — Amasezerano (Kinyarwanda)",
+    softMaxLength: 400,
+    defaultResolver: (ctx) =>
+      rwContractReference() +
+      (bulkNetworkCount(ctx) > 0 ? " Urutonde rw'imiyoboro y'amazi yemerewe ruri ku mugereka." : ""),
+  },
+];
+
 // ─── Catalogue export + registration ─────────────────────────────────────────
 
 export const permitSlots: DocumentTextSlot[] = [
@@ -787,6 +872,7 @@ export const permitSlots: DocumentTextSlot[] = [
   ...abstractionOrganizationSlots,
   ...concessionIndividualSlots,
   ...concessionOrganizationSlots,
+  ...bulkWaterSupplySlots,
 ];
 
 registerSlots(permitSlots);

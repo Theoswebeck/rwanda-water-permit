@@ -150,6 +150,15 @@ export async function GET(req: NextRequest, context: { params: Promise<{ permitN
     }
 
     const permit = result.permit as Record<string, unknown>;
+
+    // Public visibility gate: deactivated permits (suspended/revoked, e.g. a
+    // disabled test permit) are not downloadable publicly. Expired permits are
+    // still downloadable — verifying an expired permit is legitimate. See
+    // docs/superpowers/specs/2026-06-10-disable-test-permit-0925-design.md
+    if (String(permit.status) === "suspended" || String(permit.status) === "revoked") {
+      return jsonError("This permit is inactive.", 404);
+    }
+
     const permitNumberValue = String(permit.permit_number || result.inputPermitNumber);
 
     const existingPdfPath = typeof permit.permit_pdf_url === "string" ? permit.permit_pdf_url : "";

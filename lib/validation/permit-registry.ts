@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { REGISTRY_STATUSES } from "@/lib/permit/registry-status";
 
 const nullableString = z.union([z.string(), z.null()]).transform((value) => {
   if (value === null) return null;
@@ -32,8 +33,15 @@ export const permitRegistryEditableSchema = z.object({
   issuance_date: nullableDateString,
   duration: nullableString,
   expiration_date: nullableDateString,
-  status: nullableString,
+  status: z.union([z.enum(REGISTRY_STATUSES), z.null()]),
   contact: nullableString,
+  /**
+   * Concession boundary for an existing (imported) permit, in the same format
+   * RWB already uses in the registry spreadsheet: at least three
+   * "lat,lng" pairs separated by ";" or "|". Not a table column — the PATCH
+   * route turns it into `map_geometry` so the permit appears on the map.
+   */
+  concession_coordinates: nullableString,
 });
 
 export const permitRegistryPatchSchema = permitRegistryEditableSchema.partial().strict();

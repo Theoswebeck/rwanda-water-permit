@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { CloseApplicationDialog } from "@/components/staff/close-application-dialog";
+import type { ClosureOutcome } from "@/lib/notifications/termination";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,7 +79,7 @@ import {
   getFormattedSectorOptions,
   getFormattedVillageOptions,
 } from "@/lib/rwanda-administrative-data";
-import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
+import { AssessorRecommendations, assessorVolumeUnit, type VolumeUnit } from "@/components/inspection/assessor-recommendations";
 import { getDocumentBaseValues, sanitizeDocumentOverridePatch } from "@/lib/document-overrides";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
@@ -1778,10 +1780,6 @@ export default function AssessmentApplicationPage() {
   // Save assessor's permit length adjustment via the race-safe endpoint.
   const savePermitLengthAdjustment = async (newPermitLength: number) => {
     if (!application) return;
-    if ((application as any).is_renewal) {
-      alert("⚠️ Renewal applications inherit assessor recommendations from the previous permit and they cannot be edited.");
-      return;
-    }
 
     try {
       setPermitLengthSaving(true);
@@ -1822,18 +1820,14 @@ export default function AssessmentApplicationPage() {
   };
 
   // Save assessor's volume adjustment via the race-safe endpoint.
-  const saveVolumeAdjustment = async (newVolume: number) => {
+  const saveVolumeAdjustment = async (newVolume: number, unit: VolumeUnit = "m3/year") => {
     if (!application) return;
-    if ((application as any).is_renewal) {
-      alert("⚠️ Renewal applications inherit assessor recommendations from the previous permit and they cannot be edited.");
-      return;
-    }
 
     try {
       setVolumeSaving(true);
       const { assessorAdjustments, originalRequestedValues } = await persistAssessorAdjustment(
         application.id,
-        { recommendedVolumeM3: newVolume },
+        { recommendedVolumeM3: newVolume, recommendedVolumeUnit: unit },
       );
 
       setApplication((prev) => {
@@ -1866,10 +1860,6 @@ export default function AssessmentApplicationPage() {
   // Save assessor's recommended pumping rate adjustment via the race-safe endpoint.
   const savePumpingRateAdjustment = async (newRate: number) => {
     if (!application) return;
-    if ((application as any).is_renewal) {
-      alert("⚠️ Renewal applications inherit assessor recommendations from the previous permit and they cannot be edited.");
-      return;
-    }
 
     try {
       setPumpingRateSaving(true);
@@ -2545,8 +2535,8 @@ export default function AssessmentApplicationPage() {
     }
   };
 
-  const handleTerminateExempted = async () => {
-    if (!application || !terminationReason.trim()) return;
+  const handleCloseApplication = async (outcome: ClosureOutcome, reason: string) => {
+    if (!application || !reason) return;
 
     if (actionInFlightRef.current) return;
 
@@ -2558,22 +2548,25 @@ export default function AssessmentApplicationPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ reason: terminationReason.trim() }),
+        body: JSON.stringify({ reason, outcome }),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok || !payload?.success) {
-        throw new Error(payload?.message || 'Failed to terminate application.');
+        throw new Error(payload?.message || 'Failed to close application.');
       }
 
       setShowTerminateDialog(false);
-      setTerminationReason("");
       // Never claim the applicant was emailed unless the server says so.
+      const done = outcome === 'rejected'
+        ? "Application rejected."
+        : "Application terminated: the water use is exempted and no permit is required.";
       alert(
         payload?.emailSent
-          ? "Application terminated: the water use is exempted and no permit is required. The applicant has been notified by email."
-          : `Application terminated: the water use is exempted and no permit is required.\n\n${payload?.warning ||
-          "The confirmation email to the applicant could not be delivered — please follow up with them directly."
-          }`
+          ? `${done} The applicant has been notified by email.`
+          : `${done}\n\n${
+              payload?.warning ||
+              "The confirmation email to the applicant could not be delivered — please follow up with them directly."
+            }`
       );
       router.push('/assessment');
     } catch (err) {
@@ -2581,7 +2574,7 @@ export default function AssessmentApplicationPage() {
       const msg =
         err && typeof err === "object" && "message" in err && typeof (err as any).message === "string"
           ? (err as any).message
-          : "Failed to terminate application. Please try again.";
+          : "Failed to close application. Please try again.";
       alert(msg);
     } finally {
       setSubmitLoading(false);
@@ -2727,10 +2720,10 @@ export default function AssessmentApplicationPage() {
                 onClick={() => setShowTerminateDialog(true)}
                 disabled={submitLoading}
                 className="gap-2 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
-                title="Close this application because the water use is exempted and no permit is required."
+                title="Close this application as rejected or exempted."
               >
                 <Ban className="h-4 w-4" />
-                Terminate — Exempted Use
+                Close Application
               </Button>
             )}
 
@@ -3084,11 +3077,12 @@ export default function AssessmentApplicationPage() {
                             <AssessorRecommendations
                               requestedDurationYears={requestedDurationYears}
                               requestedVolumeM3={requestedVolumeM3}
-                              recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : assessorPermitLength}
-                              recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : assessorRecommendedVolume}
-                              onDurationChange={(application as any).is_renewal ? undefined : savePermitLengthAdjustment}
-                              onVolumeChange={(application as any).is_renewal ? undefined : saveVolumeAdjustment}
-                              readOnly={isReadOnly || (application as any).is_renewal}
+                              recommendedDurationYears={assessorPermitLength ?? ((application as any).is_renewal ? renewalRecommendedDurationYears : undefined)}
+                              recommendedVolumeM3={assessorRecommendedVolume ?? ((application as any).is_renewal ? renewalRecommendedVolumeM3 : undefined)}
+                              recommendedVolumeUnit={assessorVolumeUnit((application as any)?.internal_notes)}
+                              onDurationChange={savePermitLengthAdjustment}
+                              onVolumeChange={saveVolumeAdjustment}
+                              readOnly={isReadOnly}
                               durationSaving={permitLengthSaving}
                               volumeSaving={volumeSaving}
                               isConcession={rt === "concession"}
@@ -3096,7 +3090,7 @@ export default function AssessmentApplicationPage() {
                               isGroundwater={isGroundwater}
                               requestedPumpingRateM3Day={requestedPumpingRateM3Day}
                               recommendedPumpingRateM3Day={assessorRecommendedPumpingRateM3Day}
-                              onPumpingRateSave={(application as any).is_renewal ? undefined : savePumpingRateAdjustment}
+                              onPumpingRateSave={savePumpingRateAdjustment}
                               pumpingRateSaving={pumpingRateSaving}
                             />
 
@@ -3244,57 +3238,12 @@ export default function AssessmentApplicationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Terminate (Exempted Water Use) Dialog */}
-      <Dialog open={showTerminateDialog} onOpenChange={setShowTerminateDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Ban className="h-5 w-5 text-red-600" />
-              Terminate — Exempted Water Use
-            </DialogTitle>
-            <DialogDescription>
-              Use this only when the application falls under an exempted water use (e.g. irrigation on land of 1 hectare or less) and therefore needs no permit. This closes the application permanently — it is NOT a return for correction. The applicant will be notified that no permit is required.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="termination-reason">Termination Reason *</Label>
-              <Textarea
-                id="termination-reason"
-                placeholder="E.g., The declared irrigation covers 0.8 ha, which is below the 1 ha threshold. This water use is exempted and no permit is required..."
-                value={terminationReason}
-                onChange={(e) => setTerminationReason(e.target.value)}
-                rows={5}
-                required
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowTerminateDialog(false);
-                setTerminationReason("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleTerminateExempted}
-              disabled={!terminationReason.trim() || submitLoading}
-              className="gap-2"
-            >
-              {submitLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Ban className="h-4 w-4" />
-              )}
-              {submitLoading ? 'Terminating...' : 'Terminate Application'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CloseApplicationDialog
+        open={showTerminateDialog}
+        onOpenChange={setShowTerminateDialog}
+        loading={submitLoading}
+        onConfirm={handleCloseApplication}
+      />
 
       {/* Send to Review Confirmation Dialog */}
       <Dialog open={showSendToReviewDialog} onOpenChange={setShowSendToReviewDialog}>

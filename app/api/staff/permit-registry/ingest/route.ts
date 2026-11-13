@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/postgres";
 import * as XLSX from "xlsx";
+import {
+  getConcessionPolygonWkt,
+  isLatitudeInRange,
+  isLongitudeInRange,
+} from "@/lib/permit/registry-coordinates";
 
 // ---------------------------------------------------------------------------
 // Date helpers
@@ -110,83 +115,6 @@ function parseCoordinate(raw: string | undefined): number | null {
   if (!cleaned) return null;
   const num = parseFloat(cleaned);
   return Number.isFinite(num) ? num : null;
-}
-
-function parseCoordinateList(raw: string | undefined): number[] {
-  if (!raw) return [];
-  const cleaned = raw.replace(/°/g, " ").trim();
-  if (!cleaned) return [];
-  const matches = cleaned.match(/-?\d+(?:\.\d+)?/g);
-  if (!matches) return [];
-  return matches
-    .map((token) => Number(token))
-    .filter((value) => Number.isFinite(value));
-}
-
-function isLatitudeInRange(value: number): boolean {
-  return value >= -90 && value <= 90;
-}
-
-function isLongitudeInRange(value: number): boolean {
-  return value >= -180 && value <= 180;
-}
-
-function hasSamePoint(a: [number, number], b: [number, number]): boolean {
-  return a[0] === b[0] && a[1] === b[1];
-}
-
-function parseCoordinatePairsFromSingleField(raw: string | undefined): Array<[number, number]> {
-  if (!raw) return [];
-  const segments = raw.split(/[;|]/).map((s) => s.trim()).filter(Boolean);
-  if (segments.length < 3) return [];
-  const pairs: Array<[number, number]> = [];
-  for (const segment of segments) {
-    const nums = parseCoordinateList(segment);
-    if (nums.length < 2) return [];
-    pairs.push([nums[0], nums[1]]);
-  }
-  return pairs;
-}
-
-function getConcessionPolygonWkt(
-  regime: string | null,
-  latitudeRaw: string | undefined,
-  longitudeRaw: string | undefined
-): string | null {
-  if ((regime || "").trim().toLowerCase() !== "concession") return null;
-
-  const latRaw = (latitudeRaw || "").trim();
-  const lngRaw = (longitudeRaw || "").trim();
-  const latList = parseCoordinateList(latRaw);
-  const lngList = parseCoordinateList(lngRaw);
-
-  let latLngPairs: Array<[number, number]> = [];
-
-  if ((latRaw.includes(";") || latRaw.includes("|")) && !lngRaw) {
-    latLngPairs = parseCoordinatePairsFromSingleField(latRaw);
-  } else if ((lngRaw.includes(";") || lngRaw.includes("|")) && !latRaw) {
-    latLngPairs = parseCoordinatePairsFromSingleField(lngRaw);
-  } else if (latList.length >= 3 && latList.length === lngList.length) {
-    latLngPairs = latList.map((lat, idx) => [lat, lngList[idx]]);
-  } else {
-    return null;
-  }
-
-  if (latLngPairs.length < 3) return null;
-
-  for (const [lat, lng] of latLngPairs) {
-    if (!isLatitudeInRange(lat) || !isLongitudeInRange(lng)) {
-      return null;
-    }
-  }
-
-  const ring: Array<[number, number]> = [...latLngPairs];
-  if (!hasSamePoint(ring[0], ring[ring.length - 1])) {
-    ring.push(ring[0]);
-  }
-
-  const wktCoords = ring.map(([lat, lng]) => `${lng} ${lat}`).join(",");
-  return `POLYGON((${wktCoords}))`;
 }
 
 // ---------------------------------------------------------------------------

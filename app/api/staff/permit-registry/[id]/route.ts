@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/postgres";
+import { getConcessionPolygonWkt } from "@/lib/permit/registry-coordinates";
+import { deriveRegistryStatus } from "@/lib/permit/registry-status";
 import {
   permitRegistryPatchSchema,
   permitRegistryVersionSchema,
@@ -86,14 +88,27 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       );
     }
 
-    const { clauses, values } = buildUpdateClauses(parsed.data);
-    if (clauses.length === 0) {
+    const hasBoundaryEdit =
+      typeof parsed.data.concession_coordinates === "string" &&
+      parsed.data.concession_coordinates.trim().length > 0;
+    if (buildUpdateClauses(parsed.data).clauses.length === 0 && !hasBoundaryEdit) {
       return NextResponse.json({ success: false, message: "No editable fields were provided" }, { status: 400 });
     }
 
-    const existing = await query<{ id: string; updated_at: string; deleted_at: string | null; row_index: number | null }>(
+    const existing = await query<{
+      id: string;
+      updated_at: string;
+      deleted_at: string | null;
+      row_index: number | null;
+      regime: string | null;
+      status: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      expiration_date: string | null;
+    }>(
       `
-      select id, updated_at, deleted_at, row_index
+      select id, updated_at, deleted_at, row_index, regime, status, latitude, longitude,
+             expiration_date::text as expiration_date
       from public.permit_registry
       where id = $1
       limit 1
@@ -120,6 +135,78 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         { success: false, message: "This row changed while you were editing. Refresh and try again." },
         { status: 409 }
       );
+    }
+
+    // Geometry for an existing permit (RWB: "the system does not allow the
+    // addition of the existing concession/coordinates"). `concession_coordinates`
+    // is not a column — it becomes map_geometry so the row shows on the map.
+    // Only appended when the caller actually supplied coordinates, so ordinary
+    // edits keep their existing SQL and failure modes.
+    const patch = parsed.data;
+    // Operational/Expired always follow the expiration date; only
+    // suspended/revoked/cancelled are kept as chosen. Recomputed whenever the
+    // status or the expiry is edited, so a renewed date revives an expired row.
+    const effStatus = patch.status !== undefined ? patch.status : current.status;
+    const effExpiry = patch.expiration_date !== undefined ? patch.expiration_date : current.expiration_date;
+    if (patch.status !== undefined || patch.expiration_date !== undefined) {
+      patch.status = deriveRegistryStatus(effStatus, effExpiry);
+    }
+    const { clauses, values } = buildUpdateClauses(patch);
+
+    // lib/permitPolygons.ts only renders rows whose map_status is set, so any
+    // geometry we write must carry one. Falls back to the row's current status:
+    // editing only the coordinates of a cancelled permit must not flip its map
+    // pin back to active.
+    const mapStatus = (() => {
+      const status = deriveRegistryStatus(effStatus, effExpiry);
+      if (status === "SUSPENDED") return "suspended";
+      if (status === "REVOKED" || status === "CANCELLED") return "revoked";
+      return status === "EXPIRED" ? "expired" : "active";
+    })();
+    const appendMapStatus = () => {
+      values.push(mapStatus);
+      clauses.push(`map_status = $${values.length}::permit_status`);
+    };
+    const suppliedBoundary =
+      typeof patch.concession_coordinates === "string" ? patch.concession_coordinates.trim() : "";
+    const effRegime = patch.regime !== undefined ? patch.regime : current.regime;
+    const effLat = patch.latitude !== undefined ? patch.latitude : current.latitude;
+    const effLng = patch.longitude !== undefined ? patch.longitude : current.longitude;
+
+    if (suppliedBoundary) {
+      const wkt = getConcessionPolygonWkt(effRegime ?? null, suppliedBoundary, undefined);
+      if (!wkt) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Concession coordinates must be a concession permit with at least 3 points, e.g. \"-1.9441,30.0619; -1.9452,30.0631; -1.9463,30.0625\".",
+          },
+          { status: 400 }
+        );
+      }
+      values.push(wkt);
+      clauses.push(`map_geometry = ST_GeomFromText($${values.length}::text, 4326)`);
+      clauses.push(`map_updated_at = now()`);
+      appendMapStatus();
+    } else if (
+      (patch.latitude !== undefined || patch.longitude !== undefined) &&
+      typeof effLat === "number" &&
+      typeof effLng === "number"
+    ) {
+      values.push(effLng);
+      const lngParam = `$${values.length}`;
+      values.push(effLat);
+      const latParam = `$${values.length}`;
+      clauses.push(
+        `map_geometry = ST_SetSRID(ST_MakePoint(${lngParam}::double precision, ${latParam}::double precision), 4326)`
+      );
+      clauses.push(`map_updated_at = now()`);
+      appendMapStatus();
+    } else if (patch.status !== undefined) {
+      // Keep an existing map pin in step with the new status.
+      values.push(mapStatus);
+      clauses.push(`map_status = case when map_status is null then null else $${values.length}::permit_status end`);
     }
 
     values.push(id);

@@ -25,6 +25,8 @@ const SUPERUSER_EMAILS = new Set([
 type AssessorAdjustmentsPatch = {
   permitLengthYears?: number;
   recommendedVolumeM3?: number;
+  /** Unit the assessor entered the volume in; recommendedVolumeM3 stays m³/year. */
+  recommendedVolumeUnit?: "m3/year" | "m3/day";
   recommendedPumpingRateM3Day?: number;
   waterSourceLatitude?: number;
   waterSourceLongitude?: number;
@@ -139,6 +141,7 @@ export async function POST(
         );
       }
       patch.recommendedVolumeM3 = n;
+      patch.recommendedVolumeUnit = body.recommendedVolumeUnit === "m3/day" ? "m3/day" : "m3/year";
     }
 
     if (body.recommendedPumpingRateM3Day !== undefined) {
@@ -269,11 +272,10 @@ export async function POST(
       await client.query(`SET LOCAL statement_timeout = '15s'`);
 
       const lockRes = await client.query<{
-        is_renewal: boolean | null;
         internal_notes: string | null;
       }>(
         `
-        SELECT COALESCE(is_renewal, false) AS is_renewal, internal_notes
+        SELECT internal_notes
         FROM public.applications
         WHERE id = $1
         FOR UPDATE
@@ -283,9 +285,6 @@ export async function POST(
       const lockRow = lockRes.rows[0];
       if (!lockRow) {
         return { kind: "not_found" as const };
-      }
-      if (lockRow.is_renewal) {
-        return { kind: "renewal_locked" as const };
       }
 
       const parsed = parseInternalNotesStrict(lockRow.internal_notes);
@@ -313,6 +312,7 @@ export async function POST(
       }
       if (patch.recommendedVolumeM3 !== undefined) {
         nextAdjustments.recommendedVolumeM3 = patch.recommendedVolumeM3;
+        nextAdjustments.recommendedVolumeUnit = patch.recommendedVolumeUnit;
         nextAdjustments.volumeAdjustedAt = nowIso;
       }
       if (patch.recommendedPumpingRateM3Day !== undefined) {
@@ -410,12 +410,6 @@ export async function POST(
       return NextResponse.json(
         { success: false, message: "Application not found" },
         { status: 404 },
-      );
-    }
-    if (result.kind === "renewal_locked") {
-      return NextResponse.json(
-        { success: false, message: "Renewal applications inherit assessor recommendations and cannot be edited." },
-        { status: 409 },
       );
     }
     if (result.kind === "corrupt_notes") {

@@ -39,10 +39,30 @@ function candidateRoots(): string[] {
  * skip them rather than report them missing.
  */
 export async function localFileExists(relativePath: string): Promise<boolean> {
+  return (await resolveLocalFile(relativePath)) !== null;
+}
+
+/**
+ * Filename safe for a `Content-Disposition` header: non-ASCII characters make
+ * `new NextResponse(...)` throw a ByteString TypeError.
+ */
+export function contentDispositionFileName(fileName: string | null | undefined): string {
+  const cleaned = String(fileName || "")
+    .replace(/[\r\n"]/g, "")
+    .replace(/[^\x20-\x7E]/g, " ")
+    .trim();
+  return cleaned || "document";
+}
+
+/**
+ * Absolute on-disk path of a stored relative file path, or null when the file
+ * is absent from every candidate root (or the path tries to escape them).
+ */
+export async function resolveLocalFile(relativePath: string): Promise<string | null> {
   const trimmed = (relativePath || "").trim();
-  if (!trimmed) return false;
+  if (!trimmed) return null;
   const normalized = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  if (normalized.includes("..")) return false;
+  if (normalized.includes("..")) return null;
   const relNoSlash = normalized.replace(/^\/+/, "");
 
   for (const root of candidateRoots()) {
@@ -50,11 +70,11 @@ export async function localFileExists(relativePath: string): Promise<boolean> {
     if (!resolved.startsWith(root)) continue;
     try {
       await access(resolved);
-      return true;
+      return resolved;
     } catch {
       // Not in this root — try the next one.
     }
   }
 
-  return false;
+  return null;
 }

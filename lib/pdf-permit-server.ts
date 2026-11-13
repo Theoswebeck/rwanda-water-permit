@@ -25,14 +25,10 @@ import { addPermitExpiry } from "./date-math";
 import { getEffectiveInternalNotes } from "./document-overrides";
 import {
   resolvePermitDuration,
-  resolveApplicantName,
-  resolveOrgAddress,
-  resolveOrgAddressKinyarwanda,
-  resolveOrgRep,
-  resolveAdminLocation,
+  resolveBulkNetworks,
   type PermitApplication,
 } from "@/lib/permit/permit-text-data";
-import { buildChildPermitNumber, isRealNetworkRow } from "@/lib/permit-number-utils";
+import { buildChildPermitNumber } from "@/lib/permit-number-utils";
 import { resolveSlotText } from "@/lib/document-slots";
 import type { SlotResolverContext } from "@/lib/document-slots";
 import { parseBoldRuns, stripBoldMarkers } from "@/lib/document-slots/bold-markers";
@@ -865,17 +861,6 @@ async function renderStandardPermit(
 
 // ─── Bulk water supply renderer ─────────────────────────────────────────────
 
-function resolveBulkNetworks(app: PermitApplication): Array<Record<string, unknown>> {
-  const notes = getEffectiveInternalNotes(app.internal_notes);
-  const adjNetworks = (notes as Record<string, unknown> | null)?._assessorAdjustments as Record<string, unknown> | null | undefined;
-  const adj = adjNetworks?.bulkNetworks;
-  // Filter out empty placeholder rows so the PDF annex + child-permit numbering match the
-  // child permits actually issued by the terms page (both use isRealNetworkRow).
-  if (Array.isArray(adj) && adj.length > 0) return (adj as Array<Record<string, unknown>>).filter(isRealNetworkRow);
-  if (Array.isArray(app.bulk_networks) && app.bulk_networks.length > 0) return (app.bulk_networks as Array<Record<string, unknown>>).filter(isRealNetworkRow);
-  return [];
-}
-
 async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   const { application: app, permitNumber } = opts;
   const issueDate = opts.issuedDate ?? new Date();
@@ -892,48 +877,17 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
 
   const doc = createDoc();
 
-  // Resolve networks early so we can adjust para_4 text accordingly
   const networks = resolveBulkNetworks(app);
   const hasNetworks = networks.length > 0;
 
-  // Build bulk-specific para_2 (authorization sentence — no coordinates/sector/cell).
-  // Template emphasis (`**…**`) is applied here automatically — assessors
-  // never need to type bold markers themselves.
-  const orgName = resolveApplicantName(app);
-  const orgAddr = resolveOrgAddress(app);
-  const orgAddrRw = resolveOrgAddressKinyarwanda(app);
-  const rep = resolveOrgRep(app);
-  const adminLoc = resolveAdminLocation(app);
-  const networkCount = networks.length;
-  const networkCountLabel = `${networkCount} water supply network${networkCount !== 1 ? "s" : ""}`;
-
-  const bulkPara2En = `"**${orgName}**" with its registered office address as follows: ${orgAddr}; represented by ${rep.name} "**${rep.title}**", is authorized to abstract water from **${networkCountLabel}** located in ${adminLoc.district} District as specified in the attached annex. Water abstracted will be used for **water supply**.`;
-  const bulkPara2Rw = `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe gukoresha amazi y'imiyoboro **${networkCount}** iherereye mu Akarere ka ${adminLoc.district} nkuko bigaragara ku mugereka. Aya mazi yemerewe gukoreshwa mu bikorwa byo **gukwirakwiza amazi**.`;
-
-  const englishParagraphs = [
-    resolveSlotText("permit.abstraction_organization.en.para_1", ctx),
-    bulkPara2En,
-    resolveSlotText("permit.abstraction_organization.en.para_3", ctx),
-    hasNetworks
-      ? "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in the attached contract. The list of authorized distribution networks is provided in the Annex."
-      : "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in the attached contract.",
-  ];
-  const rwParagraphs = [
-    resolveSlotText("permit.abstraction_organization.rw.para_1", ctx),
-    bulkPara2Rw,
-    resolveSlotText("permit.abstraction_organization.rw.para_3", ctx),
-    hasNetworks
-      ? "Uretse ibyemejwe n'itegeko rivugwaho haruguru, uyu Uruhushya rugengwa n'amategeko n'ibisabwa bisobanurwa mu masezerano agenye. Urutonde rw'amashyamba y'amazi yemerewe ruragaragara mu Umugereka."
-      : "Uretse ibyemejwe n'itegeko rivugwaho haruguru, uyu Uruhushya rugengwa n'amategeko n'ibisabwa bisobanurwa mu masezerano agenye.",
-  ];
-
-  // Body layout is fully shared with the standard variants — same margins,
-  // font size, justification and spacing (reuses the
-  // abstraction_organization slot key for the bilingual title).
   await renderPermitBodyPages(doc, opts, ctx, {
-    title: resolveSlotText("permit.abstraction_organization.title.en", ctx),
-    englishParagraphs,
-    rwParagraphs,
+    title: resolveSlotText("permit.bulk_water_supply.title.en", ctx),
+    englishParagraphs: [1, 2, 3, 4].map((i) =>
+      resolveSlotText(`permit.bulk_water_supply.en.para_${i}`, ctx),
+    ),
+    rwParagraphs: [1, 2, 3, 4].map((i) =>
+      resolveSlotText(`permit.bulk_water_supply.rw.para_${i}`, ctx),
+    ),
   });
 
   // ─── Annex page: distribution networks table ────────────────────────────

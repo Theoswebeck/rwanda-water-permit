@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { CloseApplicationDialog } from "@/components/staff/close-application-dialog";
+import type { ClosureOutcome } from "@/lib/notifications/termination";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { Button } from "@/components/ui/button";
@@ -1010,8 +1012,8 @@ export default function ReviewApplicationPage() {
     router.push('/review');
   };
 
-  const handleTerminateExempted = async () => {
-    if (!application || !terminationReason.trim()) return;
+  const handleCloseApplication = async (outcome: ClosureOutcome, reason: string) => {
+    if (!application || !reason) return;
 
     try {
       setTerminateLoading(true);
@@ -1020,23 +1022,26 @@ export default function ReviewApplicationPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ reason: terminationReason.trim() }),
+        body: JSON.stringify({ reason, outcome }),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok || !payload?.success) {
-        throw new Error(payload?.message || 'Failed to terminate application.');
+        throw new Error(payload?.message || 'Failed to close application.');
       }
 
       setShowTerminateDialog(false);
       setTerminationReason("");
+      const done = outcome === 'rejected'
+        ? "Application rejected."
+        : "Application terminated: the water use is exempted and no permit is required.";
       // Only claim the applicant was notified when the server confirms delivery.
       persistBanner({
         scope: params.id as string,
         kind: payload?.emailSent ? "success" : "info",
-        title: "Application terminated",
+        title: outcome === 'rejected' ? "Application rejected" : "Application terminated",
         description: payload?.emailSent
-          ? "The water use is exempted — no permit is required. The applicant has been notified by email."
-          : `The water use is exempted — no permit is required. ${
+          ? `${done} The applicant has been notified by email.`
+          : `${done} ${
               payload?.warning ||
               "The confirmation email to the applicant could not be delivered — please follow up with them directly."
             }`,
@@ -1047,7 +1052,7 @@ export default function ReviewApplicationPage() {
       const msg =
         err && typeof err === "object" && "message" in err && typeof (err as any).message === "string"
           ? (err as any).message
-          : "Failed to terminate application. Please try again.";
+          : "Failed to close application. Please try again.";
       setBanner({ kind: "error", title: "Action failed", description: msg });
     } finally {
       setTerminateLoading(false);
@@ -1357,10 +1362,10 @@ export default function ReviewApplicationPage() {
                   size="sm"
                   className="gap-2 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
                   onClick={() => setShowTerminateDialog(true)}
-                  title="Close this application because the water use is exempted and no permit is required."
+                  title="Close this application as rejected or exempted."
                 >
                   <Ban className="h-4 w-4" />
-                  Terminate — Exempted Use
+                  Close Application
                 </Button>
               </div>
 
@@ -1717,58 +1722,12 @@ export default function ReviewApplicationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Terminate (Exempted Water Use) Dialog */}
-      <Dialog open={showTerminateDialog} onOpenChange={setShowTerminateDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Ban className="h-5 w-5 text-red-600" />
-              Terminate — Exempted Water Use
-            </DialogTitle>
-            <DialogDescription>
-              Use this only when the application falls under an exempted water use (e.g. irrigation on land of 1 hectare or less) and therefore needs no permit. This closes the application permanently — it is NOT a return for correction. The applicant will be notified that no permit is required.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="termination-reason">Termination Reason *</Label>
-              <Textarea
-                id="termination-reason"
-                placeholder="E.g., The declared irrigation covers 0.8 ha, which is below the 1 ha threshold. This water use is exempted and no permit is required..."
-                value={terminationReason}
-                onChange={(e) => setTerminationReason(e.target.value)}
-                rows={5}
-                required
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowTerminateDialog(false);
-                setTerminationReason("");
-              }}
-              disabled={terminateLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleTerminateExempted}
-              disabled={!terminationReason.trim() || terminateLoading}
-              className="gap-2"
-            >
-              {terminateLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Ban className="h-4 w-4" />
-              )}
-              {terminateLoading ? 'Terminating...' : 'Terminate Application'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CloseApplicationDialog
+        open={showTerminateDialog}
+        onOpenChange={setShowTerminateDialog}
+        loading={terminateLoading}
+        onConfirm={handleCloseApplication}
+      />
 
       {/* Send to Verification Confirmation Dialog */}
       <Dialog open={showSendToVerificationDialog} onOpenChange={setShowSendToVerificationDialog}>

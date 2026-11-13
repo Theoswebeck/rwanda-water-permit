@@ -13,6 +13,7 @@
  */
 
 import { getEffectiveInternalNotes } from "@/lib/document-overrides";
+import { isRealNetworkRow } from "@/lib/permit-number-utils";
 
 // ─── Number / date helpers ───────────────────────────────────────────────────
 
@@ -136,14 +137,34 @@ export function resolveAdminLocation(app: PermitApplication): {
   };
 }
 
+/**
+ * The DB stores the short cardinal forms ("East", "North", …); official
+ * documents must print the full province names ("Eastern", "Northern", …).
+ */
+export function fullProvinceName(raw: string): string {
+  const key = raw
+    .trim()
+    .toLowerCase()
+    .replace(/\s+province$/i, "")
+    .replace(/^province\s+of\s+/i, "")
+    .trim();
+  const full: Record<string, string> = {
+    east: "Eastern",
+    west: "Western",
+    north: "Northern",
+    south: "Southern",
+  };
+  return full[key] ?? raw.trim();
+}
+
 export function fmtProvince(raw: string): string {
   if (!raw) return "N/A";
-  return raw.toLowerCase() === "kigali" ? "CITY OF KIGALI" : `${raw} Province`;
+  return raw.toLowerCase() === "kigali" ? "CITY OF KIGALI" : `${fullProvinceName(raw)} Province`;
 }
 
 export function formatProvinceOrCityOfKigali(provinceRaw: string): string {
   if (!provinceRaw) return "N/A";
-  return provinceRaw.toLowerCase() === "kigali" ? "City OF Kigali" : `${provinceRaw} Province`;
+  return provinceRaw.toLowerCase() === "kigali" ? "City OF Kigali" : `${fullProvinceName(provinceRaw)} Province`;
 }
 
 export function formatIntaraOrUmujyiWaKigali(provinceRaw: string): string {
@@ -183,6 +204,22 @@ export function resolveArea(app: PermitApplication): number | null {
   if (typeof notes?.fishLakeAreaHectares === "number") return notes.fishLakeAreaHectares;
   if (typeof notes?.permitDetails?.concessionArea === "number") return notes.permitDetails.concessionArea;
   return null;
+}
+
+/**
+ * Declared irrigation command area in hectares. RWB feedback (Sep 2026): the
+ * number of hectares must be printed on the water use permit for irrigation.
+ */
+export function resolveIrrigationAreaHa(app: PermitApplication): number | null {
+  const notes = resolveNotes(app);
+  const toNum = (v: unknown): number | null => {
+    const n = typeof v === "string" ? Number.parseFloat(v.replace(/,/g, "")) : Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  return (
+    toNum(notes?.irrigationTotalArea) ??
+    toNum((app as unknown as { irrigation_total_area?: unknown }).irrigation_total_area)
+  );
 }
 
 // ─── Activity / volume resolvers ─────────────────────────────────────────────
@@ -288,29 +325,32 @@ export function resolveAbstractionMethodRaw(app: PermitApplication): string {
 export function resolveSystemType(app: PermitApplication): string {
   const raw = resolveAbstractionMethodRaw(app);
   const normalized = raw.toLowerCase();
-  if (!normalized) return resolveIsGroundwater(app) ? "PUMPING SYSTEM" : "GRAVITY SYSTEM";
-  if (normalized.includes("pump")) return "PUMPING SYSTEM";
-  if (normalized.includes("grav")) return "GRAVITY SYSTEM";
-  if (normalized.includes("diversion") || normalized === "diversion_channel") return "DIVERSION CHANNEL";
-  if (normalized.includes("dam") || normalized.includes("reservoir")) return "DAM/RESERVOIR";
-  if (normalized.includes("borehole")) return "BOREHOLE";
-  if (normalized.includes("spring")) return "SPRING CAPTURE";
-  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "HAND DUG WELL";
-  return raw.replace(/[_-]/g, " ").toUpperCase() || "GRAVITY SYSTEM";
+  // RWB feedback (Sep 2026): "pumping system" must print in lowercase on the
+  // permit and contract.
+  if (!normalized) return resolveIsGroundwater(app) ? "pumping system" : "gravity system";
+  if (normalized.includes("pump")) return "pumping system";
+  if (normalized.includes("grav")) return "gravity system";
+  if (normalized.includes("diversion") || normalized === "diversion_channel") return "diversion channel";
+  if (normalized.includes("dam") || normalized.includes("reservoir")) return "dam/reservoir";
+  if (normalized.includes("borehole")) return "borehole";
+  if (normalized.includes("spring")) return "spring capture";
+  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "hand dug well";
+  return raw.replace(/[_-]/g, " ").toLowerCase() || "gravity system";
 }
 
 export function resolveEnglishSystemLabel(app: PermitApplication): string {
   const raw = resolveAbstractionMethodRaw(app);
   const normalized = raw.toLowerCase();
-  if (!normalized) return resolveIsGroundwater(app) ? "PUMPING system" : "GRAVITY system";
-  if (normalized.includes("pump")) return "PUMPING system";
-  if (normalized.includes("grav")) return "GRAVITY system";
-  if (normalized.includes("diversion") || normalized === "diversion_channel") return "Diversion Channel";
-  if (normalized.includes("dam") || normalized.includes("reservoir")) return "Dam/Reservoir";
-  if (normalized.includes("borehole")) return "Borehole";
-  if (normalized.includes("spring")) return "Spring Capture";
-  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "Hand Dug Well";
-  return raw.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "GRAVITY system";
+  // RWB feedback (Sep 2026): lowercase system labels on official documents.
+  if (!normalized) return resolveIsGroundwater(app) ? "pumping system" : "gravity system";
+  if (normalized.includes("pump")) return "pumping system";
+  if (normalized.includes("grav")) return "gravity system";
+  if (normalized.includes("diversion") || normalized === "diversion_channel") return "diversion channel";
+  if (normalized.includes("dam") || normalized.includes("reservoir")) return "dam/reservoir";
+  if (normalized.includes("borehole")) return "borehole";
+  if (normalized.includes("spring")) return "spring capture";
+  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "hand dug well";
+  return raw.replace(/[_-]/g, " ").toLowerCase() || "gravity system";
 }
 
 export function resolveIsGroundwater(app: PermitApplication): boolean {
@@ -419,20 +459,19 @@ export function resolveOrgAddress(app: PermitApplication): string {
     const parts = [
       sector   ? `${sector} Sector`   : null,
       district ? `${district} District` : null,
-      province ? (province.toLowerCase() === "kigali" ? "City OF Kigali" : `${province} Province`) : null,
+      province ? (province.toLowerCase() === "kigali" ? "City OF Kigali" : `${fullProvinceName(province)} Province`) : null,
     ].filter(Boolean);
     if (parts.length) return parts.join(", ");
   }
 
+  // RWB feedback (Sep 2026): office address is Sector, District, Province only.
   const parts = [
-    (notes?.officeVillage as string)?.trim() ? `${notes!.officeVillage} Village` : null,
-    (notes?.officeCell as string)?.trim() ? `${notes!.officeCell} Cell` : null,
     (notes?.officeSector as string)?.trim() ? `${notes!.officeSector} Sector` : null,
     (notes?.officeDistrict as string)?.trim() ? `${notes!.officeDistrict} District` : null,
     (notes?.officeProvince as string)?.trim()
       ? (notes!.officeProvince as string).toLowerCase() === "kigali"
         ? "City OF Kigali"
-        : `${notes!.officeProvince} Province`
+        : `${fullProvinceName(notes!.officeProvince as string)} Province`
       : null,
   ].filter(Boolean);
   if (parts.length) return parts.join(", ");
@@ -494,12 +533,18 @@ export function resolveOrgRep(app: PermitApplication): { name: string; title: st
   return { name, title };
 }
 
+/** The assessor entered the recommended volume in m³/day (stored as m³/year). */
+export function assessorChoseDaily(app: PermitApplication): boolean {
+  return (resolveNotes(app) as any)?._assessorAdjustments?.recommendedVolumeUnit === "m3/day";
+}
+
 export function resolveFlowRate(app: PermitApplication): string {
   if (resolveIsGroundwater(app)) {
     const pr = resolvePumpingRateM3Day(app);
     if (pr != null) return `${fmtNum(pr)} M3/day`;
   }
   const v = resolveVolumes(app);
+  if (v.yearly != null && assessorChoseDaily(app)) return `${fmtNum(v.yearly / 365)} M3/day`;
   if (v.yearly != null) return `${fmtNum(v.yearly)} M3/year`;
   if (v.daily != null) return `${fmtNum(v.daily)} M3/day`;
   const notes = resolveNotes(app);
@@ -571,10 +616,12 @@ function formatFlowRateUnitKinyarwanda(unitRaw: string): string {
 export function resolveFlowRateKinyarwanda(app: PermitApplication): string {
   if (resolveIsGroundwater(app)) {
     const pr = resolvePumpingRateM3Day(app);
-    // Groundwater: unit before number, per official RWB format — "m3 <N> ku munsi"
-    if (pr != null) return `m3 ${fmtNum(pr)} ku munsi`;
+    // RWB feedback (Sep 2026): amount reads "<N> m3 ku munsi" — number first,
+    // matching the surface-water phrasing below.
+    if (pr != null) return `${fmtNum(pr)} m3 ku munsi`;
   }
   const v = resolveVolumes(app);
+  if (v.yearly != null && assessorChoseDaily(app)) return `${fmtNum(v.yearly / 365)} m3 ku munsi`;
   if (v.yearly != null) return `${fmtNum(v.yearly)} m3 ku mwaka`;
   if (v.daily != null) return `${fmtNum(v.daily)} m3 ku munsi`;
   const notes = resolveNotes(app);
@@ -662,4 +709,17 @@ export function resolveKinyarwandaSystemType(app: PermitApplication): string {
   if (n.includes("spring")) return "gufata amazi y'isoko";
   if (n.includes("hand") || (n.includes("dug") && n.includes("well"))) return "gukoresha iriba ryacukuwe";
   return raw.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "GUKORESHA";
+}
+
+// ─── Bulk water supply (District Water Supply) ───────────────────────────────
+
+export function resolveBulkNetworks(app: PermitApplication): Array<Record<string, unknown>> {
+  const notes = getEffectiveInternalNotes(app.internal_notes);
+  const adjNetworks = (notes as Record<string, unknown> | null)?._assessorAdjustments as Record<string, unknown> | null | undefined;
+  const adj = adjNetworks?.bulkNetworks;
+  // Filter out empty placeholder rows so the PDF annex + child-permit numbering match the
+  // child permits actually issued by the terms page (both use isRealNetworkRow).
+  if (Array.isArray(adj) && adj.length > 0) return (adj as Array<Record<string, unknown>>).filter(isRealNetworkRow);
+  if (Array.isArray(app.bulk_networks) && app.bulk_networks.length > 0) return (app.bulk_networks as Array<Record<string, unknown>>).filter(isRealNetworkRow);
+  return [];
 }

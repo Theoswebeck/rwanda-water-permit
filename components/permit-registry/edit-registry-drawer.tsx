@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getConcessionPolygonWkt } from "@/lib/permit/registry-coordinates";
 import {
   Sheet,
   SheetContent,
@@ -12,6 +13,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  REGISTRY_OVERRIDE_STATUSES,
+  deriveRegistryStatus,
+  type RegistryStatus,
+} from "@/lib/permit/registry-status";
 import type { PermitRegistryEntry } from "@/types/database";
 
 type FieldErrors = Partial<Record<keyof EditFormState, string>>;
@@ -30,8 +37,11 @@ interface EditFormState {
   issuance_date: string;
   duration: string;
   expiration_date: string;
-  status: string;
+  /** An override (suspended/revoked/cancelled), or "" to follow the expiration date. */
+  status: RegistryStatus | "";
   contact: string;
+  /** Write-only: concession boundary points, turned into map_geometry server-side. */
+  concession_coordinates: string;
 }
 
 interface EditRegistryDrawerProps {
@@ -54,6 +64,17 @@ function asInput(value: string | number | null | undefined): string {
 function normalizeDate(value: string | null | undefined): string {
   if (!value) return "";
   return value.length >= 10 ? value.slice(0, 10) : value;
+}
+
+const AUTO_STATUS = "__AUTO__";
+
+function overrideOf(status: string | null | undefined): RegistryStatus | "" {
+  const derived = deriveRegistryStatus(status, null);
+  return REGISTRY_OVERRIDE_STATUSES.includes(derived) ? derived : "";
+}
+
+function statusLabel(status: RegistryStatus): string {
+  return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
 function toNullableText(value: string): string | null {
@@ -91,6 +112,7 @@ export function EditRegistryDrawer({
     expiration_date: "",
     status: "",
     contact: "",
+    concession_coordinates: "",
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [showConfirm, setShowConfirm] = useState(false);
@@ -111,8 +133,9 @@ export function EditRegistryDrawer({
       issuance_date: normalizeDate(entry.issuance_date),
       duration: asInput(entry.duration),
       expiration_date: normalizeDate(entry.expiration_date),
-      status: asInput(entry.status),
+      status: overrideOf(entry.status),
       contact: asInput(entry.contact),
+      concession_coordinates: "",
     });
     setErrors({});
     setShowConfirm(false);
@@ -133,8 +156,9 @@ export function EditRegistryDrawer({
       issuance_date: toNullableText(form.issuance_date),
       duration: toNullableText(form.duration),
       expiration_date: toNullableText(form.expiration_date),
-      status: toNullableText(form.status),
+      status: form.status || deriveRegistryStatus(null, form.expiration_date),
       contact: toNullableText(form.contact),
+      concession_coordinates: toNullableText(form.concession_coordinates),
     };
   }, [form]);
 
@@ -154,8 +178,11 @@ export function EditRegistryDrawer({
       issuance_date: normalizeDate(entry.issuance_date) || null,
       duration: entry.duration ?? null,
       expiration_date: normalizeDate(entry.expiration_date) || null,
-      status: entry.status ?? null,
+      status: deriveRegistryStatus(entry.status, entry.expiration_date),
       contact: entry.contact ?? null,
+      // Write-only field: map_geometry is not loaded into the drawer, so any
+      // value the user types is by definition a change.
+      concession_coordinates: null,
     };
   }, [entry]);
 
@@ -178,6 +205,15 @@ export function EditRegistryDrawer({
     if (form.longitude.trim() && parsed.longitude == null) next.longitude = "Longitude must be a valid number";
     if (parsed.latitude != null && (parsed.latitude < -90 || parsed.latitude > 90)) next.latitude = "Latitude must be between -90 and 90";
     if (parsed.longitude != null && (parsed.longitude < -180 || parsed.longitude > 180)) next.longitude = "Longitude must be between -180 and 180";
+    const boundary = form.concession_coordinates.trim();
+    if (boundary) {
+      if ((parsed.regime ?? "").trim().toLowerCase() !== "concession") {
+        next.concession_coordinates = "Only Concession permits can have a boundary — set Regime to Concession.";
+      } else if (!getConcessionPolygonWkt(parsed.regime, boundary, undefined)) {
+        next.concession_coordinates =
+          "Need at least 3 valid points as \"lat,lng\" separated by \";\" (latitude -90..90, longitude -180..180).";
+      }
+    }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -210,7 +246,29 @@ export function EditRegistryDrawer({
               <Field label="Permit holder" value={form.permit_holder} onChange={(value) => setForm((prev) => ({ ...prev, permit_holder: value }))} error={errors.permit_holder} />
               <Field label="Permit number" value={form.permit_number} onChange={(value) => setForm((prev) => ({ ...prev, permit_number: value }))} error={errors.permit_number} />
               <Field label="Regime" value={form.regime} onChange={(value) => setForm((prev) => ({ ...prev, regime: value }))} />
-              <Field label="Status" value={form.status} onChange={(value) => setForm((prev) => ({ ...prev, status: value }))} />
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select
+                  value={form.status || AUTO_STATUS}
+                  onValueChange={(value) =>
+                    setForm((prev) => ({ ...prev, status: value === AUTO_STATUS ? "" : (value as RegistryStatus) }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={AUTO_STATUS}>
+                      {statusLabel(deriveRegistryStatus(null, form.expiration_date))} (from expiration date)
+                    </SelectItem>
+                    {REGISTRY_OVERRIDE_STATUSES.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {statusLabel(status)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Field label="Water source" value={form.water_source} onChange={(value) => setForm((prev) => ({ ...prev, water_source: value }))} />
               <Field label="Volume or area" value={form.volume_or_area} onChange={(value) => setForm((prev) => ({ ...prev, volume_or_area: value }))} />
               <Field label="Method of water taking" value={form.method_of_water_taking} onChange={(value) => setForm((prev) => ({ ...prev, method_of_water_taking: value }))} />
@@ -222,6 +280,18 @@ export function EditRegistryDrawer({
               <Field label="Duration" value={form.duration} onChange={(value) => setForm((prev) => ({ ...prev, duration: value }))} />
               <Field label="Expiration date" value={form.expiration_date} onChange={(value) => setForm((prev) => ({ ...prev, expiration_date: value }))} type="date" />
               <Field label="Contact" value={form.contact} onChange={(value) => setForm((prev) => ({ ...prev, contact: value }))} />
+              <Field
+                label="Concession coordinates (optional)"
+                value={form.concession_coordinates}
+                onChange={(value) => setForm((prev) => ({ ...prev, concession_coordinates: value }))}
+                error={errors.concession_coordinates}
+              />
+              <p className="-mt-2 text-xs text-muted-foreground">
+                Adds the boundary of an existing concession to the map. At least 3 points as
+                &quot;lat,lng&quot; separated by &quot;;&quot; — e.g. -1.9441,30.0619; -1.9452,30.0631;
+                -1.9463,30.0625. Only applies to Concession permits. Leave blank to keep the current map
+                position.
+              </p>
             </div>
           </div>
         ) : (

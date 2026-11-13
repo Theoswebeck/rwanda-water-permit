@@ -21,7 +21,7 @@ import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
-import { InspectionList } from "@/components/inspection/inspection-list";
+import { InspectionRegistryList } from "@/components/inspection-registry/inspection-registry-list";
 import { sortBySubmissionDateDescending, getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
@@ -85,31 +85,31 @@ function VerificationDashboardContent() {
         const processed: VerificationApplication[] = (data || [])
           .filter((a: any) => !(a.application_number || '').toUpperCase().startsWith('REG-'))
           .map((app: any) => {
-          const applicant = app.applicant as any;
-          const applicantName =
-            applicant?.company_name ||
-            (applicant?.first_name && applicant?.last_name ? `${applicant.first_name} ${applicant.last_name}` : "Unknown Applicant");
+            const applicant = app.applicant as any;
+            const applicantName =
+              applicant?.company_name ||
+              (applicant?.first_name && applicant?.last_name ? `${applicant.first_name} ${applicant.last_name}` : "Unknown Applicant");
 
-          let slaRemaining: number | null = null;
-          if (app.due_date) {
-            const dueDate = new Date(app.due_date);
-            const now = new Date();
-            const diffTime = dueDate.getTime() - now.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            slaRemaining = diffDays;
-          }
+            let slaRemaining: number | null = null;
+            if (app.due_date) {
+              const dueDate = new Date(app.due_date);
+              const now = new Date();
+              const diffTime = dueDate.getTime() - now.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              slaRemaining = diffDays;
+            }
 
-          const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
-            completenessConfirmedAt: app.completeness_confirmed_at,
+            const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
+              completenessConfirmedAt: app.completeness_confirmed_at,
+            });
+
+            return {
+              ...app,
+              applicant_name: applicantName,
+              sla_days_remaining: slaRemaining,
+              deadline_90_days_remaining: deadline90Remaining,
+            };
           });
-
-          return {
-            ...app,
-            applicant_name: applicantName,
-            sla_days_remaining: slaRemaining,
-            deadline_90_days_remaining: deadline90Remaining,
-          };
-        });
 
         setApplications(processed);
 
@@ -143,21 +143,21 @@ function VerificationDashboardContent() {
 
   const filterApplications = useCallback(
     (apps: VerificationApplication[]) => {
-    return apps.filter((app) => {
-      const matchesSearch =
-        app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        app.applicant_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        app.project_title?.toLowerCase().includes(searchTerm.toLowerCase());
+      return apps.filter((app) => {
+        const matchesSearch =
+          app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          app.applicant_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          app.project_title?.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesType =
-        filterType === "all" ||
-        app.water_source?.toLowerCase().includes(filterType.toLowerCase()) ||
-        app.application_type?.toLowerCase().includes(filterType.toLowerCase());
+        const matchesType =
+          filterType === "all" ||
+          app.water_source?.toLowerCase().includes(filterType.toLowerCase()) ||
+          app.application_type?.toLowerCase().includes(filterType.toLowerCase());
 
         const matchesStatus = activeStatuses.length === 0 || activeStatuses.includes(app.status);
 
-      return matchesSearch && matchesType && matchesStatus;
-    });
+        return matchesSearch && matchesType && matchesStatus;
+      });
     },
     [searchTerm, filterType, activeStatuses]
   );
@@ -193,7 +193,7 @@ function VerificationDashboardContent() {
   const getApplicationWaterActivityLabel = (app: VerificationApplication) => {
     const activities = Array.isArray((app as any).intended_activities)
       ? ((app as any).intended_activities as unknown[])
-          .filter((activity): activity is string => typeof activity === "string" && activity.trim().length > 0)
+        .filter((activity): activity is string => typeof activity === "string" && activity.trim().length > 0)
       : [];
 
     if (activities.length > 0) {
@@ -312,32 +312,32 @@ function VerificationDashboardContent() {
 
   return (
     <ProtectedRoute allowedRoles={["verifier", "admin"]} requireProfile={true}>
-    <DashboardLayout wide>
+      <DashboardLayout wide>
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
           className="mx-auto w-full px-4 py-6"
         >
-            <StaffSidebar
-              value={topTab}
-              onValueChange={(v) => setTopTab(v as any)}
-              items={staffNavItems("verification")}
-            >
+          <StaffSidebar
+            value={topTab}
+            onValueChange={(v) => setTopTab(v as any)}
+            items={staffNavItems("verification")}
+          >
 
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
               <div>
                 <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">
                   {topTab === "verification" ? "Application Verification Dashboard"
                     : topTab === "inspections" ? "Inspections"
-                    : topTab === "water-reports" ? "Water Use Reports"
-                    : "Permit Registry"}
+                      : topTab === "water-reports" ? "Water Use Reports"
+                        : "Permit Registry"}
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
                   {topTab === "verification" ? "Verify completeness and consistency before final approval"
                     : topTab === "inspections" ? "Manage and track field inspections"
-                    : topTab === "water-reports" ? "Monitor and review water usage reports"
-                    : "View and manage issued permits"}
+                      : topTab === "water-reports" ? "Monitor and review water usage reports"
+                        : "View and manage issued permits"}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -349,68 +349,68 @@ function VerificationDashboardContent() {
 
             {topTab === "verification" ? (
               <>
-              <StatusFilterChips
-                chips={VERIFIER_CHIPS}
-                activeChipId={activeChipId}
-                onChipChange={setActiveChipId}
-                applications={applications}
-              />
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2">
-                    <FileCheck className="h-5 w-5" />
-                    Verification Management
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Tabs value={activeInnerTab} onValueChange={setActiveInnerTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="all_applications">Applications</TabsTrigger>
-                      <TabsTrigger value="map" className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        Consolidated Map
-                      </TabsTrigger>
-                    </TabsList>
+                <StatusFilterChips
+                  chips={VERIFIER_CHIPS}
+                  activeChipId={activeChipId}
+                  onChipChange={setActiveChipId}
+                  applications={applications}
+                />
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2">
+                      <FileCheck className="h-5 w-5" />
+                      Verification Management
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Tabs value={activeInnerTab} onValueChange={setActiveInnerTab} className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="all_applications">Applications</TabsTrigger>
+                        <TabsTrigger value="map" className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          Consolidated Map
+                        </TabsTrigger>
+                      </TabsList>
 
-                    <TabsContent value="all_applications" className="space-y-4 mt-4">
-                      <div className="flex flex-col md:flex-row gap-4 p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
-                      <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                        <Input
-                          placeholder="Search by applicant name, application number, or project title..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-10 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg"
+                      <TabsContent value="all_applications" className="space-y-4 mt-4">
+                        <div className="flex flex-col md:flex-row gap-4 p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                          <div className="flex-1 relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
+                            <Input
+                              placeholder="Search by applicant name, application number, or project title..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="pl-10 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg"
+                            />
+                          </div>
+                          <Select value={filterType} onValueChange={setFilterType}>
+                            <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
+                              <SelectValue placeholder="Filter by type" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
+                              <SelectItem value="all">All Types</SelectItem>
+                              <SelectItem value="surface">Surface Water</SelectItem>
+                              <SelectItem value="groundwater">Groundwater</SelectItem>
+                              <SelectItem value="industrial">Industrial</SelectItem>
+                              <SelectItem value="agricultural">Agricultural</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {error ? <div className="text-sm text-destructive">{error}</div> : null}
+
+                        <ApplicationTable
+                          apps={applications}
+                          emptyMessage={activeChipLabel}
                         />
-                      </div>
-                      <Select value={filterType} onValueChange={setFilterType}>
-                        <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
-                          <SelectValue placeholder="Filter by type" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
-                          <SelectItem value="all">All Types</SelectItem>
-                          <SelectItem value="surface">Surface Water</SelectItem>
-                          <SelectItem value="groundwater">Groundwater</SelectItem>
-                          <SelectItem value="industrial">Industrial</SelectItem>
-                          <SelectItem value="agricultural">Agricultural</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                      </TabsContent>
 
-                    {error ? <div className="text-sm text-destructive">{error}</div> : null}
-
-                    <ApplicationTable
-                      apps={applications}
-                        emptyMessage={activeChipLabel}
-                    />
-                  </TabsContent>
-
-                    <TabsContent value="map" className="space-y-4 mt-4">
-                    <WaterConcessionMap />
-                  </TabsContent>
-                  </Tabs>
-                </CardContent>
-              </Card>
+                      <TabsContent value="map" className="space-y-4 mt-4">
+                        <WaterConcessionMap />
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                </Card>
               </>
             ) : topTab === "inspections" ? (
               <div className="space-y-6">
@@ -421,11 +421,11 @@ function VerificationDashboardContent() {
             ) : topTab === "permit-registry" ? (
               <PermitRegistryList />
             ) : (
-              <InspectionList />
+              <InspectionRegistryList canEdit />
             )}
           </StaffSidebar>
         </motion.div>
-    </DashboardLayout>
+      </DashboardLayout>
     </ProtectedRoute>
   );
 }

@@ -64,3 +64,6 @@ database/DB From Production Server/
 # UI Template scratch
 /template/
 
+# Local Production comparison folder
+From Production/
+

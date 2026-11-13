@@ -308,6 +308,16 @@ export function deriveConcessionPolygons(
   const assessorPolygon = normalizeAssessorPolygon(assessorAdjustments?.waterSourcePolygonPoints);
   if (assessorPolygon) return [assessorPolygon];
 
+  // The boundary recorded in the field assessment report outranks the
+  // applicant's submitted polygon (RWB feedback, Sep 2026). It is read here
+  // only for display — deliberately not folded into `assessorAdjustments`,
+  // because `deriveConcessionAreaValue` keys off that object and would then
+  // recompute the permit's stated area from this geometry.
+  const reportPolygon = normalizeAssessorPolygon(
+    (permit as unknown as { report_polygon_points?: unknown }).report_polygon_points
+  );
+  if (reportPolygon) return [reportPolygon];
+
   try {
     const geom = application.coordinates;
     if (geom) {

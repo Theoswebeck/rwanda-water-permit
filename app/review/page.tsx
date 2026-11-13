@@ -53,7 +53,7 @@ import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
-import { InspectionList } from "@/components/inspection/inspection-list";
+import { InspectionRegistryList } from "@/components/inspection-registry/inspection-registry-list";
 import { sortBySubmissionDateDescending, getEffectiveSubmissionDate } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
@@ -761,7 +761,7 @@ function ReviewerDashboardContent() {
           ) : topTab === "permit-registry" ? (
             <PermitRegistryList />
           ) : (
-            <InspectionList />
+            <InspectionRegistryList canEdit />
           )}
         </StaffSidebar>
       </motion.div>

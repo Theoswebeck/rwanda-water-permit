@@ -621,6 +621,13 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       bulk_networks: (formData as any).bulk_networks,
       ...((formData as any).bulk_district ? { bulk_district: (formData as any).bulk_district } : {}),
     } : {}),
+    // Switching away from District Water Supply must clear the flag, or the
+    // app keeps rendering as a network permit (RWB-2026-000215, Gisagara).
+    ...(Array.isArray(formData.intendedActivities) && !formData.intendedActivities.includes('district_water_supply') ? {
+      is_bulk: false,
+      bulk_networks: [],
+      bulk_district: null,
+    } : {}),
 
     // SLA tracking
     sla_status: 'on_time' as const,

@@ -69,7 +69,15 @@ export function buildUnifiedCte(schema: RegistrySchema): string {
         ${schema.hasRawDateColumns ? `pr.issuance_date_raw, pr.expiration_date_raw,` : `null::text as issuance_date_raw, null::text as expiration_date_raw,`}
         pr.duration,
         pr.expiration_date::text as expiration_date,
-        upper(coalesce(pr.status, 'OPERATIONAL')) as status,
+        CASE
+          WHEN pr.expiration_date IS NOT NULL
+            AND pr.expiration_date::date < current_date
+            AND upper(coalesce(pr.status, '')) NOT LIKE '%CANCEL%'
+            AND upper(coalesce(pr.status, '')) NOT LIKE '%SUSPEND%'
+            AND upper(coalesce(pr.status, '')) NOT LIKE '%REVOK%'
+          THEN 'EXPIRED'
+          ELSE upper(coalesce(pr.status, 'OPERATIONAL'))
+        END as status,
         pr.contact,
         ${schema.hasDocColumns
           ? `pr.uploaded_doc_path, pr.uploaded_doc_name, pr.uploaded_doc_mime_type, pr.uploaded_doc_uploaded_at,`
@@ -95,7 +103,7 @@ export function buildUnifiedCte(schema: RegistrySchema): string {
         coalesce(a.project_title, 'Unknown Permit Holder') as permit_holder,
         p.permit_number::text as permit_number,
         ${regimeCase} as regime,
-        p.water_source::text as water_source,
+        coalesce(nullif(btrim(a.water_body_name), ''), replace(p.water_source::text, '_', ' ')) as water_source,
         CASE
           WHEN p.water_allowance IS NOT NULL AND p.water_allowance > 0
             THEN TRIM(p.water_allowance::text) || ' ' || COALESCE(p.allowance_unit, 'm³/year')
@@ -118,10 +126,11 @@ export function buildUnifiedCte(schema: RegistrySchema): string {
         END as duration,
         p.expiry_date::text as expiration_date,
         CASE
-          WHEN p.status = 'expired'::permit_status     THEN 'EXPIRED'
-          WHEN p.status = 'expiring_soon'::permit_status THEN 'EXPIRING_SOON'
           WHEN p.status = 'suspended'::permit_status   THEN 'SUSPENDED'
           WHEN p.status = 'revoked'::permit_status     THEN 'REVOKED'
+          WHEN p.status = 'expired'::permit_status
+            OR (p.expiry_date IS NOT NULL AND p.expiry_date::date < current_date) THEN 'EXPIRED'
+          WHEN p.status = 'expiring_soon'::permit_status THEN 'EXPIRING_SOON'
           ELSE 'OPERATIONAL'
         END as status,
         null::text as contact,
