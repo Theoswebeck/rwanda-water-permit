@@ -24,6 +24,7 @@ import type { SiteContent } from "@/lib/site-content";
 function buildNavItems(content: SiteContent) {
   return [
     { label: "Home", href: "/#hero" },
+    { label: "Application Process", href: "/#application-process" },
     { label: "Permitted Activities", href: "/#features" },
     { label: "Water Dashboard", href: "/#water-dashboard" },
     { label: "Request API", href: "/api-access" },
@@ -228,7 +229,7 @@ export function Header() {
                     className="h-9 w-auto object-contain"
                   />
                   <span className="text-gray-900 font-bold text-sm leading-tight">
-                    Rwanda Water<br />Permit Portal
+                    Rwanda Water<br />Permit System
                   </span>
                 </Link>
               </div>

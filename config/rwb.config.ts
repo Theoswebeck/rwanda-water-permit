@@ -39,9 +39,9 @@ export interface SystemConfig {
 }
 
 export const rwbConfig: SystemConfig = {
-  name: "Rwanda Water Permit Portal",
-  acronym: "RWPP",
-  tagline: "Water Concession Application & Compliance Portal",
+  name: "Rwanda Water Permit System",
+  acronym: "RWPS",
+  tagline: "Water Use Permit Application & Compliance System",
   description:
     "Official digital water permit application, technical assessment, site inspection, and concession management platform of the Rwanda Water Resources Board.",
   version: "2.0.0",

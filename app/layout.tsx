@@ -12,8 +12,8 @@ import { KeepWarmHeartbeat } from "@/components/shared/keep-warm-heartbeat";
 const inter = Inter({ subsets: ["latin"], display: "swap", preload: false });
 
 export const metadata: Metadata = {
-  title: "RWater Permit - Water Concession Application Portal",
-  description: "Streamline your water concession permit process through our modern digital platform. Fast, efficient, and transparent.",
+  title: "Rwanda Water Permit System",
+  description: "Welcome to the official Rwanda Water Resources Board Water permit System. Apply, track, and manage your water use permits through our secure digital platform for sustainable water resource management in Rwanda.",
 };
 
 export default function RootLayout({

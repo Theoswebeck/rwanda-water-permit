@@ -209,7 +209,7 @@ export async function POST(req: NextRequest) {
           </div>
           <p style="font-size:16px;color:#374151">Hello ${displayName},</p>
           <p style="font-size:16px;color:#374151">
-            An account has been created for you on the Rwanda Water Permit Portal as a <strong>${rolePretty}</strong>.
+            An account has been created for you on the Rwanda Water Permit System as a <strong>${rolePretty}</strong>.
           </p>
           <div style="background:#f3f4f6;border-radius:12px;padding:20px;margin:20px 0;border:2px solid #e5e7eb">
             <p style="margin:0 0 10px 0;font-size:14px;color:#6b7280"><strong>Your Login Credentials:</strong></p>

@@ -270,7 +270,7 @@ export default function ApplyPage() {
       {step === "success" && (
         <SuccessConfirmation 
           email={userData.email} 
-          title="Welcome to Water Permit Portal!"
+          title="Welcome to Rwanda Water Permit System!"
           message="Your account has been successfully created. You can now apply for water permits and track your applications."
           showPrimaryButton={true}
           redirectUrl="/dashboard"

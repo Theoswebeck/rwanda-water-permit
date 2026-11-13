@@ -49,7 +49,7 @@ export function HeroSection() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-tight mb-4 tracking-tight"
         >
-          {tx("Rwanda Water Permit Portal")}
+          {tx("Rwanda Water Permit System")}
         </motion.h1>
 
         {/* Description */}
@@ -59,7 +59,7 @@ export function HeroSection() {
           transition={{ duration: 0.6, delay: 0.3 }}
           className="text-blue-100 text-base sm:text-lg max-w-2xl mx-auto mb-8 leading-relaxed font-normal"
         >
-          {tx("Welcome to the official Rwanda Water Resources Board permit application portal. Apply, track, and manage your water concession permits through our secure digital platform for sustainable water resource management in Rwanda.")}
+          {tx("Welcome to the official Rwanda Water Resources Board Water permit System. Apply, track, and manage your water use permits through our secure digital platform for sustainable water resource management in Rwanda.")}
         </motion.p>
 
         {/* Primary Action Buttons */}

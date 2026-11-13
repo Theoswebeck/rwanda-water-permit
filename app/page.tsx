@@ -12,6 +12,7 @@ import { useSiteContent } from '@/lib/use-site-content';
 export default function Home() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string>('all');
   const siteContent = useSiteContent();
 
   const userManualUrl = siteContent.user_manual_url || '/assets/User_Manual_Guide_Rwanda_Water_Permit_Application_Portal.pdf';
@@ -19,6 +20,7 @@ export default function Home() {
 
   const navLinks = [
     { name: 'Home', href: '#hero' },
+    { name: 'Application Process', href: '#application-process' },
     { name: 'Permitted Activities', href: '#features' },
     { name: 'Water Dashboard', href: '#water-dashboard' },
     { name: 'Request API', href: '#api-access' },
@@ -26,6 +28,227 @@ export default function Home() {
     { name: 'Guidelines', href: guidelinesUrl, newTab: true },
     { name: 'Contact', href: '#contact' },
   ];
+
+  const applicationProcessSteps = [
+    {
+      step: '01',
+      icon: 'fa-user-plus',
+      color: '#0072bc',
+      bg: '#e8f4fc',
+      title: 'Create Account & Verify Identity',
+      desc: 'Register as an Individual, Company, Cooperative, Organization, or Institution and verify your phone number (SMS OTP) and email address.',
+    },
+    {
+      step: '02',
+      icon: 'fa-file-signature',
+      color: '#0d9488',
+      bg: '#e6f7f5',
+      title: 'Complete Application & Upload Documents',
+      desc: 'Select your application type (New, Renewal, Modification, or Transfer), choose your permitted water use activity, map your water source coordinates, and upload required supporting documents.',
+    },
+    {
+      step: '03',
+      icon: 'fa-credit-card',
+      color: '#f59e0b',
+      bg: '#fef7e6',
+      title: 'Pay Application Fee via IremboPay',
+      desc: 'Generate your official IremboPay bill number directly in the system and complete payment via Mobile Money, bank transfer, or IremboPay channels to submit your application.',
+    },
+    {
+      step: '04',
+      icon: 'fa-clipboard-check',
+      color: '#6366f1',
+      bg: '#eef2ff',
+      title: 'Verification, Inspection & Technical Assessment',
+      desc: 'RWB officers verify your dossier completeness, conduct hydrological and technical assessment (including a field site inspection where required), and perform legal review.',
+    },
+    {
+      step: '05',
+      icon: 'fa-handshake',
+      color: '#8b5cf6',
+      bg: '#f3e8ff',
+      title: 'Approval & Accept Terms and Conditions',
+      desc: 'Once approved by the Director General, review and digitally accept your Water Use Permit Contract (Terms & Conditions) in your applicant dashboard.',
+    },
+    {
+      step: '06',
+      icon: 'fa-certificate',
+      color: '#16a34a',
+      bg: '#e8f7ec',
+      title: 'Get Your Official Water Use Permit',
+      desc: 'Download your signed, QR-verifiable Official Water Use Permit and Concession Contract immediately and submit periodic water use compliance reports online.',
+    },
+  ];
+
+  const activityCategories = [
+    { id: 'all', label: 'All Activities (17)' },
+    { id: 'agriculture', label: 'Agriculture & Aquaculture' },
+    { id: 'water_supply', label: 'Water Supply' },
+    { id: 'energy_industry', label: 'Energy, Industry & Mining' },
+    { id: 'infrastructure', label: 'Infrastructure & Recreation' },
+    { id: 'other', label: 'Other Activities' },
+  ];
+
+  const permittedActivities = [
+    {
+      title: 'Coffee washing',
+      category: 'agriculture',
+      regime: 'Water Abstraction',
+      icon: 'fa-coffee',
+      color: '#b45309',
+      bg: '#fef3c7',
+      desc: 'Water abstraction for coffee washing stations, wet-mill processing, and seasonal cherry pulping operations.',
+    },
+    {
+      title: 'Construction of a dam',
+      category: 'infrastructure',
+      regime: 'Water Concession',
+      icon: 'fa-water',
+      color: '#0072bc',
+      bg: '#e8f4fc',
+      desc: 'Impoundment, reservoir creation, weir construction, and hydraulic retention structures across watercourses.',
+    },
+    {
+      title: 'Construction or installation of infrastructure',
+      category: 'infrastructure',
+      regime: 'Water Abstraction',
+      icon: 'fa-hard-hat',
+      color: '#475569',
+      bg: '#f1f5f9',
+      desc: 'Civil works, bridges, intakes, pipelines, and water-related infrastructure installation in or near water bodies.',
+    },
+    {
+      title: 'Electricity generation (Hydropower)',
+      category: 'energy_industry',
+      regime: 'Water Concession',
+      icon: 'fa-bolt',
+      color: '#d97706',
+      bg: '#fef9c3',
+      desc: 'Run-of-river and reservoir hydropower plants harnessing river flow or head for clean electricity generation.',
+    },
+    {
+      title: 'Fish farming in lakes',
+      category: 'agriculture',
+      regime: 'Water Concession',
+      icon: 'fa-fish',
+      color: '#0284c7',
+      bg: '#e0f2fe',
+      desc: 'Commercial cage aquaculture and delineated lake surface concession zones for sustainable fish production.',
+    },
+    {
+      title: 'Fish farming in ponds',
+      category: 'agriculture',
+      regime: 'Water Abstraction',
+      icon: 'fa-water',
+      color: '#0d9488',
+      bg: '#ccfbf1',
+      desc: 'Inland aquaculture ponds, hatcheries, and raceways supplied by surface streams, springs, or groundwater.',
+    },
+    {
+      title: 'Gas Extraction',
+      category: 'energy_industry',
+      regime: 'Water Concession',
+      icon: 'fa-fire-flame-simple',
+      color: '#dc2626',
+      bg: '#fee2e2',
+      desc: 'Methane and dissolved gas extraction concessions and associated process water management on Lake Kivu.',
+    },
+    {
+      title: 'Industry',
+      category: 'energy_industry',
+      regime: 'Water Abstraction',
+      icon: 'fa-industry',
+      color: '#7c3aed',
+      bg: '#f3e8ff',
+      desc: 'Manufacturing, agro-processing, beverage production, cooling systems, and commercial industrial water use.',
+    },
+    {
+      title: 'Irrigation',
+      category: 'agriculture',
+      regime: 'Water Abstraction',
+      icon: 'fa-seedling',
+      color: '#16a34a',
+      bg: '#dcfce7',
+      desc: 'Smallholder and commercial crop irrigation schemes drawing from rivers, lakes, marshes, or boreholes.',
+    },
+    {
+      title: 'Livestock',
+      category: 'agriculture',
+      regime: 'Water Abstraction',
+      icon: 'fa-cow',
+      color: '#65a30d',
+      bg: '#ecfccb',
+      desc: 'Water supply for commercial livestock farms, cattle watering troughs, ranching, and dairy operations.',
+    },
+    {
+      title: 'Mining',
+      category: 'energy_industry',
+      regime: 'Water Abstraction',
+      icon: 'fa-gem',
+      color: '#4f46e5',
+      bg: '#e0e7ff',
+      desc: 'Mineral washing, ore processing, quarry dust suppression, and regulated mining water abstraction.',
+    },
+    {
+      title: 'Port Construction',
+      category: 'infrastructure',
+      regime: 'Water Concession',
+      icon: 'fa-anchor',
+      color: '#0369a1',
+      bg: '#e0f2fe',
+      desc: 'Construction and operation of lake ports, jetties, piers, landing sites, and maritime transport terminals.',
+    },
+    {
+      title: 'Recreational activities',
+      category: 'infrastructure',
+      regime: 'Water Abstraction',
+      icon: 'fa-umbrella-beach',
+      color: '#0891b2',
+      bg: '#cffafe',
+      desc: 'Eco-tourism, waterfront hospitality, water sports facilities, and recreational water body developments.',
+    },
+    {
+      title: 'Water supply',
+      category: 'water_supply',
+      regime: 'Water Abstraction',
+      icon: 'fa-faucet-drip',
+      color: '#0072bc',
+      bg: '#e8f4fc',
+      desc: 'Potable water treatment, community water supply systems, institutional supply, and private piped networks.',
+    },
+    {
+      title: 'District Water Supply',
+      category: 'water_supply',
+      regime: 'Water Abstraction',
+      icon: 'fa-network-wired',
+      color: '#1d4ed8',
+      bg: '#dbeafe',
+      desc: 'Multi-network district-wide rural and urban bulk water supply systems operated across administrative sectors.',
+    },
+    {
+      title: 'Other water abstraction activities (specify)',
+      category: 'other',
+      regime: 'Water Abstraction',
+      icon: 'fa-droplet',
+      color: '#0f766e',
+      bg: '#ccfbf1',
+      desc: 'Specialized surface or groundwater abstraction activities not listed above (applicant specifies activity details).',
+    },
+    {
+      title: 'Other water concession activities (specify)',
+      category: 'other',
+      regime: 'Water Concession',
+      icon: 'fa-file-contract',
+      color: '#6d28d9',
+      bg: '#ede9fe',
+      desc: 'Specialized water body concession or surface occupation activities not listed above (applicant specifies details).',
+    },
+  ];
+
+  const visibleActivities =
+    activeCategory === 'all'
+      ? permittedActivities
+      : permittedActivities.filter((item) => item.category === activeCategory);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -177,74 +400,150 @@ export default function Home() {
       {/* ── HERO SECTION ── */}
       <HeroSection />
 
-      {/* ── CORE MODULES / FEATURES ── */}
-      <section id="features" className="py-20 bg-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-8">
+      {/* ── APPLICATION PROCESS SECTION ── */}
+      <section id="application-process" className="py-20 bg-[#f3f5fa]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8">
           <div className="text-center mb-14">
-            <span className="text-[#0072bc] text-sm font-bold uppercase tracking-widest">Permitted Activities</span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-2">Comprehensive Concession Services</h2>
-            <p className="text-gray-500 mt-3 max-w-xl mx-auto">
-              Choose the appropriate permit type according to your water abstraction or disposal requirements.
+            <span className="inline-block px-3.5 py-1 rounded-full bg-[#0072bc]/10 text-[#0072bc] text-xs font-extrabold uppercase tracking-widest">
+              Step-by-Step Guide
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-3">
+              Water Use Permit Application Process
+            </h2>
+            <p className="text-gray-600 mt-3 max-w-2xl mx-auto text-sm sm:text-base">
+              Follow these six clear steps—from creating your account to receiving your official QR-verifiable Water Use Permit.
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              {
-                icon: 'fa-water',
-                color: '#0072bc',
-                bg: '#e8f4fc',
-                title: 'Surface Water Abstraction',
-                desc: 'Permits for rivers, lakes, reservoirs, and natural streams for commercial, industrial, or domestic supply.',
-              },
-              {
-                icon: 'fa-arrow-down',
-                color: '#28a745',
-                bg: '#e8f7ec',
-                title: 'Groundwater Exploitation',
-                desc: 'Authorisation for deep drilling, borehole construction, aquifers testing, and sustainable groundwater extraction.',
-              },
-              {
-                icon: 'fa-seedling',
-                color: '#f5a623',
-                bg: '#fef8ec',
-                title: 'Agricultural Irrigation',
-                desc: 'Large-scale and smallholder scheme water quotas, seasonal water allocation, and drainage management.',
-              },
-              {
-                icon: 'fa-industry',
-                color: '#6f42c1',
-                bg: '#f3effe',
-                title: 'Industrial & Hydro-Power',
-                desc: 'Run-of-the-river hydropower concession agreements, mineral washing, industrial cooling, and processing permits.',
-              },
-              {
-                icon: 'fa-filter',
-                color: '#dc3545',
-                bg: '#fdecea',
-                title: 'Effluent & Wastewater Discharge',
-                desc: 'Water quality compliance, authorized discharge limits, environmental impact monitoring, and reporting.',
-              },
-              {
-                icon: 'fa-tachometer-alt',
-                color: '#17a2b8',
-                bg: '#e8f7fa',
-                title: 'Meter Self-Reporting',
-                desc: 'Direct portal submission of monthly meter reads, automated billing verification, and compliance checks.',
-              },
-            ].map((feat) => (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            {applicationProcessSteps.map((item, idx) => (
+              <div
+                key={item.step}
+                className="relative bg-white rounded-2xl p-6 sm:p-7 border border-gray-100 shadow-xs hover:shadow-lg transition-all hover:-translate-y-1 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-5">
+                    <div
+                      className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-xs"
+                      style={{ backgroundColor: item.bg }}
+                    >
+                      <i className={`fa ${item.icon} text-2xl`} style={{ color: item.color }} />
+                    </div>
+                    <span className="text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-slate-100 text-slate-700">
+                      Step {item.step}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2.5">
+                    {item.title}
+                  </h3>
+                  <p className="text-gray-600 text-sm leading-relaxed">
+                    {item.desc}
+                  </p>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-[#0072bc]">
+                  <span>
+                    {idx === 0
+                      ? 'Start here'
+                      : idx === applicationProcessSteps.length - 1
+                      ? 'Final Permit Issuance'
+                      : `Proceeds to Step 0${idx + 2}`}
+                  </span>
+                  <i className="fa fa-arrow-right text-[11px]" />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-12 text-center">
+            <Link
+              href="/register"
+              className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-xl bg-[#0072bc] text-white font-bold text-sm shadow-md hover:bg-[#005a96] transition-all"
+            >
+              <span>Create Account to Start Application</span>
+              <i className="fa fa-arrow-right text-xs" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── PERMITTED ACTIVITIES SECTION ── */}
+      <section id="features" className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8">
+          <div className="text-center mb-10">
+            <span className="inline-block px-3.5 py-1 rounded-full bg-[#0072bc]/10 text-[#0072bc] text-xs font-extrabold uppercase tracking-widest">
+              Permitted Activities
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-3">
+              Regulated Water Use &amp; Concession Activities
+            </h2>
+            <p className="text-gray-600 mt-3 max-w-2xl mx-auto text-sm sm:text-base">
+              Select the permitted activity that matches your water abstraction, infrastructure, or water body concession project in Rwanda.
+            </p>
+          </div>
+
+          {/* Intuitive Category Filter Pills */}
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 mb-10">
+            {activityCategories.map((cat) => {
+              const active = activeCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    active
+                      ? 'bg-[#0072bc] text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
+            {visibleActivities.map((feat) => (
               <div
                 key={feat.title}
-                className="group rounded-2xl p-6 border border-gray-100 hover:shadow-lg transition-all hover:-translate-y-1"
+                className="group rounded-2xl p-5 sm:p-6 border border-gray-100 bg-white hover:border-[#0072bc]/30 hover:shadow-lg transition-all hover:-translate-y-1 flex flex-col justify-between"
               >
-                <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5 shadow-sm group-hover:shadow-md transition-shadow"
-                  style={{ backgroundColor: feat.bg }}
-                >
-                  <i className={`fa ${feat.icon} text-2xl`} style={{ color: feat.color }} />
+                <div>
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div
+                      className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-xs group-hover:shadow-md transition-shadow"
+                      style={{ backgroundColor: feat.bg }}
+                    >
+                      <i className={`fa ${feat.icon} text-xl`} style={{ color: feat.color }} />
+                    </div>
+                    <span
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${
+                        feat.regime === 'Water Concession'
+                          ? 'bg-amber-50 text-amber-800 border border-amber-200/70'
+                          : 'bg-blue-50 text-[#0072bc] border border-blue-200/70'
+                      }`}
+                    >
+                      {feat.regime}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-gray-900 mb-2 leading-snug">
+                    {feat.title}
+                  </h3>
+                  <p className="text-gray-500 text-xs sm:text-sm leading-relaxed">
+                    {feat.desc}
+                  </p>
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">{feat.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{feat.desc}</p>
+
+                <div className="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between">
+                  <Link
+                    href="/login"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0072bc] hover:text-[#005a96] transition-colors"
+                  >
+                    <span>Apply for this activity</span>
+                    <i className="fa fa-arrow-right text-[10px]" />
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
