@@ -45,6 +45,9 @@ const PUBLIC_API_PREFIXES = [
   '/api/public/water-use-dashboard',
   // Site chrome (contact details, guideline links) rendered on public pages.
   '/api/public/site-content',
+  // Public contact form and Ask RWB inquiry chat widget.
+  '/api/public/contact',
+  '/api/public/inquiries/',
   // Government-agency API access request form (design: docs/api-access-DESIGN.md).
   // POST-only by route shape; zod-validated, honeypot + IP throttle in-route.
   '/api/public/api-access-requests',

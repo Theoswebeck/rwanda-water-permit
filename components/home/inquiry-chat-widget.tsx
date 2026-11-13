@@ -129,7 +129,7 @@ export function InquiryChatWidget() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
-        throw new Error(json?.message || "Inquiry not found.");
+        throw new Error(json?.message || json?.error || "Inquiry not found.");
       }
       setActiveInquiry(json.inquiry);
       setMessages(json.messages || []);
@@ -169,7 +169,7 @@ export function InquiryChatWidget() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
-        throw new Error(json?.message || "Failed to submit inquiry.");
+        throw new Error(json?.message || json?.error || "Failed to submit inquiry.");
       }
       setTrackNumber(json.inquiryNumber);
       setTrackEmail(email);
@@ -203,7 +203,7 @@ export function InquiryChatWidget() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
-        throw new Error(json?.message || "Failed to send message.");
+        throw new Error(json?.message || json?.error || "Failed to send message.");
       }
       setActiveInquiry(json.inquiry);
       setMessages(json.messages || []);
