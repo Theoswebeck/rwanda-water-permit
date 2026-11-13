@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
-import { sendSmtpEmail } from '@/lib/notifications/smtp-email'
-import { SITE_CONTENT_DEFAULTS, mergeSiteContent } from '@/lib/site-content'
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 import { ensureInquiriesSchema, generateInquiryNumber } from '@/lib/inquiries/schema'
 
@@ -77,56 +75,10 @@ export async function POST(req: NextRequest) {
       [inquiryId, userId, name, message]
     )
 
-    // Resolve recipient email from Admin Website Content (`site_content.office.email`), defaulting to info@rwb.rw
-    let recipientEmail = process.env.CONTACT_EMAIL || SITE_CONTENT_DEFAULTS.office.email
-    try {
-      const res = await query<{ key: string; value: unknown }>(
-        `select key, value from public.site_content where key = 'office' limit 1`
-      )
-      if (res.rows.length > 0) {
-        const merged = mergeSiteContent(res.rows)
-        if (merged.office?.email) {
-          recipientEmail = merged.office.email
-        }
-      }
-    } catch {
-      // Fallback to default
-    }
-
-    const emailBody = [
-      `New inquiry submitted via Rwanda Water Permit System (${inquiryNumber}):`,
-      ``,
-      `Tracking Number: ${inquiryNumber}`,
-      `From: ${name} <${email}>`,
-      phone ? `Phone: ${phone}` : null,
-      organization ? `Organization: ${organization}` : null,
-      `Category: ${category}`,
-      `Priority: ${priority.toUpperCase()}`,
-      `Subject: ${subject}`,
-      ``,
-      `Message:`,
-      message,
-    ]
-      .filter((line): line is string => line !== null)
-      .join('\n')
-
-    // Best-effort SMTP notification so DB ticket creation still succeeds even if SMTP is slow/unconfigured
-    try {
-      await sendSmtpEmail({
-        to: recipientEmail,
-        subject: `[${inquiryNumber} - ${priority.toUpperCase()}] ${subject}`,
-        title: `New Contact Inquiry (${inquiryNumber})`,
-        text: emailBody,
-      })
-    } catch (smtpErr) {
-      console.warn('⚠️ Inquiry saved to DB, but SMTP email notification failed:', smtpErr)
-    }
-
     return NextResponse.json({
       success: true,
       inquiryId,
       inquiryNumber,
-      recipient: recipientEmail,
       message: `Your inquiry (${inquiryNumber}) has been received by Rwanda Water Resources Board.`,
     })
   } catch (error) {

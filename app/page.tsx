@@ -5,7 +5,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { HeroSection } from '@/components/home/hero-section';
 import { ApiAccessSection } from '@/components/home/api-access-section';
-import { ContactSection } from '@/components/home/contact-section';
 import { InquiryChatWidget } from '@/components/home/inquiry-chat-widget';
 import { WaterDashboardSection } from '@/components/home/water-dashboard-section';
 import { useSiteContent } from '@/lib/use-site-content';
@@ -27,7 +26,7 @@ export default function Home() {
     { name: 'Request API', href: '#api-access' },
     { name: 'User Manual', href: userManualUrl, newTab: true },
     { name: 'Guidelines', href: guidelinesUrl, newTab: true },
-    { name: 'Contact', href: '#contact' },
+    { name: 'Contact', href: '#footer' },
   ];
 
   const applicationProcessSteps = [
@@ -734,9 +733,6 @@ export default function Home() {
       <div id="api-access">
         <ApiAccessSection />
       </div>
-
-      {/* ── CONTACT & INQUIRIES SECTION ── */}
-      <ContactSection />
 
       {/* ── INSTITUTIONAL FOOTER ── */}
       <footer id="footer" style={{ background: 'linear-gradient(135deg, #003d6b 0%, #0072bc 100%)' }}>
