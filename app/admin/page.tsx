@@ -16,6 +16,8 @@ import { ActivityLogs } from "@/components/admin/activity-logs";
 import { RoleDelegationManagement } from "@/components/admin/role-delegation-management";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
+import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
+import { InspectionRegistryList } from "@/components/inspection-registry/inspection-registry-list";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useTabParam } from "@/hooks/use-tab-param";
 
@@ -32,7 +34,9 @@ import {
   Map,
   PenSquare,
   ScrollText,
-  BarChart3
+  BarChart3,
+  BookOpen,
+  ClipboardCheck
 } from "lucide-react";
 
 const ADMIN_VALID_TABS = [
@@ -46,6 +50,8 @@ const ADMIN_VALID_TABS = [
   "delegations",
   "api-access",
   "content",
+  "permit-registry",
+  "inspection-registry",
 ] as const;
 
 type AdminTab = (typeof ADMIN_VALID_TABS)[number];
@@ -61,6 +67,8 @@ const ADMIN_NAV: StaffNavItem[] = [
   { value: "api-access", label: "API Access", icon: KeyRound, group: "Access" },
   { value: "content", label: "Website Content", icon: PenSquare, group: "Website" },
   { value: "reports", label: "Reports", icon: BarChart3, group: "General" },
+  { value: "permit-registry", label: "Permit Registry", icon: BookOpen, group: "Registries" },
+  { value: "inspection-registry", label: "Inspection Registry", icon: ClipboardCheck, group: "Registries" },
 ];
 
 interface AdminDashboardStats {
@@ -135,81 +143,85 @@ function AdminDashboardContent() {
           className="mx-auto w-full px-4 py-6"
         >
           <div className="space-y-6">
-            {/* Executive Header Banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-xs">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-                  System Administration
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                  Manage users, monitor system performance, and oversee all water permit operations
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse" />
-                  Status: System Operational
-                </span>
-              </div>
-            </div>
+            {activeTab !== "permit-registry" && activeTab !== "inspection-registry" && (
+              <>
+                {/* Executive Header Banner */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-xs">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+                      System Administration
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                      Manage users, monitor system performance, and oversee all water permit operations
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse" />
+                      Status: System Operational
+                    </span>
+                  </div>
+                </div>
 
-            {/* Quick Stats Grid */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              <StatsCard
-                data={{
-                  title: "Total Users",
-                  value: stats?.totalUsers || 0,
-                  iconName: "Users",
-                  color: "blue",
-                  description: "Registered users",
-                }}
-              />
-              <StatsCard
-                data={{
-                  title: "Applications",
-                  value: stats?.totalApplications || 0,
-                  iconName: "FileText",
-                  color: "green",
-                  description: "Total processed",
-                }}
-              />
-              <StatsCard
-                data={{
-                  title: "Pending Reviews",
-                  value: stats?.pendingReviews || 0,
-                  iconName: "Clock",
-                  color: "amber",
-                  description: "Require attention",
-                }}
-              />
-              <StatsCard
-                data={{
-                  title: "Active Inspections",
-                  value: stats?.activeInspections || 0,
-                  iconName: "CheckCircle",
-                  color: "purple",
-                  description: "In progress",
-                }}
-              />
-              <StatsCard
-                data={{
-                  title: "Pending Assessments",
-                  value: stats?.pendingAssessments || 0,
-                  iconName: "FileSpreadsheet",
-                  color: "indigo",
-                  description: "Awaiting assessment",
-                }}
-              />
-              <StatsCard
-                data={{
-                  title: "Pending Approvals",
-                  value: stats?.pendingApprovals || 0,
-                  iconName: "CheckCircle2",
-                  color: "blue",
-                  description: "Awaiting DG sign-off",
-                }}
-              />
-            </div>
+                {/* Quick Stats Grid */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                  <StatsCard
+                    data={{
+                      title: "Total Users",
+                      value: stats?.totalUsers || 0,
+                      iconName: "Users",
+                      color: "blue",
+                      description: "Registered users",
+                    }}
+                  />
+                  <StatsCard
+                    data={{
+                      title: "Applications",
+                      value: stats?.totalApplications || 0,
+                      iconName: "FileText",
+                      color: "green",
+                      description: "Total processed",
+                    }}
+                  />
+                  <StatsCard
+                    data={{
+                      title: "Pending Reviews",
+                      value: stats?.pendingReviews || 0,
+                      iconName: "Clock",
+                      color: "amber",
+                      description: "Require attention",
+                    }}
+                  />
+                  <StatsCard
+                    data={{
+                      title: "Active Inspections",
+                      value: stats?.activeInspections || 0,
+                      iconName: "CheckCircle",
+                      color: "purple",
+                      description: "In progress",
+                    }}
+                  />
+                  <StatsCard
+                    data={{
+                      title: "Pending Assessments",
+                      value: stats?.pendingAssessments || 0,
+                      iconName: "FileSpreadsheet",
+                      color: "indigo",
+                      description: "Awaiting assessment",
+                    }}
+                  />
+                  <StatsCard
+                    data={{
+                      title: "Pending Approvals",
+                      value: stats?.pendingApprovals || 0,
+                      iconName: "CheckCircle2",
+                      color: "blue",
+                      description: "Awaiting DG sign-off",
+                    }}
+                  />
+                </div>
+              </>
+            )}
 
             {/* Main Full-Width Horizontal Workbench Sections */}
             <StaffSidebar
@@ -259,6 +271,14 @@ function AdminDashboardContent() {
               
               <TabsContent value="reports" className="space-y-4 focus-visible:outline-none">
                 <AdminReports />
+              </TabsContent>
+
+              <TabsContent value="permit-registry" className="space-y-4 focus-visible:outline-none">
+                <PermitRegistryList canUpload={true} canEdit={true} />
+              </TabsContent>
+
+              <TabsContent value="inspection-registry" className="space-y-4 focus-visible:outline-none">
+                <InspectionRegistryList canUpload={true} canEdit={true} />
               </TabsContent>
             </StaffSidebar>
           </div>

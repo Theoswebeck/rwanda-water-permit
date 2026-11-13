@@ -64,6 +64,27 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
   );
   const role = userProfile?.role?.toLowerCase() || highestEffectiveRole || "applicant";
 
+  // Detect if an Admin (or multi-role staff) is currently inside a specific role's workbench
+  const getWorkbenchRoleFromPath = (path: string): string | null => {
+    if (path === "/approver" || path.startsWith("/approver/")) return "approver";
+    if (path === "/inspection" || path.startsWith("/inspection/")) return "inspector";
+    if (path === "/review" || path.startsWith("/review/")) return "reviewer";
+    if (path === "/assessment" || path.startsWith("/assessment/") || path === "/technical-assessment") return "assessor";
+    if (path === "/verification" || path.startsWith("/verification/") || path === "/verifier" || path.startsWith("/verifier/")) return "verifier";
+    if (
+      (path === "/dashboard" || path.startsWith("/dashboard/") || path === "/new-application") &&
+      !path.startsWith("/dashboard/profile") &&
+      !path.startsWith("/dashboard/settings")
+    ) {
+      return "applicant";
+    }
+    return null;
+  };
+
+  const activeContextRole = role === "admin"
+    ? (getWorkbenchRoleFromPath(pathname) || "admin")
+    : role;
+
   const toggleSubmenu = (title: string) => {
     if (isCollapsed && !isHovered) {
       onExpandSidebar();
@@ -75,8 +96,8 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
   };
 
   // Build role-specific navigation menu items
-  const getMenuItems = (): MenuItem[] => {
-    if (role === "admin") {
+  const getRoleMenuItems = (targetRole: string): MenuItem[] => {
+    if (targetRole === "admin") {
       return [
         { title: "System Overview", href: "/admin?tab=overview", iconClass: "fa fa-dashboard", sectionLabel: "ADMIN CONTROL CENTER" },
         { title: "User Management", href: "/admin?tab=users", iconClass: "fa fa-users" },
@@ -89,8 +110,8 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
         { title: "Website Content", href: "/admin?tab=content", iconClass: "fa fa-edit" },
         { title: "Institutional Reports", href: "/admin?tab=reports", iconClass: "fa fa-chart-bar" },
 
-        { title: "Permit Registry", href: "/approver?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
-        { title: "Inspection Registry", href: "/approver?tab=inspection-registry", iconClass: "fa fa-list-alt" },
+        { title: "Permit Registry", href: "/admin?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
+        { title: "Inspection Registry", href: "/admin?tab=inspection-registry", iconClass: "fa fa-list-alt" },
 
         { title: "Approver Workbench", href: "/approver", iconClass: "fa fa-check-double", sectionLabel: "STAFF WORKBENCHES" },
         { title: "Field Inspections", href: "/inspection", iconClass: "fa fa-clipboard-check" },
@@ -104,9 +125,9 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
       ];
     }
 
-    if (role === "approver") {
+    if (targetRole === "approver") {
       return [
-        { title: "Permitting", href: "/approver?tab=approval", iconClass: "fa fa-file-text", sectionLabel: "WORKFLOW" },
+        { title: "Permitting", href: "/approver?tab=approval", iconClass: "fa fa-file-text", sectionLabel: "APPROVER WORKBENCH" },
         { title: "Inspections", href: "/approver?tab=inspections", iconClass: "fa fa-clipboard-check" },
         { title: "Water Use Reports", href: "/approver?tab=water-reports", iconClass: "fa fa-tint" },
         { title: "Permit Registry", href: "/approver?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
@@ -115,9 +136,9 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
       ];
     }
 
-    if (role === "inspector") {
+    if (targetRole === "inspector") {
       return [
-        { title: "Field Inspections", href: "/inspection?tab=inspections", iconClass: "fa fa-clipboard-check", sectionLabel: "WORKFLOW" },
+        { title: "Field Inspections", href: "/inspection?tab=inspections", iconClass: "fa fa-clipboard-check", sectionLabel: "INSPECTOR WORKBENCH" },
         { title: "Technical Assessment", href: "/inspection?tab=assessments", iconClass: "fa fa-tasks" },
         { title: "All Applications", href: "/inspection?tab=applications", iconClass: "fa fa-files-o" },
         { title: "Consolidated Map", href: "/inspection?tab=map", iconClass: "fa fa-map-marker" },
@@ -126,9 +147,9 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
       ];
     }
 
-    if (role === "reviewer") {
+    if (targetRole === "reviewer") {
       return [
-        { title: "Permitting", href: "/review?tab=review", iconClass: "fa fa-file-text", sectionLabel: "WORKFLOW" },
+        { title: "Permitting", href: "/review?tab=review", iconClass: "fa fa-file-text", sectionLabel: "LEGAL REVIEW WORKBENCH" },
         { title: "Inspections", href: "/review?tab=inspections", iconClass: "fa fa-clipboard-check" },
         { title: "Water Use Reports", href: "/review?tab=water-reports", iconClass: "fa fa-tint" },
         { title: "Permit Registry", href: "/review?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
@@ -137,9 +158,9 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
       ];
     }
 
-    if (role === "assessor") {
+    if (targetRole === "assessor") {
       return [
-        { title: "Permitting", href: "/assessment?tab=assessment", iconClass: "fa fa-file-text", sectionLabel: "WORKFLOW" },
+        { title: "Permitting", href: "/assessment?tab=assessment", iconClass: "fa fa-file-text", sectionLabel: "ASSESSMENT WORKBENCH" },
         { title: "Inspections", href: "/assessment?tab=inspections", iconClass: "fa fa-clipboard-check" },
         { title: "Water Use Reports", href: "/assessment?tab=water-reports", iconClass: "fa fa-tint" },
         { title: "Permit Registry", href: "/assessment?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
@@ -148,9 +169,9 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
       ];
     }
 
-    if (role === "verifier") {
+    if (targetRole === "verifier") {
       return [
-        { title: "Permitting", href: "/verification?tab=verification", iconClass: "fa fa-file-text", sectionLabel: "WORKFLOW" },
+        { title: "Permitting", href: "/verification?tab=verification", iconClass: "fa fa-file-text", sectionLabel: "VERIFICATION WORKBENCH" },
         { title: "Inspections", href: "/verification?tab=inspections", iconClass: "fa fa-clipboard-check" },
         { title: "Water Use Reports", href: "/verification?tab=water-reports", iconClass: "fa fa-tint" },
         { title: "Permit Registry", href: "/verification?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
@@ -164,6 +185,7 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
       {
         title: "Applicant Portal",
         iconClass: "fa fa-home",
+        sectionLabel: "APPLICANT PORTAL",
         subItems: [
           { title: "My Applications", href: "/dashboard", iconClass: "fa fa-list-alt" },
           { title: "New Application", href: "/new-application?mode=new", iconClass: "fa fa-plus-circle" },
@@ -172,6 +194,22 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
         ],
       },
     ];
+  };
+
+  const getMenuItems = (): MenuItem[] => {
+    const baseItems = getRoleMenuItems(activeContextRole);
+    if (role === "admin" && activeContextRole !== "admin") {
+      return [
+        {
+          title: "← Admin Control Center",
+          href: "/admin?tab=overview",
+          iconClass: "fa fa-arrow-left",
+          sectionLabel: "ADMINISTRATION",
+        },
+        ...baseItems,
+      ];
+    }
+    return baseItems;
   };
 
   const menuItems = getMenuItems();
