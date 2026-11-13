@@ -222,7 +222,7 @@ export function InquiryChatWidget() {
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-full bg-[#0072bc] hover:bg-[#005a96] text-white px-5 py-3.5 shadow-2xl transition-all hover:scale-105 cursor-pointer"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3.5 shadow-2xl transition-all hover:scale-105 cursor-pointer"
           aria-label="Open RWB Inquiry Chat"
         >
           <MessageSquare className="h-5 w-5" />
