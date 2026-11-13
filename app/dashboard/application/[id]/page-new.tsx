@@ -156,8 +156,8 @@ export default function ApplicationDetailPage() {
           {/* Application Header */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">{application.project_title}</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">{application.project_title}</h1>
+              <p className="text-sm text-muted-foreground mt-1">
                 Application submitted on {formatDate(application.created_at)}
               </p>
             </div>

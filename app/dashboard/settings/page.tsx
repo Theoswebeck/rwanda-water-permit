@@ -59,8 +59,10 @@ export default function SettingsPage() {
         </div>
         
         <div className="space-y-6">
-          <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">{tx("Account Settings")}</h1>
-          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">{tx("Manage your account preferences and settings")}</p>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">{tx("Account Settings")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{tx("Manage your account preferences and settings")}</p>
+          </div>
           
           <Tabs defaultValue="general" className="w-full">
             <TabsList className={`w-full max-w-xl grid ${isStaffUser ? 'grid-cols-5' : 'grid-cols-4'}`}>

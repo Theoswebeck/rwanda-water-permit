@@ -649,15 +649,15 @@ export default function AssessmentPage() {
               </Link>
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-3">
-                <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">
                   Technical Assessment: {application.application_number}
                 </h1>
                 {getStatusBadge(application.status)}
               </div>
 
-              <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
+              <p className="text-sm text-muted-foreground">
                 Conduct technical assessment of water permit application for feasibility and compliance
               </p>
             </div>

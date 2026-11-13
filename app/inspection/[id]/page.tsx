@@ -18,8 +18,8 @@ export default async function InspectionDetailPage({ params }: { params: Promise
         <BackButton />
         
         <div>
-          <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">Inspection Details</h1>
-          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">Inspection Details</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             View detailed information about this inspection
           </p>
         </div>

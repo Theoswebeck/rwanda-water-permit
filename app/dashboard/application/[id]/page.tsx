@@ -1109,12 +1109,12 @@ export default function ApplicationDetailPage() {
           {/* Application Header */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">{application.project_title}</h1>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">{application.project_title}</h1>
+              <p className="text-sm text-muted-foreground mt-1">
                 Application submitted on {formatDate(application.created_at)} • Read-only view
               </p>
             </div>
-            <div className="flex flex-col gap-2 md:items-end">
+            <div className="flex flex-col gap-1.5 md:items-end">
               <div className="flex items-center gap-2">
                 {getStatusBadge(application.status)}
                 {(application.status === 'revision_required' || application.status === 'draft') && (
@@ -1130,7 +1130,7 @@ export default function ApplicationDetailPage() {
                   </Link>
                 )}
               </div>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Application ID: <span className="font-mono text-foreground font-semibold">{formatApplicationId(application)}</span>
               </p>
             </div>

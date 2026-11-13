@@ -532,9 +532,9 @@ export default function PermitDetailPage() {
           transition={{ duration: 0.5 }}
           className="space-y-6"
         >
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">{permit.title}</h1>
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">{permit.title}</h1>
               {getStatusBadge(permit.status)}
               {(permit.modifiedCount ?? 0) > 0 ? (
                 <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100">
@@ -542,7 +542,7 @@ export default function PermitDetailPage() {
                 </Badge>
               ) : null}
             </div>
-            <p className="text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Permit Number: {permit.permitNumber} • Issued on {formatDate(permit.issueDate)}
             </p>
           </div>

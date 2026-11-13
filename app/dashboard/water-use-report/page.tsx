@@ -323,10 +323,10 @@ function WaterUseReportContent() {
             className="space-y-8"
           >
             <div>
-              <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">
                 {tx("Annual Water Use Report")}
               </h1>
-              <p className="text-muted-foreground mt-2">
+              <p className="text-sm text-muted-foreground mt-1">
                 {tx("Submit your annual water resources use report as required by Ministerial Order No 001/MoE/24 of 02/04/2024.")}
               </p>
               <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">

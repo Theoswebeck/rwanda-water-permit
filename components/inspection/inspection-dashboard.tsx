@@ -102,8 +102,8 @@ export function InspectionDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">Water Resource Inspection</h1>
-          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">Water Resource Inspection</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Field inspection management and compliance monitoring
           </p>
         </div>

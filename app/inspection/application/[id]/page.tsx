@@ -1012,16 +1012,16 @@ export default function InspectorApplicationView() {
               <BackToDashboardButton size="sm" className="gap-2" />
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">
                   Application Review: {application.application_number}
                 </h1>
                 {getApplicationTypeBadge()}
                 {getStatusBadge(application.status)}
               </div>
 
-              <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
+              <p className="text-sm text-muted-foreground">
                 Technical review and assessment of water permit application
               </p>
               {(application as any)?.assigned_to_user && (
