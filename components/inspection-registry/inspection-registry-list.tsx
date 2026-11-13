@@ -577,9 +577,9 @@ export function InspectionRegistryList({ canEdit = false }: InspectionRegistryLi
             <Table className="w-full table-fixed">
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80">
-                  <TableHead className="w-[44px]" />
+                  <TableHead className="w-[36px]" />
                   <TableHead
-                    className="w-[52px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                    className="w-[44px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
                     onClick={() => toggleSort("row_index")}
                   >
                     <span className="flex items-center">
@@ -588,7 +588,7 @@ export function InspectionRegistryList({ canEdit = false }: InspectionRegistryLi
                     </span>
                   </TableHead>
                   <TableHead
-                    className="w-[140px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
+                    className="w-[130px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
                     onClick={() => toggleSort("inspection_number")}
                   >
                     <span className="flex items-center">
@@ -597,16 +597,16 @@ export function InspectionRegistryList({ canEdit = false }: InspectionRegistryLi
                     </span>
                   </TableHead>
                   <TableHead
-                    className="w-[26%] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                    className="cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap overflow-hidden"
                     onClick={() => toggleSort("permit_holder")}
                   >
-                    <span className="flex items-center">
+                    <span className="flex items-center truncate">
                       Permit Holder
                       <SortIcon field="permit_holder" />
                     </span>
                   </TableHead>
                   <TableHead
-                    className="w-[170px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
+                    className="w-[148px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
                     onClick={() => toggleSort("permit_number")}
                   >
                     <span className="flex items-center">
@@ -614,11 +614,11 @@ export function InspectionRegistryList({ canEdit = false }: InspectionRegistryLi
                       <SortIcon field="permit_number" />
                     </span>
                   </TableHead>
-                  <TableHead className="hidden xl:table-cell w-[150px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
+                  <TableHead className="hidden xl:table-cell w-[120px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                     Activity
                   </TableHead>
                   <TableHead
-                    className="w-[130px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
+                    className="w-[118px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
                     onClick={() => toggleSort("compliance_status")}
                   >
                     <span className="flex items-center">
@@ -627,7 +627,7 @@ export function InspectionRegistryList({ canEdit = false }: InspectionRegistryLi
                     </span>
                   </TableHead>
                   <TableHead
-                    className="hidden lg:table-cell w-[160px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
+                    className="hidden lg:table-cell w-[142px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
                     onClick={() => toggleSort("action")}
                   >
                     <span className="flex items-center">
@@ -635,11 +635,11 @@ export function InspectionRegistryList({ canEdit = false }: InspectionRegistryLi
                       <SortIcon field="action" />
                     </span>
                   </TableHead>
-                  <TableHead className="hidden 2xl:table-cell w-[150px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
+                  <TableHead className="hidden 2xl:table-cell w-[135px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                     Inspection Date
                   </TableHead>
                   {canEdit && (
-                    <TableHead className="w-[56px] text-right text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
+                    <TableHead className="w-[48px] text-right text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
                       <span className="sr-only">Actions</span>
                     </TableHead>
                   )}
