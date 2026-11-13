@@ -143,6 +143,7 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
         { title: "API Key Access", href: "/admin?tab=api-access", iconClass: "fa fa-key" },
         { title: "Website Content", href: "/admin?tab=content", iconClass: "fa fa-edit" },
         { title: "Institutional Reports", href: "/admin?tab=reports", iconClass: "fa fa-chart-bar" },
+        { title: "Inquiries", href: "/admin?tab=inquiries", iconClass: "fa fa-comments" },
 
         { title: "Permit Registry", href: "/admin?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
         { title: "Inspection Registry", href: "/admin?tab=inspection-registry", iconClass: "fa fa-list-alt" },
@@ -176,6 +177,7 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
         { title: "Technical Assessment", href: "/inspection?tab=assessments", iconClass: "fa fa-tasks" },
         { title: "All Applications", href: "/inspection?tab=applications", iconClass: "fa fa-files-o" },
         { title: "Consolidated Map", href: "/inspection?tab=map", iconClass: "fa fa-map-marker" },
+        { title: "Inquiries", href: "/inspection?tab=inquiries", iconClass: "fa fa-comments" },
         { title: "Inspection Registry", href: "/inspection?tab=inspection-registry", iconClass: "fa fa-list-alt", sectionLabel: "REGISTRIES" },
         { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt", sectionLabel: "OTHER TOOLS" },
       ];
@@ -186,6 +188,7 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
         { title: "Permitting", href: "/review?tab=review", iconClass: "fa fa-file-text", sectionLabel: "LEGAL REVIEW WORKBENCH" },
         { title: "Inspections", href: "/review?tab=inspections", iconClass: "fa fa-clipboard-check" },
         { title: "Water Use Reports", href: "/review?tab=water-reports", iconClass: "fa fa-tint" },
+        { title: "Inquiries", href: "/review?tab=inquiries", iconClass: "fa fa-comments" },
         { title: "Permit Registry", href: "/review?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
         { title: "Inspection Registry", href: "/review?tab=inspection-registry", iconClass: "fa fa-list-alt" },
         { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt", sectionLabel: "OTHER TOOLS" },
@@ -197,6 +200,7 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
         { title: "Permitting", href: "/assessment?tab=assessment", iconClass: "fa fa-file-text", sectionLabel: "ASSESSMENT WORKBENCH" },
         { title: "Inspections", href: "/assessment?tab=inspections", iconClass: "fa fa-clipboard-check" },
         { title: "Water Use Reports", href: "/assessment?tab=water-reports", iconClass: "fa fa-tint" },
+        { title: "Inquiries", href: "/assessment?tab=inquiries", iconClass: "fa fa-comments" },
         { title: "Permit Registry", href: "/assessment?tab=permit-registry", iconClass: "fa fa-book", sectionLabel: "REGISTRIES" },
         { title: "Inspection Registry", href: "/assessment?tab=inspection-registry", iconClass: "fa fa-list-alt" },
         { title: "Management Dashboard", href: "/management", iconClass: "fa fa-tachometer-alt", sectionLabel: "OTHER TOOLS" },

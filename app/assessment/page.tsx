@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { StaffInquiriesWorkbench } from "@/components/inquiries/staff-inquiries-workbench";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -68,9 +69,9 @@ function AssessmentDashboardContent() {
   const [allApplications, setAllApplications] = useState<AssessmentApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [topTab, setTopTab] = useTabParam<"assessment" | "inspections" | "water-reports" | "permit-registry" | "inspection-registry">(
+  const [topTab, setTopTab] = useTabParam<"assessment" | "inspections" | "water-reports" | "permit-registry" | "inspection-registry" | "inquiries">(
     "assessment",
-    ["assessment", "inspections", "water-reports", "permit-registry", "inspection-registry"]
+    ["assessment", "inspections", "water-reports", "permit-registry", "inspection-registry", "inquiries"]
   );
   const [activeChipId, setActiveChipId] = useState("pending_assessment");
   // "my_assignments" = applications assigned to me (actionable queue).
@@ -433,6 +434,7 @@ function AssessmentDashboardContent() {
                 {topTab === "assessment" ? "Application Assessment Dashboard"
                   : topTab === "inspections" ? "Inspections"
                   : topTab === "water-reports" ? "Water Use Reports"
+                  : topTab === "inquiries" ? "Assigned Inquiries"
                   : topTab === "permit-registry" ? "Permit Registry"
                   : "Inspection Registry"}
               </h1>
@@ -440,6 +442,7 @@ function AssessmentDashboardContent() {
                 {topTab === "assessment" ? "Assess and review water permit applications for technical compliance and field verification"
                   : topTab === "inspections" ? "Manage and track field inspections"
                   : topTab === "water-reports" ? "Monitor and review water usage reports"
+                  : topTab === "inquiries" ? "Work on public inquiries assigned to you and reply to citizens"
                   : topTab === "permit-registry" ? "View and manage issued permits"
                   : "View and track water user inspections"}
               </p>
@@ -532,6 +535,8 @@ function AssessmentDashboardContent() {
             </div>
           ) : topTab === "water-reports" ? (
             <WaterUseReportsList roleContext="assessor" />
+          ) : topTab === "inquiries" ? (
+            <StaffInquiriesWorkbench />
           ) : topTab === "permit-registry" ? (
             <PermitRegistryList />
           ) : (

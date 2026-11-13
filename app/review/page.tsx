@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { StaffInquiriesWorkbench } from "@/components/inquiries/staff-inquiries-workbench";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,9 +117,9 @@ const REVIEWER_CHIPS: StatusChipDef[] = [
 
 function ReviewerDashboardContent() {
   const router = useRouter();
-  const [topTab, setTopTab] = useTabParam<"review" | "inspections" | "water-reports" | "permit-registry" | "inspection-registry">(
+  const [topTab, setTopTab] = useTabParam<"review" | "inspections" | "water-reports" | "permit-registry" | "inspection-registry" | "inquiries">(
     "review",
-    ["review", "inspections", "water-reports", "permit-registry", "inspection-registry"]
+    ["review", "inspections", "water-reports", "permit-registry", "inspection-registry", "inquiries"]
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
@@ -688,6 +689,7 @@ function ReviewerDashboardContent() {
                 {topTab === "review" ? "Application Review Dashboard"
                   : topTab === "inspections" ? "Inspections"
                   : topTab === "water-reports" ? "Water Use Reports"
+                  : topTab === "inquiries" ? "Public Inquiries & Messages"
                   : topTab === "permit-registry" ? "Permit Registry"
                   : "Inspection Registry"}
               </h1>
@@ -695,6 +697,7 @@ function ReviewerDashboardContent() {
                 {topTab === "review" ? "Review and assess water permit applications for technical compliance"
                   : topTab === "inspections" ? "Manage and track field inspections"
                   : topTab === "water-reports" ? "Monitor and review water usage reports"
+                  : topTab === "inquiries" ? "Respond to citizen inquiries or assign them to assessors and inspectors"
                   : topTab === "permit-registry" ? "View and manage issued permits"
                   : "View and track water user inspections"}
               </p>
@@ -760,6 +763,8 @@ function ReviewerDashboardContent() {
             </div>
           ) : topTab === "water-reports" ? (
             <WaterUseReportsList roleContext="reviewer" />
+          ) : topTab === "inquiries" ? (
+            <StaffInquiriesWorkbench />
           ) : topTab === "permit-registry" ? (
             <PermitRegistryList />
           ) : (

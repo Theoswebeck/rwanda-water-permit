@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { HeroSection } from '@/components/home/hero-section';
 import { ApiAccessSection } from '@/components/home/api-access-section';
 import { ContactSection } from '@/components/home/contact-section';
+import { InquiryChatWidget } from '@/components/home/inquiry-chat-widget';
 import { WaterDashboardSection } from '@/components/home/water-dashboard-section';
 import { useSiteContent } from '@/lib/use-site-content';
 
@@ -812,6 +813,7 @@ export default function Home() {
           </div>
         </div>
       </footer>
+      <InquiryChatWidget />
     </div>
   );
 }

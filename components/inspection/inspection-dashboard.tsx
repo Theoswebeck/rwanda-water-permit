@@ -11,6 +11,7 @@ import { AssessmentTab } from "./assessment-tab"
 import { InspectionsTab } from "./inspections-tab"
 import { AllApplicationsTab } from "./all-applications-tab"
 import { InspectionList } from "@/components/inspection/inspection-list"
+import { StaffInquiriesWorkbench } from "@/components/inquiries/staff-inquiries-workbench"
 import { WaterConcessionMap } from "@/components/shared/water-concession-map"
 import { 
   ClipboardList, 
@@ -19,12 +20,13 @@ import {
   Loader2,
   MapPin,
   ClipboardCheck,
+  MessageSquare,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getInspectionStats, getApplicationsForInspection, getCurrentUser } from "@/lib/supabase"
 
 export function InspectionDashboard() {
-  const [activeTab, setActiveTab] = useTabParam("inspections", ["inspections", "assessments", "applications", "map", "inspection-registry"])
+  const [activeTab, setActiveTab] = useTabParam("inspections", ["inspections", "assessments", "applications", "map", "inquiries", "inspection-registry"])
   const [stats, setStats] = useState({
     pendingAssessmentCount: 0,
     allApplicationsCount: 0
@@ -115,12 +117,13 @@ export function InspectionDashboard() {
       {/* Main Content */}
       <StaffSidebar
         value={activeTab}
-        onValueChange={setActiveTab}
+        onValueChange={(v) => setActiveTab(v as any)}
         items={[
           { value: "assessments", label: "Technical Assessment", icon: ClipboardList, badge: countBadge(stats.pendingAssessmentCount) },
           { value: "inspections", label: "Post-Permit Inspections", icon: FileCheck, badge: countBadge(stats.allApplicationsCount) },
           { value: "applications", label: "All Applications", icon: Files },
           { value: "map", label: "Consolidated Map", icon: MapPin },
+          { value: "inquiries", label: "Inquiries", icon: MessageSquare },
           { value: "inspection-registry", label: "Inspection Registry", icon: ClipboardCheck },
         ]}
       >
@@ -135,6 +138,9 @@ export function InspectionDashboard() {
         </TabsContent>
         <TabsContent value="map" className="mt-0">
           <WaterConcessionMap />
+        </TabsContent>
+        <TabsContent value="inquiries" className="mt-0">
+          <StaffInquiriesWorkbench />
         </TabsContent>
         <TabsContent value="inspection-registry" className="mt-0">
           <InspectionList />

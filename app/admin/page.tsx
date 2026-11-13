@@ -18,6 +18,7 @@ import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
 import { InspectionRegistryList } from "@/components/inspection-registry/inspection-registry-list";
+import { StaffInquiriesWorkbench } from "@/components/inquiries/staff-inquiries-workbench";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useTabParam } from "@/hooks/use-tab-param";
 
@@ -36,7 +37,8 @@ import {
   ScrollText,
   BarChart3,
   BookOpen,
-  ClipboardCheck
+  ClipboardCheck,
+  MessageSquare
 } from "lucide-react";
 
 const ADMIN_VALID_TABS = [
@@ -50,6 +52,7 @@ const ADMIN_VALID_TABS = [
   "delegations",
   "api-access",
   "content",
+  "inquiries",
   "permit-registry",
   "inspection-registry",
 ] as const;
@@ -58,6 +61,7 @@ type AdminTab = (typeof ADMIN_VALID_TABS)[number];
 
 const ADMIN_NAV: StaffNavItem[] = [
   { value: "overview", label: "Overview", icon: LayoutDashboard, group: "General" },
+  { value: "inquiries", label: "Inquiries", icon: MessageSquare, group: "General" },
   { value: "users", label: "User Management", icon: Users, group: "Access" },
   { value: "applications", label: "Applications Oversight", icon: FileText, group: "Operations" },
   { value: "water-reports", label: "Water Use Reports", icon: Droplets, group: "Operations" },
@@ -277,6 +281,9 @@ function AdminDashboardContent() {
                 <PermitRegistryList canUpload={true} canEdit={true} />
               </TabsContent>
 
+              <TabsContent value="inquiries" className="space-y-4 focus-visible:outline-none">
+                <StaffInquiriesWorkbench />
+              </TabsContent>
               <TabsContent value="inspection-registry" className="space-y-4 focus-visible:outline-none">
                 <InspectionRegistryList canUpload={true} canEdit={true} />
               </TabsContent>

@@ -21,6 +21,7 @@ import { translateText } from "@/lib/i18n/translator";
 export function ContactSection() {
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [lastSubmitted, setLastSubmitted] = useState<{ inquiryNumber: string; email: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState<AppLanguage>("en");
 
@@ -66,6 +67,11 @@ export function ContactSection() {
         throw new Error(result?.message || tx('Failed to send message. Please try again.'));
       }
       setSuccess(true);
+      setLastSubmitted(
+        result.inquiryNumber
+          ? { inquiryNumber: String(result.inquiryNumber), email: formData.email }
+          : null
+      );
       setFormData({
         name: "",
         email: "",
@@ -76,7 +82,7 @@ export function ContactSection() {
         message: "",
         priority: "normal"
       });
-      setTimeout(() => setSuccess(false), 6000);
+      setTimeout(() => setSuccess(false), 20000);
     } catch (err) {
       setError(err instanceof Error ? err.message : tx('Failed to send message. Please try again.'));
     } finally {
@@ -107,8 +113,36 @@ export function ContactSection() {
           >
             <Alert className="border-green-200 bg-green-50">
               <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
-                ✅ <strong>{tx("Message sent successfully! We'll get back to you as soon as possible.")}</strong>
+              <AlertDescription className="text-green-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <strong>{tx("Message sent successfully! We'll get back to you as soon as possible.")}</strong>
+                  {lastSubmitted?.inquiryNumber && (
+                    <p className="text-xs text-green-700 mt-1">
+                      {tx("Tracking ID")}: <span className="font-mono font-bold bg-white/80 px-1.5 py-0.5 rounded border border-green-200">{lastSubmitted.inquiryNumber}</span>
+                    </p>
+                  )}
+                </div>
+                {lastSubmitted?.inquiryNumber && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent("rwb:open-inquiry-chat", {
+                          detail: {
+                            inquiryNumber: lastSubmitted.inquiryNumber,
+                            email: lastSubmitted.email,
+                          },
+                        })
+                      )
+                    }
+                    className="border-green-300 bg-white text-green-800 hover:bg-green-100 shrink-0"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                    {tx("Open in Chat Panel")}
+                  </Button>
+                )}
               </AlertDescription>
             </Alert>
           </motion.div>
