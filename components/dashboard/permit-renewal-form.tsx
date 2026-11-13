@@ -506,6 +506,13 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     tabsCompleted["water-use-report"] &&
     tabsCompleted.attachments;
 
+  // A renewal that RWB staff returned for revision has ALREADY been paid for.
+  // The applicant must resubmit it directly (it goes back to the assessor) —
+  // sending it through the Payment tab again re-opened payment, flipped the
+  // application to pending_payment and, on cancel/failure, dropped it to draft.
+  const isReturnedForRevision =
+    !isStaffView && !readOnly && (currentApplication as any)?.status === "revision_required";
+
   const getTabProgressError = useCallback((tabId: string): string | null => {
     if (tabId === "permit-details" && !tabsCompleted["permit-details"]) {
       return "Complete all required Permit Details fields before moving to Water Use Report.";
@@ -546,6 +553,13 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       return false;
     }
 
+    if (targetTab === "payment" && isReturnedForRevision) {
+      setTabValidationError(
+        "This renewal was returned for revision and is already paid. Use \"Resubmit Application\" on the Attachments tab.",
+      );
+      return false;
+    }
+
     if (targetTab === "payment" && !canProceedToPayment) {
       setTabValidationError(
         "Complete Permit Details, Water Use Report, and Attachments before opening Payment.",
@@ -562,6 +576,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     activeTab,
     canProceedToPayment,
     getTabProgressError,
+    isReturnedForRevision,
     isStaffView,
     readOnly,
   ]);
@@ -930,6 +945,31 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     }
   };
 
+  // Resubmit a renewal that was returned for revision (no new payment).
+  // onSubmit (handleRenewalSubmit) routes it back to the assigned assessor and
+  // keeps the original submission date.
+  const handleResubmitReturned = async () => {
+    if (readOnly || !isReturnedForRevision) return;
+    if (!tabsCompleted.attachments) {
+      setTabValidationError("Upload the required renewal request letter before resubmitting.");
+      return;
+    }
+    if (!waterUseReportSubmitted) {
+      setTabValidationError("Complete and submit the Water Use Report before resubmitting.");
+      return;
+    }
+    try {
+      setIsSaving(true);
+      setSaveError(null);
+      setTabValidationError(null);
+      await onSubmit(buildFormData());
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to resubmit renewal application");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Editable only for manual permits in non-read-only mode
   const detailsEditable = isManualPermit && !readOnly;
 
@@ -1004,7 +1044,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                 <span className="hidden sm:inline">{tx("Attachments")}</span>
                 {tabsCompleted.attachments && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
               </TabsTrigger>
-              <TabsTrigger value="payment" className="flex items-center gap-1 text-xs" disabled={!isStaffView && !canProceedToPayment}>
+              <TabsTrigger value="payment" className="flex items-center gap-1 text-xs" disabled={!isStaffView && (!canProceedToPayment || isReturnedForRevision)}>
                 <CreditCard className="h-4 w-4" />
                 <span className="hidden sm:inline">{tx("Payment")}</span>
               </TabsTrigger>
@@ -1565,10 +1605,17 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
                         {tx("Save as Draft")}
                       </Button>
-                      <Button onClick={handleContinueToPayment} className="bg-green-600 hover:bg-green-700 gap-2" disabled={!tabsCompleted.attachments || isSaving}>
-                        {tx("Continue to Payment")}
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
+                      {isReturnedForRevision ? (
+                        <Button onClick={handleResubmitReturned} className="bg-green-600 hover:bg-green-700 gap-2" disabled={!tabsCompleted.attachments || isSaving}>
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                          {tx("Resubmit Application")}
+                        </Button>
+                      ) : (
+                        <Button onClick={handleContinueToPayment} className="bg-green-600 hover:bg-green-700 gap-2" disabled={!tabsCompleted.attachments || isSaving}>
+                          {tx("Continue to Payment")}
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}

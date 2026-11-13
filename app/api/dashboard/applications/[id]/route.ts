@@ -265,10 +265,13 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     // 'draft' is refused on a returned application: the renewal form's
     // save-as-draft sent it and RWB-2026-000258 (paid, returned by the assessor)
     // fell back to 'draft', invisible to staff.
+    // 'pending_payment' is likewise refused on a returned application: it is already
+    // paid, and moving it to pending_payment forces a second payment whose
+    // cancel/failure then reverts it to 'draft'.
     const editableCurrentStatusesFor = (next: unknown) =>
       String(next) === 'pending_assessment'
         ? ['revision_required']
-        : String(next) === 'draft'
+        : String(next) === 'draft' || String(next) === 'pending_payment'
           ? ['draft', 'pending_payment']
           : APPLICANT_EDITABLE_CURRENT_STATUSES
     // Applicant forms rebuild internal_notes from their own form state, so a

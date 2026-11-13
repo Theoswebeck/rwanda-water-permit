@@ -648,15 +648,24 @@ export async function POST(request: NextRequest) {
 
     if (application && purpose !== 'annual_report_fee') {
       const nextStatus = 'pending_payment';
+      // Only an unpaid application may move to pending_payment. Without this guard
+      // opening a payment on a returned (revision_required) or already-submitted
+      // application flipped it to pending_payment and, when that payment was
+      // cancelled/failed, it was reverted to 'draft' — the "resubmit goes to draft"
+      // bug.
       await query(
         `
         update public.applications
         set status = $2, updated_at = now()
         where id = $1
+          and status in ('draft', 'pending_payment')
         `,
         [applicationIdToUse, nextStatus]
       ).then(
-        () => console.log('✅ [PAYMENT INITIATE] Application status updated to', nextStatus),
+        (res) =>
+          res.rowCount
+            ? console.log('✅ [PAYMENT INITIATE] Application status updated to', nextStatus)
+            : console.log('ℹ️  [PAYMENT INITIATE] Application status left unchanged (not in draft/pending_payment)'),
         (updateError) => console.error('⚠️  [PAYMENT INITIATE] Failed to update application status:', updateError)
       );
     } else {

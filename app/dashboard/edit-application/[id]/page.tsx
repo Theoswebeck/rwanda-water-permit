@@ -821,6 +821,22 @@ export default function EditApplicationPage() {
       if (updatedApplication) {
         console.log('✅ Application updated and submitted successfully:', updatedApplication);
 
+        // The PATCH route silently ignores a status write the row is not eligible
+        // for (e.g. a stale view of the status) and still answers success. Never
+        // tell the applicant "resubmitted" while the application is still sitting
+        // in an applicant-side state (draft / returned / awaiting payment).
+        const resultingStatus = String((updatedApplication as any).status || '');
+        if (['draft', 'revision_required', 'pending_payment'].includes(resultingStatus)) {
+          console.error('❌ Resubmission did not change the application status:', {
+            application_id: application.id,
+            attempted: resubmissionStatus,
+            resulting: resultingStatus,
+          });
+          throw new Error(
+            'Your changes were saved, but the application could not be resubmitted (its status did not change). Please refresh the page and try Resubmit again, or contact support if it persists.'
+          );
+        }
+
         // Degradation check: the PATCH route silently drops columns the database
         // does not have yet, so on an un-migrated database resubmitted_at never
         // lands and staff tables keep showing the original submission date.

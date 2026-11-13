@@ -1711,10 +1711,13 @@ function NewApplicationContent() {
       // Prefer permit details entered by user (manual permits) over permit object
       const pd = formData.permitDetails;
 
-      // If this renewal was returned for revision by an assessor, route it back
-      // directly to that assessor (bypass reviewer/verifier).
+      // A renewal returned for revision is a RESUBMISSION: it is already paid, keeps
+      // its ORIGINAL submitted_at (statutory 6-month expiration anchor) and only
+      // stamps resubmitted_at. If an assessor had it, it goes straight back to that
+      // assessor (bypass reviewer/verifier); otherwise it re-enters as 'submitted'.
+      const isReturnedRenewal = currentRenewalApplication?.status === 'revision_required';
       const wasReturnedByAssessor =
-        currentRenewalApplication?.status === 'revision_required' &&
+        isReturnedRenewal &&
         (currentRenewalApplication as any)?.assigned_assessor_id;
       const submissionStatus = wasReturnedByAssessor ? 'pending_assessment' : 'submitted';
       if (wasReturnedByAssessor) {
@@ -1727,7 +1730,7 @@ function NewApplicationContent() {
         // Only stamp submitted_at on the first submission. Resubmissions keep the
         // original stamp (the statutory 6-month expiration anchor) and use
         // resubmitted_at instead.
-        ...(wasReturnedByAssessor
+        ...(isReturnedRenewal
           ? { resubmitted_at: new Date().toISOString() }
           : { submitted_at: new Date().toISOString() }),
         application_type: pickNonTransferAppType(
@@ -2049,10 +2052,12 @@ function NewApplicationContent() {
           lookupStatus: "found" as const,
         };
 
-      // If this modification was returned for revision by an assessor, route it back
-      // directly to that assessor (bypass reviewer/verifier).
+      // A modification returned for revision is a RESUBMISSION: keep the ORIGINAL
+      // submitted_at and stamp resubmitted_at. Route it straight back to the
+      // assessor who returned it (bypass reviewer/verifier) when one is assigned.
+      const isReturnedModification = currentModificationApplication?.status === 'revision_required';
       const wasReturnedByAssessor =
-        currentModificationApplication?.status === 'revision_required' &&
+        isReturnedModification &&
         (currentModificationApplication as any)?.assigned_assessor_id;
       const submissionStatus = wasReturnedByAssessor ? 'pending_assessment' : 'submitted';
       if (wasReturnedByAssessor) {
@@ -2065,7 +2070,7 @@ function NewApplicationContent() {
         // Only stamp submitted_at on the first submission. Resubmissions keep the
         // original stamp (the statutory 6-month expiration anchor) and use
         // resubmitted_at instead.
-        ...(wasReturnedByAssessor
+        ...(isReturnedModification
           ? { resubmitted_at: new Date().toISOString() }
           : { submitted_at: new Date().toISOString() }),
         application_type: pickNonTransferAppType(
