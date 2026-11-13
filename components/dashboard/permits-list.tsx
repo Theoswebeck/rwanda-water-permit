@@ -301,9 +301,7 @@ export function PermitsList({ permits }: PermitsListProps) {
                           <DropdownMenuLabel>{tx("View")}</DropdownMenuLabel>
                           <DropdownMenuItem asChild>
                             <Link
-                              href={`https://waterpermit.rwb.rw/permit/view/${encodeURIComponent(permit.permitNumber)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              href={`/permit/view/${encodeURIComponent(permit.permitNumber)}`}
                             >
                               <Eye className="mr-2 h-4 w-4" />
                               {tx("View permit PDF")}
@@ -311,9 +309,7 @@ export function PermitsList({ permits }: PermitsListProps) {
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
                             <Link
-                              href={`https://waterpermit.rwb.rw/contract/terms/${encodeURIComponent(permit.permitNumber)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              href={`/contract/terms/${encodeURIComponent(permit.permitNumber)}`}
                             >
                               <FileText className="mr-2 h-4 w-4" />
                               {tx("View terms")}

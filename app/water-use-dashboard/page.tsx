@@ -17,6 +17,7 @@ import {
   type AppLanguage,
 } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
+import { OptionalDashboardLayout } from "@/components/dashboard/optional-dashboard-layout";
 
 /** Translate a sentence that carries numbers, then substitute them back in. */
 function fillTemplate(template: string, values: Record<string, string>): string {
@@ -157,6 +158,7 @@ export default function WaterUseDashboardPage() {
   const attribution = data?.catchmentAttribution;
 
   return (
+    <OptionalDashboardLayout>
     <div className="mx-auto w-full max-w-5xl px-4 py-10">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -170,7 +172,7 @@ export default function WaterUseDashboardPage() {
               <Waves className="h-7 w-7 text-primary" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{tx("Water Use Dashboard")}</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-primary">{tx("Water Use Dashboard")}</h1>
           <p className="mx-auto max-w-2xl text-muted-foreground">
             {tx("Water use permits issued across Rwanda, as recorded in the national Permit Registry.")}
           </p>
@@ -347,5 +349,6 @@ export default function WaterUseDashboardPage() {
         ) : null}
       </motion.div>
     </div>
+    </OptionalDashboardLayout>
   );
 }

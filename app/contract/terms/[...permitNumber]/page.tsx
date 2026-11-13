@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 import { ContractTermsPreview } from "@/components/contract/contract-terms-preview";
 import { ContractTermsActions } from "@/components/contract/contract-terms-actions";
+import { OptionalDashboardLayout } from "@/components/dashboard/optional-dashboard-layout";
 import type { PermitVariant } from "@/lib/permit-variant";
 
 function isPermitVariant(v: string | undefined | null): v is PermitVariant {
@@ -35,22 +36,24 @@ export default async function PublicContractTermsPage({
   const application = (permit as Record<string, unknown> | null)?.application ?? null;
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mx-auto max-w-4xl space-y-6">
-          <ContractTermsActions
-            application={application as Record<string, any> | null}
-            permitNumber={permitNumber}
-            variantOverride={variantOverride}
-          />
-          <ContractTermsPreview
-            application={application as Record<string, any> | null}
-            permitNumber={permitNumber}
-            variantOverride={variantOverride}
-            mode="public"
-          />
+    <OptionalDashboardLayout>
+      <div className="min-h-screen bg-slate-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="mx-auto max-w-4xl space-y-6">
+            <ContractTermsActions
+              application={application as Record<string, any> | null}
+              permitNumber={permitNumber}
+              variantOverride={variantOverride}
+            />
+            <ContractTermsPreview
+              application={application as Record<string, any> | null}
+              permitNumber={permitNumber}
+              variantOverride={variantOverride}
+              mode="public"
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </OptionalDashboardLayout>
   );
 }

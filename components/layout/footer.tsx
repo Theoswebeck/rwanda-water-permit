@@ -3,11 +3,19 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import { useSiteContent } from "@/lib/use-site-content";
 
 export function Footer() {
   const pathname = usePathname();
+  const { isAuthenticated } = useAuth();
   const siteContent = useSiteContent();
+
+  const isOptionalShellRoute =
+    pathname.startsWith("/contract/terms") ||
+    pathname.startsWith("/permit/view") ||
+    pathname.startsWith("/permit/map") ||
+    pathname.startsWith("/water-use-dashboard");
 
   const isInternalDashboardRoute =
     pathname.startsWith("/dashboard") ||
@@ -22,7 +30,8 @@ export function Footer() {
     pathname.startsWith("/approver") ||
     pathname.startsWith("/management") ||
     pathname.startsWith("/change-password-required") ||
-    pathname.startsWith("/technical-assessment");
+    pathname.startsWith("/technical-assessment") ||
+    (isAuthenticated && isOptionalShellRoute);
 
   const isLoginPage = pathname === "/login";
   const isRegisterPage = pathname === "/register";

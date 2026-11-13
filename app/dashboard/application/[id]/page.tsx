@@ -1093,7 +1093,7 @@ export default function ApplicationDetailPage() {
   }
   
   return (
-    <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+    <ProtectedRoute allowedRoles={['applicant', 'admin', 'approver', 'reviewer', 'assessor', 'verifier', 'inspector']} requireProfile={true}>
     <DashboardLayout>
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center mb-6">

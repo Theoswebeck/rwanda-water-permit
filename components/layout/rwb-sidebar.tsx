@@ -64,29 +64,59 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
   );
   const role = userProfile?.role?.toLowerCase() || highestEffectiveRole || "applicant";
 
-  // Detect if an Admin (or multi-role staff) is currently inside a specific role's workbench
-  const getWorkbenchRoleFromPath = (path: string): string | null => {
+  // Detect if an Admin is explicitly inside a specific role's workbench/portal.
+  // Shared detail routes (/dashboard/application/*, /dashboard/permit/*, /water-use-report/*,
+  // /contract/terms/*, /permit/view/*, /permit/map/*, /water-use-dashboard, /dashboard/profile,
+  // /dashboard/settings) return null so the user continues viewing their active menu.
+  const getExplicitWorkbenchRoleFromPath = (path: string): string | null => {
+    if (path === "/admin" || path.startsWith("/admin/")) return "admin";
     if (path === "/approver" || path.startsWith("/approver/")) return "approver";
     if (path === "/inspection" || path.startsWith("/inspection/")) return "inspector";
     if (path === "/review" || path.startsWith("/review/")) return "reviewer";
     if (path === "/assessment" || path.startsWith("/assessment/") || path === "/technical-assessment") return "assessor";
     if (path === "/verification" || path.startsWith("/verification/") || path === "/verifier" || path.startsWith("/verifier/")) return "verifier";
     if (
-      (path === "/dashboard" ||
-        path.startsWith("/dashboard/") ||
-        path === "/new-application" ||
-        path === "/water-use-report" ||
-        path.startsWith("/water-use-report/")) &&
-      !path.startsWith("/dashboard/profile") &&
-      !path.startsWith("/dashboard/settings")
+      path === "/dashboard" ||
+      path === "/dashboard/new-application" ||
+      path === "/new-application" ||
+      path === "/dashboard/water-use-report" ||
+      path === "/water-use-report" ||
+      path.startsWith("/dashboard/edit-application/")
     ) {
       return "applicant";
     }
     return null;
   };
 
+  const explicitWorkbenchRole = getExplicitWorkbenchRoleFromPath(pathname);
+
+  const resolveAdminContextRole = (): string => {
+    if (explicitWorkbenchRole) {
+      if (typeof window !== "undefined") {
+        try {
+          window.sessionStorage.setItem("rwb_admin_active_role", explicitWorkbenchRole);
+          window.localStorage.setItem("rwb_admin_active_role", explicitWorkbenchRole);
+        } catch {
+          // ignore storage errors
+        }
+      }
+      return explicitWorkbenchRole;
+    }
+    if (typeof window !== "undefined") {
+      try {
+        const stored =
+          window.sessionStorage.getItem("rwb_admin_active_role") ||
+          window.localStorage.getItem("rwb_admin_active_role");
+        if (stored) return stored;
+      } catch {
+        // ignore storage errors
+      }
+    }
+    return "admin";
+  };
+
   const activeContextRole = role === "admin"
-    ? (getWorkbenchRoleFromPath(pathname) || "admin")
+    ? resolveAdminContextRole()
     : role;
 
   const toggleSubmenu = (title: string) => {
@@ -268,12 +298,32 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
                 if (href === "/new-application?mode=new" && pathname === "/dashboard/new-application") {
                   return true;
                 }
-                if (href === "/dashboard?tab=permits" && pathname.startsWith("/dashboard/permit/")) {
+                if (
+                  href === "/dashboard?tab=permits" &&
+                  (pathname.startsWith("/dashboard/permit/") ||
+                    pathname.startsWith("/contract/terms/") ||
+                    pathname.startsWith("/permit/view/") ||
+                    pathname.startsWith("/permit/map/"))
+                ) {
                   return true;
                 }
-                if (href.endsWith("?tab=water-reports") && pathname.includes("/water-use-report/")) {
-                  const [base] = href.split("?");
-                  if (pathname.startsWith(`${base}/`)) return true;
+                if (
+                  href.endsWith("?tab=permit-registry") &&
+                  (pathname.startsWith("/review/permit/") ||
+                    pathname.startsWith("/contract/terms/") ||
+                    pathname.startsWith("/permit/view/") ||
+                    pathname.startsWith("/permit/map/"))
+                ) {
+                  return true;
+                }
+                if (
+                  href.endsWith("?tab=water-reports") &&
+                  (pathname.includes("/water-use-report/") || pathname.startsWith("/water-use-report/"))
+                ) {
+                  return true;
+                }
+                if (href === "/admin?tab=applications" && pathname.startsWith("/dashboard/application/")) {
+                  return true;
                 }
                 if (href.endsWith("?tab=inspections")) {
                   const [base] = href.split("?");
@@ -293,18 +343,17 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
                 }
                 if (
                   href === "/inspection?tab=applications" &&
-                  (pathname.startsWith("/inspection/application/") || pathname === "/inspection/applications")
+                  (pathname.startsWith("/inspection/application/") ||
+                    pathname === "/inspection/applications" ||
+                    pathname.startsWith("/dashboard/application/"))
                 ) {
                   return true;
                 }
-                if (href === "/review?tab=permit-registry" && pathname.startsWith("/review/permit/")) {
-                  return true;
-                }
                 if (
-                  (href === "/approver?tab=approval" && pathname.startsWith("/approver/application/")) ||
-                  (href === "/review?tab=review" && pathname.startsWith("/review/application/")) ||
-                  (href === "/assessment?tab=assessment" && pathname.startsWith("/assessment/application/")) ||
-                  (href === "/verification?tab=verification" && pathname.startsWith("/verification/application/"))
+                  (href === "/approver?tab=approval" && (pathname.startsWith("/approver/application/") || pathname.startsWith("/dashboard/application/"))) ||
+                  (href === "/review?tab=review" && (pathname.startsWith("/review/application/") || pathname.startsWith("/dashboard/application/"))) ||
+                  (href === "/assessment?tab=assessment" && (pathname.startsWith("/assessment/application/") || pathname.startsWith("/dashboard/application/"))) ||
+                  (href === "/verification?tab=verification" && (pathname.startsWith("/verification/application/") || pathname.startsWith("/dashboard/application/")))
                 ) {
                   return true;
                 }

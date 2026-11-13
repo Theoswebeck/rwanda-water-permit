@@ -8,6 +8,7 @@ import type { PermitStatus } from "@/types/database";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 import { PermitPublicActions } from "@/components/public/permit-public-actions";
 import { PermitLocationMap } from "@/components/public/permit-location-map";
+import { OptionalDashboardLayout } from "@/components/dashboard/optional-dashboard-layout";
 import { Tx } from "@/components/ui/tx";
 import { safeInternalPath } from "@/lib/safe-internal-path";
 // All display derivations (holder, activity, area, location, dates,
@@ -212,9 +213,10 @@ export default async function PublicPermitViewPage({
   const concessionPolygons = deriveConcessionPolygons(permit, assessorAdjustments);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="container mx-auto px-4 py-8">
-        {backHref ? (
+    <OptionalDashboardLayout>
+      <div className="min-h-screen bg-slate-50">
+        <div className="container mx-auto px-4 py-8">
+          {backHref ? (
           <div className="mx-auto mb-4 max-w-4xl">
             <Link
               href={backHref}
@@ -404,6 +406,7 @@ export default async function PublicPermitViewPage({
         </div>
       </div>
     </div>
+    </OptionalDashboardLayout>
   );
 }
 

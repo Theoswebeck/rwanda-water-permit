@@ -20,7 +20,16 @@ async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> 
 }
 
 // Returns the authenticated user's id plus whether they may read any application
-// (admins / superusers), not just the ones they personally submitted.
+// (staff / admins / superusers), not just the ones they personally submitted.
+const STAFF_READ_ROLES = new Set([
+  'admin',
+  'approver',
+  'reviewer',
+  'assessor',
+  'verifier',
+  'inspector',
+])
+
 async function getAuthenticatedActor(
   req: NextRequest
 ): Promise<{ userId: string; canReadAny: boolean } | null> {
@@ -29,7 +38,8 @@ async function getAuthenticatedActor(
   const claims = await verifySessionToken(token)
   if (!claims?.sub) return null
   const email = String(claims.email || '').toLowerCase()
-  const canReadAny = claims.role === 'admin' || SUPERUSER_EMAILS.has(email)
+  const role = String(claims.role || '').toLowerCase()
+  const canReadAny = STAFF_READ_ROLES.has(role) || SUPERUSER_EMAILS.has(email)
   return { userId: claims.sub, canReadAny }
 }
 

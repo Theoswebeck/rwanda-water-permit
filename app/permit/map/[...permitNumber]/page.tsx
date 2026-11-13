@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 import { Tx } from "@/components/ui/tx";
 import { ConcessionMapPrint } from "@/components/public/concession-map-print";
+import { OptionalDashboardLayout } from "@/components/dashboard/optional-dashboard-layout";
 import {
   deriveConcessionAreaValue,
   deriveConcessionPolygons,
@@ -57,24 +58,26 @@ export default async function ConcessionMapPrintPage({
 
   if (!permit) {
     return (
-      <div className="container mx-auto px-4 py-10">
-        <Card>
-          <CardHeader>
-            <CardTitle><Tx>Concession boundary map</Tx></CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              <Tx>We couldn&apos;t load this permit. It may not exist yet, may be inactive, or the permit number format may be invalid.</Tx>
-            </p>
-            <p className="text-sm">
-              <Tx>Permit number:</Tx> <span className="font-mono">{inputPermitNumber}</span>
-            </p>
-            <Link className="text-sm underline" href="/">
-              <Tx>Back to portal</Tx>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+      <OptionalDashboardLayout>
+        <div className="container mx-auto px-4 py-10">
+          <Card>
+            <CardHeader>
+              <CardTitle><Tx>Concession boundary map</Tx></CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                <Tx>We couldn&apos;t load this permit. It may not exist yet, may be inactive, or the permit number format may be invalid.</Tx>
+              </p>
+              <p className="text-sm">
+                <Tx>Permit number:</Tx> <span className="font-mono">{inputPermitNumber}</span>
+              </p>
+              <Link className="text-sm underline" href="/">
+                <Tx>Back to portal</Tx>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </OptionalDashboardLayout>
     );
   }
 
@@ -82,27 +85,29 @@ export default async function ConcessionMapPrintPage({
   // permits never expose their details (or boundary) publicly.
   if (String(permit.status) === "suspended" || String(permit.status) === "revoked") {
     return (
-      <div className="container mx-auto px-4 py-10">
-        <Card>
-          <CardHeader>
-            <CardTitle><Tx>Concession boundary map</Tx></CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-sm font-medium text-amber-700">
-              <Tx>This permit is inactive.</Tx>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              <Tx>This permit is not currently active and its details are not available for public verification.</Tx>
-            </p>
-            <p className="text-sm">
-              <Tx>Permit number:</Tx> <span className="font-mono">{inputPermitNumber}</span>
-            </p>
-            <Link className="text-sm underline" href="/">
-              <Tx>Back to portal</Tx>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+      <OptionalDashboardLayout>
+        <div className="container mx-auto px-4 py-10">
+          <Card>
+            <CardHeader>
+              <CardTitle><Tx>Concession boundary map</Tx></CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-sm font-medium text-amber-700">
+                <Tx>This permit is inactive.</Tx>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                <Tx>This permit is not currently active and its details are not available for public verification.</Tx>
+              </p>
+              <p className="text-sm">
+                <Tx>Permit number:</Tx> <span className="font-mono">{inputPermitNumber}</span>
+              </p>
+              <Link className="text-sm underline" href="/">
+                <Tx>Back to portal</Tx>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </OptionalDashboardLayout>
     );
   }
 
@@ -121,41 +126,45 @@ export default async function ConcessionMapPrintPage({
   const hasPolygons = polygons.length > 0 && polygons[0].length >= 3;
   if (!hasPolygons) {
     return (
-      <div className="container mx-auto px-4 py-10">
-        <Card>
-          <CardHeader>
-            <CardTitle><Tx>Concession boundary map</Tx></CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              <Tx>No concession boundary is recorded for this permit, so a printable map is not available.</Tx>
-            </p>
-            <p className="text-sm">
-              <Tx>Permit number:</Tx> <span className="font-mono">{String(permit.permit_number || inputPermitNumber)}</span>
-            </p>
-            <Link className="text-sm underline" href={backHref}>
-              <Tx>Back to permit</Tx>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+      <OptionalDashboardLayout>
+        <div className="container mx-auto px-4 py-10">
+          <Card>
+            <CardHeader>
+              <CardTitle><Tx>Concession boundary map</Tx></CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                <Tx>No concession boundary is recorded for this permit, so a printable map is not available.</Tx>
+              </p>
+              <p className="text-sm">
+                <Tx>Permit number:</Tx> <span className="font-mono">{String(permit.permit_number || inputPermitNumber)}</span>
+              </p>
+              <Link className="text-sm underline" href={backHref}>
+                <Tx>Back to permit</Tx>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </OptionalDashboardLayout>
     );
   }
 
   const issueDateRaw = getCanonicalIssueDate(permit);
 
   return (
-    <ConcessionMapPrint
-      permitNumber={String(permit.permit_number || inputPermitNumber)}
-      holderName={holderName}
-      activity={activity}
-      recordedArea={recordedArea}
-      location={location}
-      issueDate={issueDateRaw ? formatPermitDate(issueDateRaw) : "N/A"}
-      expiryDate={permit.expiry_date ? formatPermitDate(permit.expiry_date) : "N/A"}
-      statusLabel={permitStatusLabel(String(permit.status))}
-      polygons={polygons}
-      backHref={backHref}
-    />
+    <OptionalDashboardLayout>
+      <ConcessionMapPrint
+        permitNumber={String(permit.permit_number || inputPermitNumber)}
+        holderName={holderName}
+        activity={activity}
+        recordedArea={recordedArea}
+        location={location}
+        issueDate={issueDateRaw ? formatPermitDate(issueDateRaw) : "N/A"}
+        expiryDate={permit.expiry_date ? formatPermitDate(permit.expiry_date) : "N/A"}
+        statusLabel={permitStatusLabel(String(permit.status))}
+        polygons={polygons}
+        backHref={backHref}
+      />
+    </OptionalDashboardLayout>
   );
 }
