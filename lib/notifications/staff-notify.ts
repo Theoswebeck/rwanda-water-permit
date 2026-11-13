@@ -367,7 +367,8 @@ function buildStaffEmailCopy(
   const supportEmail = process.env.SUPPORT_EMAIL || 'info@rwb.rw'
   const ref = getEntityReference(entity)
   const linkId = (entity as Record<string, unknown>)._link_id as string | undefined ?? entityId
-  const link = buildPortalLink(config.dashboardPath(linkId))
+  // Permit numbers contain slashes (0530/RWB/2022) — encode or the route 404s.
+  const link = buildPortalLink(config.dashboardPath(encodeURIComponent(linkId)))
   const staffName = `${staffUser.first_name || ''} ${staffUser.last_name || ''}`.trim() || 'Staff'
 
   const subject = `[RWB] ${config.emailSubjectPrefix} — ${ref}`

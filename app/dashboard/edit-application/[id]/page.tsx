@@ -23,6 +23,7 @@ import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
 import { buildDocumentLookupPathPatterns, resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { mapFormDataToApplication as mapFormDataToApplicationShared } from "@/lib/application-utils";
+import { inferWaterSourceType } from "@/lib/infer-water-source-type";
 import { BackToDashboardButton } from "@/components/ui/back-button";
 
 interface ApplicationWithRelations extends Application {
@@ -119,6 +120,16 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
             ];
     }
     
+    // Saved notes can carry waterSourceType = "" (it is a required field), which
+    // made Submit/Resubmit fail. Infer it from the stored column / source name /
+    // activities exactly like production does.
+    formData.waterSourceType = inferWaterSourceType({
+      current: formData.waterSourceType,
+      waterSourceColumn: application.water_source,
+      sourceName: formData.nameSourceWater || application.water_body_name,
+      activities: formData.intendedActivities ?? application.intended_activities,
+    });
+
     // Ensure additionalDocuments is always an array
     if (!formData.additionalDocuments) {
       formData.additionalDocuments = [];
@@ -158,7 +169,10 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     'surface_water': 'stream_river',
     'groundwater': 'borehole'
   };
-  formData.waterSourceType = waterSourceMap[application.water_source] || 'stream_river';
+  formData.waterSourceType =
+    waterSourceMap[application.water_source] ||
+    inferWaterSourceType({ waterSourceColumn: application.water_source, sourceName: application.water_body_name, activities: application.intended_activities }) ||
+    'stream_river';
   formData.nameSourceWater = application.water_body_name || '';
   formData.tributaryToMain = application.tributary_name || '';
   
