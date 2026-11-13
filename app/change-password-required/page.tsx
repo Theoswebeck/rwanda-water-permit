@@ -272,7 +272,7 @@ export default function ChangePasswordRequiredPage() {
                 <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200/80 rounded-lg p-2.5 space-y-1">
                   <p className="font-semibold text-slate-700">{tx("Password requirements:")}</p>
                   <ul className="list-disc list-inside space-y-0.5 ml-1 text-[11px]">
-                    <li>{tx("At least 8 characters")}</li>
+                    <li>{tx("At least 6 characters")}</li>
                     <li>{tx("At least one uppercase and one lowercase letter")}</li>
                     <li>{tx("At least one number")}</li>
                   </ul>

@@ -18,9 +18,8 @@ export default function Home() {
   const guidelinesUrl = siteContent.guidelines_url || '/Water_Use_Permitting_Guidelines.pdf';
 
   const navLinks = [
-    { name: 'About', href: '#about' },
-    { name: 'Permit Categories', href: '#features' },
-    { name: 'Application Process', href: '#process' },
+    { name: 'Home', href: '#hero' },
+    { name: 'Permitted Activities', href: '#features' },
     { name: 'Water Dashboard', href: '#water-dashboard' },
     { name: 'Request API', href: '#api-access' },
     { name: 'User Manual', href: userManualUrl, newTab: true },
@@ -178,86 +177,11 @@ export default function Home() {
       {/* ── HERO SECTION ── */}
       <HeroSection />
 
-      {/* ── ABOUT / OVERVIEW ── */}
-      <section id="about" className="py-20" style={{ backgroundColor: '#f3f5fa' }}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-8">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <span className="text-[#0072bc] text-sm font-bold uppercase tracking-widest">About the Portal</span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-2 leading-tight">
-                Sustainable Water Concession Management
-              </h2>
-              <p className="text-gray-600 mt-5 leading-relaxed">
-                The Rwanda Water Permitting System is the official regulatory portal managed by the Rwanda Water Resources Board. It empowers agricultural, industrial, municipal, and commercial water users to acquire valid concessions, submit regular flow meter logs, and stay fully compliant with national water security laws.
-              </p>
-              <div className="mt-8 grid grid-cols-2 gap-4">
-                {[
-                  { icon: 'fa-check-circle', text: 'Interactive GIS Mapping' },
-                  { icon: 'fa-check-circle', text: 'Integrated IremboPay' },
-                  { icon: 'fa-check-circle', text: 'Multi-stage Technical Review' },
-                  { icon: 'fa-check-circle', text: 'Automated 2FA Security' },
-                ].map((item) => (
-                  <div key={item.text} className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                    <i className={`fa ${item.icon} text-[#0072bc]`} />
-                    {item.text}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-8 flex gap-4">
-                <Link
-                  href="/apply"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-[#0072bc] text-white rounded-xl font-bold hover:bg-[#005fa0] transition-colors shadow-md"
-                >
-                  Start New Application <i className="fa fa-arrow-right text-xs" />
-                </Link>
-                <a
-                  href="#water-dashboard"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#0072bc] border border-[#0072bc] rounded-xl font-bold hover:bg-blue-50 transition-colors cursor-pointer"
-                >
-                  Explore Water Data
-                </a>
-              </div>
-            </div>
-
-            {/* Graphics Card */}
-            <div className="relative">
-              <div className="rounded-3xl overflow-hidden shadow-2xl p-8" style={{ background: 'linear-gradient(135deg, #0072bc, #003d6b)' }}>
-                <div className="flex items-center gap-3 mb-6">
-                  <Image src="/images/logo_New.png" alt="RWB" width={48} height={48} className="rounded-full bg-white p-1" />
-                  <div>
-                    <div className="text-white font-bold">Water Concession Workbench</div>
-                    <div className="text-blue-200 text-xs">Rwanda Water Resources Board</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  {[
-                    { label: 'Surface Water', value: '420 Permits', icon: 'fa-tint' },
-                    { label: 'Groundwater Boreholes', value: '185 Wells', icon: 'fa-bore-hole' },
-                    { label: 'Hydropower Uses', value: '38 Concessions', icon: 'fa-bolt' },
-                    { label: 'Irrigation Schemes', value: '94 Projects', icon: 'fa-seedling' },
-                  ].map((card) => (
-                    <div key={card.label} className="bg-white/15 rounded-xl p-4">
-                      <i className={`fa ${card.icon} text-blue-200 text-sm mb-2`} />
-                      <div className="text-white font-bold text-lg">{card.value}</div>
-                      <div className="text-blue-200 text-xs">{card.label}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="bg-white/10 rounded-xl p-4 text-xs text-blue-100 flex items-center justify-between">
-                  <span>Catchment Health Level: Optimal</span>
-                  <span className="bg-emerald-400/30 text-emerald-200 px-2 py-0.5 rounded-full font-bold">9 Basins Monitored</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ── CORE MODULES / FEATURES ── */}
       <section id="features" className="py-20 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-8">
           <div className="text-center mb-14">
-            <span className="text-[#0072bc] text-sm font-bold uppercase tracking-widest">Permit Categories</span>
+            <span className="text-[#0072bc] text-sm font-bold uppercase tracking-widest">Permitted Activities</span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-2">Comprehensive Concession Services</h2>
             <p className="text-gray-500 mt-3 max-w-xl mx-auto">
               Choose the appropriate permit type according to your water abstraction or disposal requirements.
@@ -321,38 +245,6 @@ export default function Home() {
                 </div>
                 <h3 className="text-lg font-bold text-gray-900 mb-2">{feat.title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{feat.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── APPLICATION PROCESS ── */}
-      <section id="process" className="py-20" style={{ backgroundColor: '#f3f5fa' }}>
-        <div className="max-w-5xl mx-auto px-4 sm:px-8">
-          <div className="text-center mb-14">
-            <span className="text-[#0072bc] text-sm font-bold uppercase tracking-widest">Process Flow</span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-2">How to Obtain Your Water Permit</h2>
-            <p className="text-gray-500 mt-3 max-w-xl mx-auto">A seamless 4-step digital journey from initial submission to certificate issuance.</p>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {[
-              { step: '01', icon: 'fa-map-marked-alt', title: 'Submit & GIS Pin', desc: 'Fill out your online application, specify intended volumes, and pin coordinates on the interactive Leaflet map.' },
-              { step: '02', icon: 'fa-search', title: 'Technical Assessment', desc: 'RWB hydrologists and technical teams evaluate basin yield, environmental impact, and site feasibility.' },
-              { step: '03', icon: 'fa-credit-card', title: 'Fee Settlement', desc: 'Secure payment of statutory application and concession dues via IremboPay, MTN MoMo, or card.' },
-              { step: '04', icon: 'fa-certificate', title: 'Permit Issuance', desc: 'Download your official cryptographically verified digital water concession certificate directly from your dashboard.' },
-            ].map((step, idx, arr) => (
-              <div key={step.step} className="relative flex flex-col items-center text-center">
-                {idx < arr.length - 1 && (
-                  <div className="hidden lg:block absolute top-8 left-[calc(50%+32px)] right-0 h-0.5 bg-[#0072bc]/20 z-0" />
-                )}
-                <div className="relative z-10 w-16 h-16 rounded-full bg-[#0072bc] flex items-center justify-center shadow-lg mb-5">
-                  <i className={`fa ${step.icon} text-white text-xl`} />
-                </div>
-                <div className="text-xs font-bold text-[#0072bc] mb-1">{step.step}</div>
-                <h3 className="font-bold text-gray-900 mb-2">{step.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{step.desc}</p>
               </div>
             ))}
           </div>

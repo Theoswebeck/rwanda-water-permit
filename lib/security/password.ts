@@ -6,7 +6,7 @@
  * file free of Node-only imports.
  */
 
-export const PASSWORD_MIN_LENGTH = 12
+export const PASSWORD_MIN_LENGTH = 6
 export const PASSWORD_MAX_LENGTH = 128
 
 export interface PasswordContext {

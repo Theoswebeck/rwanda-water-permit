@@ -23,9 +23,8 @@ import type { SiteContent } from "@/lib/site-content";
 
 function buildNavItems(content: SiteContent) {
   return [
-    { label: "About", href: "/#about" },
-    { label: "Permit Categories", href: "/#features" },
-    { label: "Application Process", href: "/#process" },
+    { label: "Home", href: "/#hero" },
+    { label: "Permitted Activities", href: "/#features" },
     { label: "Water Dashboard", href: "/#water-dashboard" },
     { label: "Request API", href: "/api-access" },
     { label: "API Docs", href: "/api-access/docs" },
