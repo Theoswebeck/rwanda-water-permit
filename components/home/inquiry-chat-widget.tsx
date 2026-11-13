@@ -112,28 +112,57 @@ export function InquiryChatWidget() {
     return () => window.removeEventListener("rwb:open-inquiry-chat", handler);
   }, []);
 
+  const prevMessageCountRef = useRef(0);
+
   useEffect(() => {
-    if (mode === "thread") {
+    if (mode === "thread" && messages.length > prevMessageCountRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, mode]);
+    prevMessageCountRef.current = messages.length;
+  }, [messages.length, mode]);
 
-  const loadThread = async (inqNum: string, inqEmail: string) => {
-    setLoading(true);
-    setError(null);
+  const loadThread = async (inqNum: string, inqEmail: string, silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await fetch("/api/public/inquiries/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({ inquiryNumber: inqNum.trim(), email: inqEmail.trim() }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
-        throw new Error(json?.message || json?.error || "Inquiry not found.");
+        if (!silent) {
+          throw new Error(json?.message || json?.error || "Inquiry not found.");
+        }
+        return;
       }
-      setActiveInquiry(json.inquiry);
-      setMessages(json.messages || []);
-      setMode("thread");
+      setActiveInquiry((prev) => {
+        if (
+          prev &&
+          prev.id === json.inquiry.id &&
+          prev.status === json.inquiry.status &&
+          prev.assigned_role === json.inquiry.assigned_role
+        ) {
+          return prev;
+        }
+        return json.inquiry;
+      });
+      const incoming: ChatMessage[] = json.messages || [];
+      setMessages((prev) => {
+        const prevLast = prev[prev.length - 1]?.id;
+        const nextLast = incoming[incoming.length - 1]?.id;
+        if (prev.length === incoming.length && prevLast === nextLast) {
+          return prev;
+        }
+        return incoming;
+      });
+      if (!silent) {
+        setMode("thread");
+      }
       try {
         localStorage.setItem(
           STORAGE_KEY,
@@ -143,11 +172,28 @@ export function InquiryChatWidget() {
         // ignore
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load conversation.");
+      if (!silent) {
+        setError(err instanceof Error ? err.message : "Failed to load conversation.");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
+
+  // Auto-refresh active chat thread every 4s while open and tab is visible
+  useEffect(() => {
+    if (!isOpen || mode !== "thread" || !activeInquiry?.inquiry_number || !activeInquiry?.sender_email) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadThread(activeInquiry.inquiry_number, activeInquiry.sender_email, true);
+      }
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [isOpen, mode, activeInquiry?.inquiry_number, activeInquiry?.sender_email]);
 
   const handleCreateInquiry = async (e: React.FormEvent) => {
     e.preventDefault();

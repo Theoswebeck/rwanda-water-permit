@@ -65,9 +65,10 @@ export function StaffInquiriesWorkbench() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef(0);
 
-  const fetchInquiries = useCallback(async () => {
-    setLoadingList(true);
+  const fetchInquiries = useCallback(async (silent = false) => {
+    if (!silent) setLoadingList(true);
     try {
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);
@@ -83,22 +84,32 @@ export function StaffInquiriesWorkbench() {
         setViewerRole(json.viewerRole || "");
       }
     } finally {
-      setLoadingList(false);
+      if (!silent) setLoadingList(false);
     }
   }, [statusFilter, scopeFilter, searchQuery]);
 
-  const fetchThread = useCallback(async (id: string) => {
-    setLoadingThread(true);
+  const fetchThread = useCallback(async (id: string, silent = false) => {
+    if (!silent) setLoadingThread(true);
     try {
       const res = await fetch(`/api/staff/inquiries/${id}`, { cache: "no-store" });
       const json = await res.json().catch(() => null);
       if (res.ok && json?.success) {
         setActiveInquiry(json.inquiry);
-        setMessages(json.messages || []);
-        setAssignTargetId(json.inquiry?.assigned_to_user_id || "");
+        const incoming: InquiryMessageRecord[] = json.messages || [];
+        setMessages((prev) => {
+          const prevLast = prev[prev.length - 1]?.id;
+          const nextLast = incoming[incoming.length - 1]?.id;
+          if (prev.length === incoming.length && prevLast === nextLast) {
+            return prev;
+          }
+          return incoming;
+        });
+        if (!silent) {
+          setAssignTargetId(json.inquiry?.assigned_to_user_id || "");
+        }
       }
     } finally {
-      setLoadingThread(false);
+      if (!silent) setLoadingThread(false);
     }
   }, []);
 
@@ -107,6 +118,7 @@ export function StaffInquiriesWorkbench() {
   }, [fetchInquiries]);
 
   useEffect(() => {
+    prevMessageCountRef.current = 0;
     if (selectedId) {
       fetchThread(selectedId);
     } else {
@@ -115,9 +127,25 @@ export function StaffInquiriesWorkbench() {
     }
   }, [selectedId, fetchThread]);
 
+  // Auto-refresh inquiry list & active thread every 5s while tab is visible
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchInquiries(true);
+        if (selectedId) {
+          fetchThread(selectedId, true);
+        }
+      }
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [fetchInquiries, fetchThread, selectedId]);
+
+  useEffect(() => {
+    if (messages.length > prevMessageCountRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+    prevMessageCountRef.current = messages.length;
+  }, [messages.length]);
 
   const handleAssign = async () => {
     if (!activeInquiry || !assignTargetId) return;
@@ -227,7 +255,7 @@ export function StaffInquiriesWorkbench() {
             </Select>
           </div>
 
-          <Button variant="outline" size="sm" onClick={fetchInquiries} className="gap-1.5 h-9">
+          <Button variant="outline" size="sm" onClick={() => fetchInquiries()} className="gap-1.5 h-9">
             <RefreshCw className={`h-3.5 w-3.5 ${loadingList ? "animate-spin" : ""}`} />
             Refresh
           </Button>
