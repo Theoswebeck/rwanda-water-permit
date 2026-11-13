@@ -11,6 +11,8 @@ export function Footer() {
 
   const isInternalDashboardRoute =
     pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/water-use-report") ||
+    pathname.startsWith("/new-application") ||
     pathname.startsWith("/inspection") ||
     pathname.startsWith("/review") ||
     pathname.startsWith("/assessment") ||

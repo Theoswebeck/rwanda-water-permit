@@ -54,7 +54,10 @@ export function Header() {
   const isForgotPasswordPage = pathname.startsWith("/forgot-password");
   const isResetPasswordPage = pathname.startsWith("/reset-password");
   const isAuthPage = isLoginPage || isRegisterPage || isForgotPasswordPage || isResetPasswordPage;
-  const isDashboardPage = pathname.startsWith('/dashboard');
+  const isDashboardPage =
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/water-use-report') ||
+    pathname.startsWith('/new-application');
   const isInspectionPage = pathname.startsWith('/inspection');
   const isReviewPage = pathname.startsWith('/review');
   const isAssessmentPage = pathname.startsWith('/assessment');

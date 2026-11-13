@@ -72,7 +72,11 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
     if (path === "/assessment" || path.startsWith("/assessment/") || path === "/technical-assessment") return "assessor";
     if (path === "/verification" || path.startsWith("/verification/") || path === "/verifier" || path.startsWith("/verifier/")) return "verifier";
     if (
-      (path === "/dashboard" || path.startsWith("/dashboard/") || path === "/new-application") &&
+      (path === "/dashboard" ||
+        path.startsWith("/dashboard/") ||
+        path === "/new-application" ||
+        path === "/water-use-report" ||
+        path.startsWith("/water-use-report/")) &&
       !path.startsWith("/dashboard/profile") &&
       !path.startsWith("/dashboard/settings")
     ) {
@@ -248,6 +252,37 @@ export const RwbSidebar: React.FC<RwbSidebarProps> = ({
 
               const checkUrlActive = (href?: string) => {
                 if (!href) return false;
+                // Sub-route active matching for detail pages
+                if (
+                  href === "/dashboard?tab=reports" &&
+                  (pathname.startsWith("/water-use-report/") || pathname === "/dashboard/water-use-report")
+                ) {
+                  return true;
+                }
+                if (
+                  href === "/dashboard" &&
+                  (pathname.startsWith("/dashboard/application/") || pathname.startsWith("/dashboard/edit-application/"))
+                ) {
+                  return true;
+                }
+                if (href === "/new-application?mode=new" && pathname === "/dashboard/new-application") {
+                  return true;
+                }
+                if (href === "/dashboard?tab=permits" && pathname.startsWith("/dashboard/permit/")) {
+                  return true;
+                }
+                if (href.endsWith("?tab=water-reports") && pathname.includes("/water-use-report/")) {
+                  const [base] = href.split("?");
+                  if (pathname.startsWith(`${base}/`)) return true;
+                }
+                if (
+                  (href === "/approver?tab=approval" && pathname.startsWith("/approver/application/")) ||
+                  (href === "/review?tab=review" && pathname.startsWith("/review/application/")) ||
+                  (href === "/assessment?tab=assessment" && pathname.startsWith("/assessment/application/")) ||
+                  (href === "/verification?tab=verification" && pathname.startsWith("/verification/application/"))
+                ) {
+                  return true;
+                }
                 if (href.includes("?")) {
                   const [path, query] = href.split("?");
                   if (pathname !== path) return false;
