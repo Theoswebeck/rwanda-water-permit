@@ -48,11 +48,23 @@ export function ContactSection() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.category) {
+      setError(tx('Please select an inquiry category.'));
+      return;
+    }
     setIsLoading(true);
     setError(null);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await fetch('/api/public/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || tx('Failed to send message. Please try again.'));
+      }
       setSuccess(true);
       setFormData({
         name: "",
@@ -64,9 +76,9 @@ export function ContactSection() {
         message: "",
         priority: "normal"
       });
-      setTimeout(() => setSuccess(false), 5000);
-    } catch {
-      setError(tx('Failed to send message. Please try again.'));
+      setTimeout(() => setSuccess(false), 6000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : tx('Failed to send message. Please try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +86,7 @@ export function ContactSection() {
 
   return (
     <section id="contact" className="py-20 bg-[#f3f5fa] border-t border-gray-200/70">
-      <div className="max-w-3xl mx-auto px-4 sm:px-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-8">
         <div className="text-center mb-12">
           <span className="text-[#0072bc] text-xs font-bold uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
             {tx("Get In Touch")}

@@ -122,12 +122,12 @@ export default function Home() {
       summary: 'Dam construction, lake port terminals, and civil infrastructure installation in or near water bodies.',
     },
     {
-      id: 'recreation_other',
-      title: 'Recreation & Other Permitted Uses',
+      id: 'recreation',
+      title: 'Recreation & Eco-Tourism',
       icon: 'fa-umbrella-beach',
       color: '#0d9488',
       bg: '#ccfbf1',
-      summary: 'Waterfront recreation, eco-tourism, and specialized water abstraction or concession activities.',
+      summary: 'Waterfront recreation, eco-tourism hospitality, and regulated water sports developments.',
     },
   ];
 
@@ -260,30 +260,12 @@ export default function Home() {
     },
     {
       title: 'Recreational activities',
-      category: 'recreation_other',
+      category: 'recreation',
       regime: 'Water Abstraction',
       icon: 'fa-umbrella-beach',
       color: '#0891b2',
       bg: '#cffafe',
       desc: 'Eco-tourism, waterfront hospitality, water sports facilities, and recreational water body developments.',
-    },
-    {
-      title: 'Other water abstraction activities (specify)',
-      category: 'recreation_other',
-      regime: 'Water Abstraction',
-      icon: 'fa-droplet',
-      color: '#0f766e',
-      bg: '#ccfbf1',
-      desc: 'Specialized surface or groundwater abstraction activities not listed above (applicant specifies activity details).',
-    },
-    {
-      title: 'Other water concession activities (specify)',
-      category: 'recreation_other',
-      regime: 'Water Concession',
-      icon: 'fa-file-contract',
-      color: '#6d28d9',
-      bg: '#ede9fe',
-      desc: 'Specialized water body concession or surface occupation activities not listed above (applicant specifies details).',
     },
   ];
 
@@ -595,7 +577,7 @@ export default function Home() {
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 border-[#0072bc] text-[#0072bc] hover:bg-[#0072bc] hover:text-white font-bold text-xs sm:text-sm transition-all cursor-pointer"
             >
               <i className="fa fa-list-ul" />
-              <span>View All 17 Permitted Activities in One List</span>
+              <span>View All 15 Permitted Activities in One List</span>
             </button>
           </div>
         </div>
@@ -627,7 +609,7 @@ export default function Home() {
                     <h3 className="text-lg sm:text-xl font-extrabold truncate">
                       {activeModalCategory
                         ? activeModalCategory.title
-                        : 'All 17 Official Permitted Activities'}
+                        : 'All 15 Official Permitted Activities'}
                     </h3>
                   </div>
                 </div>
@@ -652,7 +634,7 @@ export default function Home() {
                       : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  All (17)
+                  All (15)
                 </button>
                 {activityCategories.map((cat) => (
                   <button
